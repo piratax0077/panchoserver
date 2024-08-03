@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<EnvioDTE xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sii.cl/SiiDte EnvioDTE_v10.xsd" version="1.0">
+  <SetDTE ID="PR_SetDoc">
+    <Caratula version="1.0">
+      <RutEmisor>76881221-7</RutEmisor>
+      <RutEnvia>13412179-3</RutEnvia>
+      <RutReceptor>60803000-K</RutReceptor>
+      <FchResol>2014-08-22</FchResol>
+      <NroResol>80</NroResol>
+      <TmstFirmaEnv>2024-04-02T12:22:01</TmstFirmaEnv>
+      <SubTotDTE>
+        <TpoDTE>61</TpoDTE>
+        <NroDTE>1</NroDTE>
+      </SubTotDTE>
+    </Caratula>
+    <DTE version="1.0">
+  <Documento ID="PR_T61F1199">
+    <Encabezado>
+      <IdDoc>
+        <TipoDTE>61</TipoDTE>
+        <Folio>1199</Folio>
+        <FchEmis>2024-04-02</FchEmis>
+        <MntBruto>1</MntBruto>
+        <TpoTranVenta>1</TpoTranVenta>
+      </IdDoc>
+      <Emisor>
+        <RUTEmisor>76881221-7</RUTEmisor>
+        <RznSoc>JOSE FRANCISCO TRONCOSO TRONCOSO REPUESTOS AUTOMOTRICES SPA&#13;
+</RznSoc>
+        <GiroEmis>VENTA DE PARTES, PIEZAS Y ACCESORIOS PARA VEHICULOS AUTOMOTORES.</GiroEmis>
+        <Acteco>453000</Acteco>
+        <DirOrigen>Casa Matriz: Pasaje Riquelme #831</DirOrigen>
+        <CmnaOrigen>Arica</CmnaOrigen>
+      </Emisor>
+      <Receptor>
+        <RUTRecep>7167524-6</RUTRecep>
+        <RznSocRecep>APOLINARIO ULISES ZAVALA ROJAS</RznSocRecep>
+        <GiroRecep>TRANSPORTE DE CARGA POR CARRETERA</GiroRecep>
+        <DirRecep>POBL MIRAMAR PSJE MICHIGAN 1376</DirRecep>
+        <CmnaRecep>ARICA</CmnaRecep>
+        <CiudadRecep>ARICA</CiudadRecep>
+      </Receptor>
+      <Totales>
+        <MntNeto>514521</MntNeto>
+        <MntExe>0</MntExe>
+        <TasaIVA>19</TasaIVA>
+        <IVA>97759</IVA>
+        <MntTotal>612280</MntTotal>
+      </Totales>
+    </Encabezado>
+    <Detalle>
+      <NroLinDet>1</NroLinDet>
+      <NmbItem>FILTRO ACEITE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>3000.00</PrcItem>
+      <MontoItem>3000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>2</NroLinDet>
+      <NmbItem>FILTRO AIRE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>7500.00</PrcItem>
+      <MontoItem>7500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>3</NroLinDet>
+      <NmbItem>FILTRO AIRE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>2500.00</PrcItem>
+      <MontoItem>2500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>4</NroLinDet>
+      <NmbItem>LIMPIA CARBURADOR SPRAY 354 GRS</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>6000.00</PrcItem>
+      <MontoItem>6000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>5</NroLinDet>
+      <NmbItem>BOMBA BENCINA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>18000.00</PrcItem>
+      <MontoItem>18000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>6</NroLinDet>
+      <NmbItem>ACEITE MOBIL 1 5W30 4 LITROS ESP C/DPF</NmbItem>
+      <QtyItem>2</QtyItem>
+      <PrcItem>47000.00</PrcItem>
+      <MontoItem>94000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>7</NroLinDet>
+      <NmbItem>FILTRO ACEITE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>7000.00</PrcItem>
+      <MontoItem>7000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>8</NroLinDet>
+      <NmbItem>FILTRO ACEITE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>3500.00</PrcItem>
+      <MontoItem>3500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>9</NroLinDet>
+      <NmbItem>BUJIA COMUN</NmbItem>
+      <QtyItem>12</QtyItem>
+      <PrcItem>5820.00</PrcItem>
+      <MontoItem>69840</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>10</NroLinDet>
+      <NmbItem>PASTILLAS FRENO DELANTERA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>16975.00</PrcItem>
+      <MontoItem>16975</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>11</NroLinDet>
+      <NmbItem>PASTILLAS FRENO DELANTERA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>17945.00</PrcItem>
+      <MontoItem>17945</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>12</NroLinDet>
+      <NmbItem>PASTILLAS FRENO TRASERA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>15520.00</PrcItem>
+      <MontoItem>15520</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>13</NroLinDet>
+      <NmbItem>FILTRO PETROLEO</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>20000.00</PrcItem>
+      <MontoItem>20000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>14</NroLinDet>
+      <NmbItem>CORREA ALTERNADOR</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>7000.00</PrcItem>
+      <MontoItem>7000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>15</NroLinDet>
+      <NmbItem>BOMBA BENCINA ELECTRICA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>58000.00</PrcItem>
+      <MontoItem>58000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>16</NroLinDet>
+      <NmbItem>NIPLE SALIDA CULATA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>15500.00</PrcItem>
+      <MontoItem>15500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>17</NroLinDet>
+      <NmbItem>KIT DISTRIBUCION ORIGINAL 9 PIEZAS</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>241500.00</PrcItem>
+      <MontoItem>241500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>18</NroLinDet>
+      <NmbItem>RETEN CIGUEÑAL DELANTERO</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>5000.00</PrcItem>
+      <MontoItem>5000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>19</NroLinDet>
+      <NmbItem>FILTRO AIRE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>3500.00</PrcItem>
+      <MontoItem>3500</MontoItem>
+    </Detalle>
+    <Referencia>
+      <NroLinRef>1</NroLinRef>
+      <TpoDocRef>33</TpoDocRef>
+      <FolioRef>10105</FolioRef>
+      <FchRef>2024-04-02</FchRef>
+      <CodRef>1</CodRef>
+      <RazonRef>Anular Factura N° 10105: </RazonRef>
+    </Referencia>
+    <TED version="1.0">
+  <DD>
+    <RE>76881221-7</RE>
+    <TD>61</TD>
+    <F>1199</F>
+    <FE>2024-04-02</FE>
+    <RR>7167524-6</RR>
+    <RSR>APOLINARIO ULISES ZAVALA ROJAS</RSR>
+    <MNT>612280</MNT>
+    <IT1>FILTRO ACEITE</IT1>
+    <CAF version="1.0">
+<DA>
+<RE>76881221-7</RE>
+<RS>JOSÉ FRANCISCO TRONCOSO TRONCOSO REPUEST</RS>
+<TD>61</TD>
+<RNG><D>1122</D><H>1273</H></RNG>
+<FA>2024-01-26</FA>
+<RSAPK><M>qaEkRKn2y1zEzxMbnRJTz/9FVKbRGcuaUxy29m7QPpR14O+2l4NKbWz50PxSGY63Jf0cPzjWIcjxNZu8ffKp0w==</M><E>Aw==</E></RSAPK>
+<IDK>300</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">J/IWsprr3y46M+1jlDlYXRkKU0jWBOKJhDD0ZoYT6RiJKU+euEuLg3gfOo7Oi8dw8mwr2bCXPEMb6im5uW0wRA==</FRMA>
+</CAF>
+    <TSTED>2024-04-02T12:22:01</TSTED>
+  </DD>
+  <FRMT algoritmo="SHA1withRSA">HZftFuKm3xwJS+tQopax9wyvdVH24L/jQC2YOrnnvVT0KkvLW/Qwm21AQIJ4kksFNG0jNKyTXV5mhsL+HYe6kw==</FRMT>
+</TED>
+  <TmstFirma>2024-04-02T12:22:01</TmstFirma></Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_T61F1199"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>uHvrfKh+aKcba8sQjVAwDRKcoAA=</DigestValue></Reference></SignedInfo><SignatureValue>mocPuwQmfX3LJfiU2DTnekpUYUtsQ7n8gS+xcc2qu9K2wy4QXYmSLvjag2/0lwnT
+Q9EyYiLmIKVhPopIprXB9aqW1jWTV0Ti1G5hEzD1DYW2Zhk3t3U/tVGpVy/fph9K
+FEh7EIMR7DgFCcM/y12v/39IYL67F7rCjRscpDtGtA8vUexQf5VrTKHWaHOyD6CY
+JTTvzkeWWIdmxYzBUtRu98CHorDkjbpyPCEds0boEsND4fToqUHH9EEYZrgvGriP
+Q0zu9STCyUxOHN/jO6ZumT7666knBbymWD1UbsHJ+6RDlLFUTMBI0hGdGC3SBrG3
+To+aLibc+DsDkk4roAbl5A==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>w5DIZjYJCzV7qYcpE7giH0TapE5b8EpsElK/SuRIgkZQwDqhdL/yWVcnVsXsRCdo
+ZqKPcYcISi6MGDhgdn1wHq1o3LVfEKdAsPa8gx7EWdGZGprnsRPjsy8MCC67jBBt
+CZxYJ5G9brPz9no9B0acna2qy/kHzwy4eEJu6A52WwAsKQS81VhfgwvjMSjs2VoC
+QaP2+A1zpTC2WrAmXSI6C5KmRDpRJs/hHR6OZuUndL3gTX+FDdeFOykBNLKrjYuw
+tXCwa0OCqeo7LJtouH6+LgPys3HgSxKZnQNR2C+NpQrwnumbIHVqiXj2jnd08CbY
+vmdP5qrLbaABBnvUt7ktDQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIHxzCCBa+gAwIBAgIKXIE9uAABAASaLzANBgkqhkiG9w0BAQsFADCBvzELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQDExVFLUNFUlRDSElMRSBDQSBGRVMg
+MDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNoaWxlLmNsMB4XDTIz
+MDIwMzAyNDU1MloXDTI2MDIwMjAyNDU1MlowgcMxCzAJBgNVBAYTAkNMMRswGQYD
+VQQIExJBUklDQSBZIFBBUklOQUNPVEExDjAMBgNVBAcTBUFSSUNBMS0wKwYDVQQK
+EyRKT1NFIEZSQU5DSVNDTyBUUk9OQ09TTyBUUk9OQ09TTyBTUEExCjAIBgNVBAsM
+ASoxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSEw
+HwYJKoZIhvcNAQkBFhJFR1VSRU4zNUBHTUFJTC5DT00wggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQDDkMhmNgkLNXuphykTuCIfRNqkTlvwSmwSUr9K5EiC
+RlDAOqF0v/JZVydWxexEJ2hmoo9xhwhKLowYOGB2fXAerWjctV8Qp0Cw9ryDHsRZ
+0ZkamuexE+OzLwwILruMEG0JnFgnkb1us/P2ej0HRpydrarL+QfPDLh4Qm7oDnZb
+ACwpBLzVWF+DC+MxKOzZWgJBo/b4DXOlMLZasCZdIjoLkqZEOlEmz+EdHo5m5Sd0
+veBNf4UN14U7KQE0squNi7C1cLBrQ4Kp6jssm2i4fr4uA/KzceBLEpmdA1HYL42l
+CvCe6ZsgdWqJePaOd3TwJti+Z0/mqsttoAEGe9S3uS0NAgMBAAGjggK9MIICuTCC
+AV8GA1UdIASCAVYwggFSMIIBTgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFo
+dHRwczovL3d3dy5lLWNlcnRjaGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMv
+MIH+BggrBgEFBQcCAjCB8R6B7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUA
+cwB0AGUAIABmAG8AcgBtAHUAbABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEA
+dQBpAHMAaQB0AG8AIABpAG4AZABpAHMAcABlAG4AcwBhAGIAbABlACAAcABhAHIA
+YQAgAGQAYQByACAAaQBuAGkAYwBpAG8AIABhAGwAIABwAHIAbwBjAGUAcwBvACAA
+ZABlACAAYwBlAHIAdABpAGYAaQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABlAHIA
+aQBvAHIAbQBlAG4AdABlACwwHQYDVR0OBBYEFFLjZE3Zme3Gwq7TnopASvzsKTgv
+MAsGA1UdDwQEAwIE8DAjBgNVHREEHDAaoBgGCCsGAQQBwQEBoAwWCjEzNDEyMTc5
+LTMwHwYDVR0jBBgwFoAUdNYhs/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1
+oDOgMYYvaHR0cDovL2NybC5lY2VydGNoaWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMw
+Mi5jcmwwPQYIKwYBBQUHAQEEMTAvMC0GCCsGAQUFBzABhiFodHRwOi8vb2NzcGZl
+cy5lY2VydGNoaWxlLmNsL29jc3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYBBAGCNxUI
+gd3STZfUOoaJnQaHiM5vg6/MYEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgG
+CCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAKD9J74J
+J8dI4mKfOYUoFqw7x1qYjvNoFZsza+OdQ1YVymY8Q+vscT+4k8Os2bvJ7W+3gFXq
+eBcAtiuUAZddYit/l0PV2MeAOi61WqT4zdGFf3TjdgKNtK3AxYA4PsWux7sOg8KA
+FknMVoeCaGneQB9DwUFSfRMMXvXDbARE7IBFDMeFJRweet0CbiywjP6aRMVoqdWV
+z5rKykyG1Jc2ez20ablSQyeuNG3zxq7tOGDDblLIMj5fGwfqzvRv/N6VP6T3C1pK
+la2PLluByPeMXXVWBpzXSBM7AKzq3nDXR7DNsCLc5xeWCqm2rBRnAGVLpnuDCfgK
+Mom4rkVSCmUptY7JZrl94rWhTMRPs+5zYCuiZEH0pHVzToUkRzKAfpOwY/UQo0L7
+5LBb0qvHBvTupBUUeaXhtSYTPtZbFwETc44FIYdO1dkw1avrjswq9JpmbeafJbz9
+Y8CpTjElEsv/oM4BZPTf7eom/C72m4CT7H2oHHmikCpT+o5iqBEvApVbY9DLDTQY
+2EmGIm9hLgqN82Cnlp/+dlYeVqBttYYWKsN4ps/773vvBzCuQ6K2AJZBHNsnzGTE
+xDY9m4xsxhrPIFUMac6w/GE5UXewOzy45ranSCPo67HC93VqesRFfeHJSEaMNvYg
+g+HIWH22zRwDVZmP+nVsKK14g66StvRm8KIy</X509Certificate></X509Data></KeyInfo></Signature></DTE>
+  </SetDTE>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_SetDoc"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>XxtCKos6kdfZbEr+Bo+HCJTF/Cs=</DigestValue></Reference></SignedInfo><SignatureValue>G7pP89nqEA2rD5ZE//2xf8X11txlIcJe+KWeA7lY4QPzYrhXz6/ENtiE8Myv4n3L
+GxTBeTpgSw1YsRm8BR6qJshKvkLTzwtYMWu8E5a+mNA43//vSy2k/rbQNq07re4a
+CkV9yi5+c1s9xj2WAGMA/Dg8k1uHvNVvkwIcDyJiKWJCZeVFjzqKm5ENzuk7ER/X
+tgq2HCQwLamG6rDuFAKI5/TxTHx3r/8m/tOTEl4OpyGyVTEuaXlEBEyaO6xMBpRn
+FKMQ9hPAMHWR35RsxqMpMZu9cL0M/ICi/5gxId5qWG971VBXwaLFxJQVfZRSJjyY
+ESin9cGrg1HhruTCXtohcw==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>w5DIZjYJCzV7qYcpE7giH0TapE5b8EpsElK/SuRIgkZQwDqhdL/yWVcnVsXsRCdo
+ZqKPcYcISi6MGDhgdn1wHq1o3LVfEKdAsPa8gx7EWdGZGprnsRPjsy8MCC67jBBt
+CZxYJ5G9brPz9no9B0acna2qy/kHzwy4eEJu6A52WwAsKQS81VhfgwvjMSjs2VoC
+QaP2+A1zpTC2WrAmXSI6C5KmRDpRJs/hHR6OZuUndL3gTX+FDdeFOykBNLKrjYuw
+tXCwa0OCqeo7LJtouH6+LgPys3HgSxKZnQNR2C+NpQrwnumbIHVqiXj2jnd08CbY
+vmdP5qrLbaABBnvUt7ktDQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIHxzCCBa+gAwIBAgIKXIE9uAABAASaLzANBgkqhkiG9w0BAQsFADCBvzELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQDExVFLUNFUlRDSElMRSBDQSBGRVMg
+MDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNoaWxlLmNsMB4XDTIz
+MDIwMzAyNDU1MloXDTI2MDIwMjAyNDU1MlowgcMxCzAJBgNVBAYTAkNMMRswGQYD
+VQQIExJBUklDQSBZIFBBUklOQUNPVEExDjAMBgNVBAcTBUFSSUNBMS0wKwYDVQQK
+EyRKT1NFIEZSQU5DSVNDTyBUUk9OQ09TTyBUUk9OQ09TTyBTUEExCjAIBgNVBAsM
+ASoxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSEw
+HwYJKoZIhvcNAQkBFhJFR1VSRU4zNUBHTUFJTC5DT00wggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQDDkMhmNgkLNXuphykTuCIfRNqkTlvwSmwSUr9K5EiC
+RlDAOqF0v/JZVydWxexEJ2hmoo9xhwhKLowYOGB2fXAerWjctV8Qp0Cw9ryDHsRZ
+0ZkamuexE+OzLwwILruMEG0JnFgnkb1us/P2ej0HRpydrarL+QfPDLh4Qm7oDnZb
+ACwpBLzVWF+DC+MxKOzZWgJBo/b4DXOlMLZasCZdIjoLkqZEOlEmz+EdHo5m5Sd0
+veBNf4UN14U7KQE0squNi7C1cLBrQ4Kp6jssm2i4fr4uA/KzceBLEpmdA1HYL42l
+CvCe6ZsgdWqJePaOd3TwJti+Z0/mqsttoAEGe9S3uS0NAgMBAAGjggK9MIICuTCC
+AV8GA1UdIASCAVYwggFSMIIBTgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFo
+dHRwczovL3d3dy5lLWNlcnRjaGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMv
+MIH+BggrBgEFBQcCAjCB8R6B7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUA
+cwB0AGUAIABmAG8AcgBtAHUAbABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEA
+dQBpAHMAaQB0AG8AIABpAG4AZABpAHMAcABlAG4AcwBhAGIAbABlACAAcABhAHIA
+YQAgAGQAYQByACAAaQBuAGkAYwBpAG8AIABhAGwAIABwAHIAbwBjAGUAcwBvACAA
+ZABlACAAYwBlAHIAdABpAGYAaQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABlAHIA
+aQBvAHIAbQBlAG4AdABlACwwHQYDVR0OBBYEFFLjZE3Zme3Gwq7TnopASvzsKTgv
+MAsGA1UdDwQEAwIE8DAjBgNVHREEHDAaoBgGCCsGAQQBwQEBoAwWCjEzNDEyMTc5
+LTMwHwYDVR0jBBgwFoAUdNYhs/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1
+oDOgMYYvaHR0cDovL2NybC5lY2VydGNoaWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMw
+Mi5jcmwwPQYIKwYBBQUHAQEEMTAvMC0GCCsGAQUFBzABhiFodHRwOi8vb2NzcGZl
+cy5lY2VydGNoaWxlLmNsL29jc3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYBBAGCNxUI
+gd3STZfUOoaJnQaHiM5vg6/MYEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgG
+CCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAKD9J74J
+J8dI4mKfOYUoFqw7x1qYjvNoFZsza+OdQ1YVymY8Q+vscT+4k8Os2bvJ7W+3gFXq
+eBcAtiuUAZddYit/l0PV2MeAOi61WqT4zdGFf3TjdgKNtK3AxYA4PsWux7sOg8KA
+FknMVoeCaGneQB9DwUFSfRMMXvXDbARE7IBFDMeFJRweet0CbiywjP6aRMVoqdWV
+z5rKykyG1Jc2ez20ablSQyeuNG3zxq7tOGDDblLIMj5fGwfqzvRv/N6VP6T3C1pK
+la2PLluByPeMXXVWBpzXSBM7AKzq3nDXR7DNsCLc5xeWCqm2rBRnAGVLpnuDCfgK
+Mom4rkVSCmUptY7JZrl94rWhTMRPs+5zYCuiZEH0pHVzToUkRzKAfpOwY/UQo0L7
+5LBb0qvHBvTupBUUeaXhtSYTPtZbFwETc44FIYdO1dkw1avrjswq9JpmbeafJbz9
+Y8CpTjElEsv/oM4BZPTf7eom/C72m4CT7H2oHHmikCpT+o5iqBEvApVbY9DLDTQY
+2EmGIm9hLgqN82Cnlp/+dlYeVqBttYYWKsN4ps/773vvBzCuQ6K2AJZBHNsnzGTE
+xDY9m4xsxhrPIFUMac6w/GE5UXewOzy45ranSCPo67HC93VqesRFfeHJSEaMNvYg
+g+HIWH22zRwDVZmP+nVsKK14g66StvRm8KIy</X509Certificate></X509Data></KeyInfo></Signature></EnvioDTE>

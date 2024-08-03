@@ -1,0 +1,360 @@
+/* Para ver los colores en hexadecimal
+
+* https://www.color-hex.com/
+
+*/
+
+
+
+
+
+/* TABLA CON SCROLL-Y */
+
+
+
+.tabla-scroll-y-200 {
+
+    position: relative;
+
+    height: 200px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+.tabla-scroll-y-250 {
+
+    position: relative;
+
+    height: 250px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+.tabla-scroll-y-300 {
+
+    position: relative;
+
+    height: 300px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+.tabla-scroll-y-400 {
+
+    position: relative;
+
+    height: 400px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+.tabla-scroll-y-500 {
+
+    position: relative;
+
+    height: 500px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+.tabla-scroll-y-600 {
+
+    position: relative;
+
+    height: 600px;
+
+    overflow: auto;
+
+    display: block;
+
+}
+
+
+
+
+
+/*color cuando pones el puntero sobre una fila de la tabla */
+
+
+
+.table-hover>tbody>tr:hover {
+
+    background-color: #e4dafd;
+
+}
+
+
+
+
+
+/* color de cabecera de las tablas*/
+
+
+
+.table>thead>tr>th {
+
+    background-color: #bbffee;
+
+}
+
+
+
+
+
+/* Tamaño de letras de la tabla */
+
+
+
+.letra-chica {
+
+    font-size: '7px';
+
+    font-family: 'Calibri', serif;
+
+}
+
+
+
+
+
+/* color para las cabeceras de los dataTables */
+
+
+
+table.dataTable thead {
+
+    background-color: #bbffee
+
+}
+
+
+
+.row-10 {
+
+    height: 10%;
+
+    background-color: #ffe6e6;
+
+}
+
+
+
+.row-15 {
+
+    height: 15%;
+
+    background-color: #ecd9c6;
+
+}
+
+
+
+.row-20 {
+
+    height: 20%;
+
+    background-color: #ffe6e6;
+
+}
+
+
+
+.row-30 {
+
+    height: 30%;
+
+    background-color: #ecd9c6;
+
+}
+
+
+
+.row-40 {
+
+    height: 40%;
+
+    background-color: #ffb3ec;
+
+}
+
+
+
+.row-50 {
+
+    height: 50%;
+
+    background-color: #b3ffb3;
+
+}
+
+
+
+.row-60 {
+
+    height: 60%;
+
+    background-color: #ffe6e6;
+
+}
+
+
+
+.row-70 {
+
+    height: 70%;
+
+    background-color: #ecd9c6;
+
+}
+
+
+
+.row-75 {
+
+    height: 75%;
+
+    background-color: #ccccff;
+
+}
+
+
+
+.row-80 {
+
+    height: 80%;
+
+    background-color: #ffe6e6;
+
+}
+
+
+
+
+
+/* REDUCCIÓN DEL TAMAÑO DE LETRA */
+
+
+
+h1,
+
+h2,
+
+h3,
+
+h4,
+
+p,
+
+.navbar-brand,
+
+.navbar-nav a,
+
+select,
+
+label {
+
+    font-family: 'Calibri', serif;
+
+}
+
+
+
+
+
+/* Reducción de los márgenes de  h2 */
+
+
+
+h2 {
+
+    margin-top: 5px;
+
+    margin-bottom: 5px;
+
+}
+
+
+
+
+
+/* ALTURA DEL NAVBAR SUPERIOR */
+
+
+
+.navbar-nav>li>a,
+
+.navbar-brand {
+
+    padding-top: 5px !important;
+
+    padding-bottom: 0 !important;
+
+    height: 30px;
+
+}
+
+
+
+.navbar {
+
+    min-height: 30px !important;
+
+}
+
+
+
+select.input-sm,
+
+.input-sm {
+
+    height: 24px;
+
+    padding-left: 2px;
+
+    padding-right: 2px;
+
+    padding-top: 2px;
+
+    padding-bottom: 2px;
+
+}
+
+
+
+
+
+/* MARGEN SUPERIOR DEL BODY PARA QUE EL NAVBAR NO TAPE LOS TÍTULOS */
+
+
+
+body {
+
+    padding-top: 31px;
+
+}
+

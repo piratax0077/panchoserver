@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<ConsumoFolios xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sii.cl/SiiDte ConsumoFolio_v10.xsd" version="1.0">
+  <DocumentoConsumoFolios ID="RCOF_768812217_20210202_1612374297">
+    <Caratula version="1.0">
+      <RutEmisor>76881221-7</RutEmisor>
+      <RutEnvia>13412179-3</RutEnvia>
+      <FchResol>2014-08-22</FchResol>
+      <NroResol>80</NroResol>
+      <FchInicio>2021-02-02</FchInicio>
+      <FchFinal>2021-02-02</FchFinal>
+      <SecEnvio>1</SecEnvio>
+      <TmstFirmaEnv>2021-02-03T14:44:57</TmstFirmaEnv>
+    </Caratula>
+    <Resumen>
+      <TipoDocumento>39</TipoDocumento>
+      <MntNeto>2561591</MntNeto>
+      <MntIva>486709</MntIva>
+      <TasaIVA>19</TasaIVA>
+      <MntTotal>3048300</MntTotal>
+      <FoliosEmitidos>85</FoliosEmitidos>
+      <FoliosAnulados>0</FoliosAnulados>
+      <FoliosUtilizados>85</FoliosUtilizados>
+      <RangoUtilizados>
+        <Inicial>4947</Inicial>
+        <Final>5031</Final>
+      </RangoUtilizados>
+    </Resumen>
+    <Resumen>
+      <TipoDocumento>61</TipoDocumento>
+      <MntNeto>13320</MntNeto>
+      <MntIva>2530</MntIva>
+      <TasaIVA>19</TasaIVA>
+      <MntTotal>15850</MntTotal>
+      <FoliosEmitidos>2</FoliosEmitidos>
+      <FoliosAnulados>0</FoliosAnulados>
+      <FoliosUtilizados>2</FoliosUtilizados>
+      <RangoUtilizados>
+        <Inicial>115</Inicial>
+        <Final>115</Final>
+      </RangoUtilizados>
+      <RangoUtilizados>
+        <Inicial>117</Inicial>
+        <Final>117</Final>
+      </RangoUtilizados>
+    </Resumen>
+  </DocumentoConsumoFolios>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#RCOF_768812217_20210202_1612374297"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>tU1lTRqtEPnBOQFGuIVoRpgUb3o=</DigestValue></Reference></SignedInfo><SignatureValue>ypmCRNjBvcZg5xS2zHcO/edV468qG/bpdCOBuv6PhFzdKo9408xkP6+TcATdlnoR
+c6QjNVX0n+QKzdIowvQAsswKQqoZXiRqHC4EhVm5Zm5NUj+hZ4x0sY3GVod0gA0t
+PlLus6OAtI3FjmGlsBFDaPESEeb38z9Q35to5x/B/7I=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs
+51DlggMDn448MLykdKgXhASmu7o4DK2Y1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwf
+c8ToNP9GwxJ8sMj3cD44sul5HyV4gcafHzt3103TGJk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGajCCBVKgAwIBAgIKQ3yB9gAAABBGbzANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0yMDAyMDYxODQ5MTVaFw0yMzAyMDUxODQ5MTVaMIHr
+MQswCQYDVQQGEwJDTDEmMCQGA1UECAwdUkVHScOTTiBERSBBUklDQSBZIFBBUklO
+QUNPVEExDjAMBgNVBAcTBUFyaWNhMS4wLAYDVQQKEyVKT1NFIEZSQU5DSVNDTyBU
+Uk9OQ09TTyBUUk9OQ09TTyBFSVJMMRswGQYDVQQLExJWRU5UQSBERSBSRVBVRVNU
+T1MxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSww
+KgYJKoZIhvcNAQkBFh1wY29ycmVhLmF1ZGljb25zdWx0QGdtYWlsLmNvbTCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk
+05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs51DlggMDn448MLykdKgXhASmu7o4DK2Y
+1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwfc8ToNP9GwxJ8sMj3cD44sul5HyV4gcaf
+Hzt3103TGJkCAwEAAaOCAqkwggKlMIIBTwYDVR0gBIIBRjCCAUIwggE+BggrBgEE
+AcNSBTCCATAwLQYIKwYBBQUHAgEWIWh0dHA6Ly93d3cuZS1jZXJ0Y2hpbGUuY2wv
+Q1BTLmh0bTCB/gYIKwYBBQUHAgIwgfEege4ARQBsACAAcgBlAHMAcABvAG4AZABl
+AHIAIABlAHMAdABlACAAZgBvAHIAbQB1AGwAYQByAGkAbwAgAGUAcwAgAHUAbgAg
+AHIAZQBxAHUAaQBzAGkAdABvACAAaQBuAGQAaQBzAHAAZQBuAHMAYQBiAGwAZQAg
+AHAAYQByAGEAIABkAGEAcgAgAGkAbgBpAGMAaQBvACAAYQBsACAAcAByAG8AYwBl
+AHMAbwAgAGQAZQAgAGMAZQByAHQAaQBmAGkAYwBhAGMAaQDzAG4ALgAgAFAAbwBz
+AHQAZQByAGkAbwByAG0AZQBuAHQAZQAsMB0GA1UdDgQWBBQEjYoZLS5J74VYnEqc
+7dslhV/wLTALBgNVHQ8EBAMCBPAwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgox
+MzQxMjE3OS0zMB8GA1UdIwQYMBaAFHjhPp/SErN6PI3NMA5Ts0MpB7NVMD4GA1Ud
+HwQ3MDUwM6AxoC+GLWh0dHA6Ly9jcmwuZS1jZXJ0Y2hpbGUuY2wvZWNlcnRjaGls
+ZWNhRkVTLmNybDA6BggrBgEFBQcBAQQuMCwwKgYIKwYBBQUHMAGGHmh0dHA6Ly9v
+Y3NwLmVjZXJ0Y2hpbGUuY2wvb2NzcDA9BgkrBgEEAYI3FQcEMDAuBiYrBgEEAYI3
+FQiC3IMvhZOMZoXVnReC4twnge/sPGGBy54UhqiCWAIBZAIBBDAjBgNVHRIEHDAa
+oBgGCCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQEFBQADggEBAExi
+tpMxfYvOiF7TXdEvvYSVVnOmQuy5JX8NArOGtwGNvIvS9oeY2H5hepz0x0ml0pV6
+l2CfsbrWYJT2eskTbTeSgNOWGnggLakopZbxUKsCXJth8A15yf56jwl55b7Ipb3d
+u4IEAbxv5W4mqQZqYBa8LaKbf08NmzP++neg3NJFdSY27qT+0+8XM760nT02rWVt
+ZrkCrYsCx4ENdVM1anCvxAuo9J8jvf/4pqKlA5B5kNDszieyKptvy3oOsJPEr/rd
+rkukQpu5quMofOP0U4nBocpPB1tir0GvyCtG4S8GTOv1wTmeYVKpf72JaxjaL+dV
+ODm2I59SspmbZ4inFds=</X509Certificate></X509Data></KeyInfo></Signature></ConsumoFolios>

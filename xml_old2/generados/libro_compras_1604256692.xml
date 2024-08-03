@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<LibroCompraVenta xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sii.cl/SiiDte LibroCV_v10.xsd" version="1.0">
+  <EnvioLibro ID="PR_LIBRO_COMPRA_768812217_202011_1604256692">
+    <Caratula>
+      <RutEmisorLibro>76881221-7</RutEmisorLibro>
+      <RutEnvia>13412179-3</RutEnvia>
+      <PeriodoTributario>2020-11</PeriodoTributario>
+      <FchResol>2020-11-01</FchResol>
+      <NroResol>0</NroResol>
+      <TipoOperacion>COMPRA</TipoOperacion>
+      <TipoLibro>ESPECIAL</TipoLibro>
+      <TipoEnvio>TOTAL</TipoEnvio>
+      <FolioNotificacion>1</FolioNotificacion>
+    </Caratula>
+    <ResumenPeriodo>
+      <TotalesPeriodo>
+        <TpoDoc>30</TpoDoc>
+        <TotDoc>2</TotDoc>
+        <TotMntExe>0</TotMntExe>
+        <TotMntNeto>73989</TotMntNeto>
+        <TotMntIVA>8347</TotMntIVA>
+        <TotIVAUsoComun>5711</TotIVAUsoComun>
+        <FctProp>0.6</FctProp>
+        <TotCredIVAUsoComun>3427</TotCredIVAUsoComun>
+        <TotMntTotal>88047</TotMntTotal>
+      </TotalesPeriodo>
+      <TotalesPeriodo>
+        <TpoDoc>33</TpoDoc>
+        <TotDoc>2</TotDoc>
+        <TotMntExe>10111</TotMntExe>
+        <TotMntNeto>21551</TotMntNeto>
+        <TotMntIVA>1906</TotMntIVA>
+        <TotIVANoRec>
+          <CodIVANoRec>4</CodIVANoRec>
+          <TotOpIVANoRec>1</TotOpIVANoRec>
+          <TotMntIVANoRec>2189</TotMntIVANoRec>
+        </TotIVANoRec>
+        <TotMntTotal>35757</TotMntTotal>
+      </TotalesPeriodo>
+      <TotalesPeriodo>
+        <TpoDoc>46</TpoDoc>
+        <TotDoc>1</TotDoc>
+        <TotMntExe>0</TotMntExe>
+        <TotMntNeto>10323</TotMntNeto>
+        <TotMntIVA>1961</TotMntIVA>
+        <TotOtrosImp>
+          <CodImp>15</CodImp>
+          <TotMntImp>1961</TotMntImp>
+        </TotOtrosImp>
+        <TotIVARetTotal>1961</TotIVARetTotal>
+        <TotMntTotal>10323</TotMntTotal>
+      </TotalesPeriodo>
+      <TotalesPeriodo>
+        <TpoDoc>60</TpoDoc>
+        <TotDoc>2</TotDoc>
+        <TotMntExe>0</TotMntExe>
+        <TotMntNeto>10582</TotMntNeto>
+        <TotMntIVA>2011</TotMntIVA>
+        <TotMntTotal>12593</TotMntTotal>
+      </TotalesPeriodo>
+    </ResumenPeriodo>
+    <Detalle>
+      <TpoDoc>30</TpoDoc>
+      <NroDoc>234</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-01</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>43931</MntNeto>
+      <MntIVA>8347</MntIVA>
+      <MntTotal>52278</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>33</TpoDoc>
+      <NroDoc>32</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-01</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntExe>10111</MntExe>
+      <MntNeto>10031</MntNeto>
+      <MntIVA>1906</MntIVA>
+      <MntTotal>22048</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>30</TpoDoc>
+      <NroDoc>781</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-02</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>30058</MntNeto>
+      <IVAUsoComun>5711</IVAUsoComun>
+      <MntTotal>35769</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>60</TpoDoc>
+      <NroDoc>451</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-03</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>2867</MntNeto>
+      <MntIVA>545</MntIVA>
+      <MntTotal>3412</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>33</TpoDoc>
+      <NroDoc>67</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-04</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>11520</MntNeto>
+      <IVANoRec>
+        <CodIVANoRec>4</CodIVANoRec>
+        <MntIVANoRec>2189</MntIVANoRec>
+      </IVANoRec>
+      <MntTotal>13709</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>46</TpoDoc>
+      <NroDoc>9</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-05</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>10323</MntNeto>
+      <MntIVA>1961</MntIVA>
+      <OtrosImp>
+        <CodImp>15</CodImp>
+        <TasaImp>19</TasaImp>
+        <MntImp>1961</MntImp>
+      </OtrosImp>
+      <IVARetTotal>1961</IVARetTotal>
+      <MntTotal>10323</MntTotal>
+    </Detalle>
+    <Detalle>
+      <TpoDoc>60</TpoDoc>
+      <NroDoc>211</NroDoc>
+      <TpoImp>1</TpoImp>
+      <TasaImp>19</TasaImp>
+      <FchDoc>2020-11-06</FchDoc>
+      <RUTDoc>78885550-8</RUTDoc>
+      <MntNeto>7715</MntNeto>
+      <MntIVA>1466</MntIVA>
+      <MntTotal>9181</MntTotal>
+    </Detalle>
+    <TmstFirma>2020-11-01T15:51:32</TmstFirma>
+  </EnvioLibro>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_LIBRO_COMPRA_768812217_202011_1604256692"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>Zw4aOs5Oe29X1VyVoIUzFJCBabA=</DigestValue></Reference></SignedInfo><SignatureValue>rynQB0dal8gCAOygjQ1Whn9qVsW0W/EQqW8d9F2EHTtPZqAIo2ob67PjQziFP9ED
+FD5VBM9weqZeYeslw6RH073txG9c9D6/s3FPJlBPZB95AiJEm2G21prCARgddWu5
+WDAonnC9Z15JW4X/aR/d+olsjmfFp/4cTuCE1qgd4y4=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs
+51DlggMDn448MLykdKgXhASmu7o4DK2Y1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwf
+c8ToNP9GwxJ8sMj3cD44sul5HyV4gcafHzt3103TGJk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGajCCBVKgAwIBAgIKQ3yB9gAAABBGbzANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0yMDAyMDYxODQ5MTVaFw0yMzAyMDUxODQ5MTVaMIHr
+MQswCQYDVQQGEwJDTDEmMCQGA1UECAwdUkVHScOTTiBERSBBUklDQSBZIFBBUklO
+QUNPVEExDjAMBgNVBAcTBUFyaWNhMS4wLAYDVQQKEyVKT1NFIEZSQU5DSVNDTyBU
+Uk9OQ09TTyBUUk9OQ09TTyBFSVJMMRswGQYDVQQLExJWRU5UQSBERSBSRVBVRVNU
+T1MxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSww
+KgYJKoZIhvcNAQkBFh1wY29ycmVhLmF1ZGljb25zdWx0QGdtYWlsLmNvbTCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk
+05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs51DlggMDn448MLykdKgXhASmu7o4DK2Y
+1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwfc8ToNP9GwxJ8sMj3cD44sul5HyV4gcaf
+Hzt3103TGJkCAwEAAaOCAqkwggKlMIIBTwYDVR0gBIIBRjCCAUIwggE+BggrBgEE
+AcNSBTCCATAwLQYIKwYBBQUHAgEWIWh0dHA6Ly93d3cuZS1jZXJ0Y2hpbGUuY2wv
+Q1BTLmh0bTCB/gYIKwYBBQUHAgIwgfEege4ARQBsACAAcgBlAHMAcABvAG4AZABl
+AHIAIABlAHMAdABlACAAZgBvAHIAbQB1AGwAYQByAGkAbwAgAGUAcwAgAHUAbgAg
+AHIAZQBxAHUAaQBzAGkAdABvACAAaQBuAGQAaQBzAHAAZQBuAHMAYQBiAGwAZQAg
+AHAAYQByAGEAIABkAGEAcgAgAGkAbgBpAGMAaQBvACAAYQBsACAAcAByAG8AYwBl
+AHMAbwAgAGQAZQAgAGMAZQByAHQAaQBmAGkAYwBhAGMAaQDzAG4ALgAgAFAAbwBz
+AHQAZQByAGkAbwByAG0AZQBuAHQAZQAsMB0GA1UdDgQWBBQEjYoZLS5J74VYnEqc
+7dslhV/wLTALBgNVHQ8EBAMCBPAwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgox
+MzQxMjE3OS0zMB8GA1UdIwQYMBaAFHjhPp/SErN6PI3NMA5Ts0MpB7NVMD4GA1Ud
+HwQ3MDUwM6AxoC+GLWh0dHA6Ly9jcmwuZS1jZXJ0Y2hpbGUuY2wvZWNlcnRjaGls
+ZWNhRkVTLmNybDA6BggrBgEFBQcBAQQuMCwwKgYIKwYBBQUHMAGGHmh0dHA6Ly9v
+Y3NwLmVjZXJ0Y2hpbGUuY2wvb2NzcDA9BgkrBgEEAYI3FQcEMDAuBiYrBgEEAYI3
+FQiC3IMvhZOMZoXVnReC4twnge/sPGGBy54UhqiCWAIBZAIBBDAjBgNVHRIEHDAa
+oBgGCCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQEFBQADggEBAExi
+tpMxfYvOiF7TXdEvvYSVVnOmQuy5JX8NArOGtwGNvIvS9oeY2H5hepz0x0ml0pV6
+l2CfsbrWYJT2eskTbTeSgNOWGnggLakopZbxUKsCXJth8A15yf56jwl55b7Ipb3d
+u4IEAbxv5W4mqQZqYBa8LaKbf08NmzP++neg3NJFdSY27qT+0+8XM760nT02rWVt
+ZrkCrYsCx4ENdVM1anCvxAuo9J8jvf/4pqKlA5B5kNDszieyKptvy3oOsJPEr/rd
+rkukQpu5quMofOP0U4nBocpPB1tir0GvyCtG4S8GTOv1wTmeYVKpf72JaxjaL+dV
+ODm2I59SspmbZ4inFds=</X509Certificate></X509Data></KeyInfo></Signature></LibroCompraVenta>

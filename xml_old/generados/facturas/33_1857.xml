@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<EnvioDTE xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sii.cl/SiiDte EnvioDTE_v10.xsd" version="1.0">
+  <SetDTE ID="PR_SetDoc">
+    <Caratula version="1.0">
+      <RutEmisor>76881221-7</RutEmisor>
+      <RutEnvia>13412179-3</RutEnvia>
+      <RutReceptor>60803000-K</RutReceptor>
+      <FchResol>2014-08-22</FchResol>
+      <NroResol>80</NroResol>
+      <TmstFirmaEnv>2021-01-15T16:08:46</TmstFirmaEnv>
+      <SubTotDTE>
+        <TpoDTE>33</TpoDTE>
+        <NroDTE>1</NroDTE>
+      </SubTotDTE>
+    </Caratula>
+    <DTE version="1.0">
+  <Documento ID="PR_T33F1857">
+    <Encabezado>
+      <IdDoc>
+        <TipoDTE>33</TipoDTE>
+        <Folio>1857</Folio>
+        <FchEmis>2021-01-15</FchEmis>
+        <MntBruto>1</MntBruto>
+        <TpoTranVenta>1</TpoTranVenta>
+        <FmaPago>1</FmaPago>
+      </IdDoc>
+      <Emisor>
+        <RUTEmisor>76881221-7</RUTEmisor>
+        <RznSoc>JOSE FRANCISCO TRONCOSO TRONCOSO REPUESTOS AUTOMOTRICES E.I.R.L.</RznSoc>
+        <GiroEmis>COMPRA Y VENTA DE REPUESTOS DE VEHICULOS MOTORIZADOS</GiroEmis>
+        <Acteco>453000</Acteco>
+        <DirOrigen>Vicuña Mackena #1048. Arica</DirOrigen>
+        <CmnaOrigen>Arica</CmnaOrigen>
+      </Emisor>
+      <Receptor>
+        <RUTRecep>77066300-8</RUTRecep>
+        <RznSocRecep>AGROINSUMOS GLORIA DEL ROSARIO SAJAMA MAMANI EIRL</RznSocRecep>
+        <GiroRecep>VENTA AL POR MAYOR DE MATERIAS PRIMAS</GiroRecep>
+        <DirRecep>CAM VALLE AZAPA KM 12 SITIO 32 SECTOR C VALLE DE AZAPA</DirRecep>
+        <CmnaRecep>ARICA</CmnaRecep>
+        <CiudadRecep>ARICA</CiudadRecep>
+      </Receptor>
+      <Totales>
+        <MntNeto>336134</MntNeto>
+        <TasaIVA>19</TasaIVA>
+        <IVA>63866</IVA>
+        <MntTotal>400000</MntTotal>
+      </Totales>
+    </Encabezado>
+    <Detalle>
+      <NroLinDet>1</NroLinDet>
+      <NmbItem>BOMBA AGUA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>30000</PrcItem>
+      <MontoItem>30000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>2</NroLinDet>
+      <NmbItem>METAL BIELA JUEGO</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>8000</PrcItem>
+      <MontoItem>8000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>3</NroLinDet>
+      <NmbItem>METAL BANCADA JUEGO</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>12000</PrcItem>
+      <MontoItem>12000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>4</NroLinDet>
+      <NmbItem>KIT EMPAQUETADURA</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>18500</PrcItem>
+      <MontoItem>18500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>5</NroLinDet>
+      <NmbItem>KIT DISTRIBUCION</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>33000</PrcItem>
+      <MontoItem>33000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>6</NroLinDet>
+      <NmbItem>TERMOSTATO</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>11000</PrcItem>
+      <MontoItem>11000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>7</NroLinDet>
+      <NmbItem>BOMBA ACEITE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>65000</PrcItem>
+      <MontoItem>65000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>8</NroLinDet>
+      <NmbItem>JUEGO ANILLOS</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>28000</PrcItem>
+      <MontoItem>28000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>9</NroLinDet>
+      <NmbItem>FILTRO ACEITE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>4500</PrcItem>
+      <MontoItem>4500</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>10</NroLinDet>
+      <NmbItem>CORREA</NmbItem>
+      <QtyItem>4</QtyItem>
+      <PrcItem>3750</PrcItem>
+      <MontoItem>15000</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>11</NroLinDet>
+      <NmbItem>CIGUEñAL</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>175000</PrcItem>
+      <MontoItem>175000</MontoItem>
+    </Detalle>
+    <TED version="1.0">
+  <DD>
+    <RE>76881221-7</RE>
+    <TD>33</TD>
+    <F>1857</F>
+    <FE>2021-01-15</FE>
+    <RR>77066300-8</RR>
+    <RSR>AGROINSUMOS GLORIA DEL ROSARIO SAJAMA MA</RSR>
+    <MNT>400000</MNT>
+    <IT1>BOMBA AGUA</IT1>
+    <CAF version="1.0">
+<DA>
+<RE>76881221-7</RE>
+<RS>JOSÉ FRANCISCO TRONCOSO TRONCOSO REPUEST</RS>
+<TD>33</TD>
+<RNG><D>1349</D><H>2304</H></RNG>
+<FA>2020-11-05</FA>
+<RSAPK><M>y/AWXHd53QCiIQRWMZZxoOvkzA/zUfdylW6NwRfgpNfaaUuIgKIcI8k1jx08tgrlHtNRQIoGkk8h88Z7NoWuIw==</M><E>Aw==</E></RSAPK>
+<IDK>300</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">aQWzFxitANa1Vti0Q/9Mx4xUwgnUhstSMCQlWTAOl267wjA2kdd/NoJgoocdtj0skQ71dDHRThS+H9KmIwz4qA==</FRMA>
+</CAF>
+    <TSTED>2021-01-15T16:08:45</TSTED>
+  </DD>
+  <FRMT algoritmo="SHA1withRSA">YVYZQgHccevtgY6ECIMAe5ePWZNNVYTqZ6ZNbUbsjk9WqYNNi/nm4oAkoWjlsj1n8pytM7zSr9t0RZ+TYfHt4g==</FRMT>
+</TED>
+  <TmstFirma>2021-01-15T16:08:45</TmstFirma></Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_T33F1857"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>/en5xjeXzlfqtZ4954/7mV9J/84=</DigestValue></Reference></SignedInfo><SignatureValue>SAgI7b+EW2lS4yYFdvs9xgeudSUd55TdXYHv6PjLWGIdX8+GUaidbz3E5YeSQny1
+7aoYksKkAOAoVcpCG/HlqvLWm8+X3dytEdsJDTF9q3FsckJBCSgLrroqdH7qIPkz
+pabQ6vExJUCraUrBislNMmSBpC8wek31oy9H0ZOsYMc=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs
+51DlggMDn448MLykdKgXhASmu7o4DK2Y1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwf
+c8ToNP9GwxJ8sMj3cD44sul5HyV4gcafHzt3103TGJk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGajCCBVKgAwIBAgIKQ3yB9gAAABBGbzANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0yMDAyMDYxODQ5MTVaFw0yMzAyMDUxODQ5MTVaMIHr
+MQswCQYDVQQGEwJDTDEmMCQGA1UECAwdUkVHScOTTiBERSBBUklDQSBZIFBBUklO
+QUNPVEExDjAMBgNVBAcTBUFyaWNhMS4wLAYDVQQKEyVKT1NFIEZSQU5DSVNDTyBU
+Uk9OQ09TTyBUUk9OQ09TTyBFSVJMMRswGQYDVQQLExJWRU5UQSBERSBSRVBVRVNU
+T1MxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSww
+KgYJKoZIhvcNAQkBFh1wY29ycmVhLmF1ZGljb25zdWx0QGdtYWlsLmNvbTCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk
+05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs51DlggMDn448MLykdKgXhASmu7o4DK2Y
+1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwfc8ToNP9GwxJ8sMj3cD44sul5HyV4gcaf
+Hzt3103TGJkCAwEAAaOCAqkwggKlMIIBTwYDVR0gBIIBRjCCAUIwggE+BggrBgEE
+AcNSBTCCATAwLQYIKwYBBQUHAgEWIWh0dHA6Ly93d3cuZS1jZXJ0Y2hpbGUuY2wv
+Q1BTLmh0bTCB/gYIKwYBBQUHAgIwgfEege4ARQBsACAAcgBlAHMAcABvAG4AZABl
+AHIAIABlAHMAdABlACAAZgBvAHIAbQB1AGwAYQByAGkAbwAgAGUAcwAgAHUAbgAg
+AHIAZQBxAHUAaQBzAGkAdABvACAAaQBuAGQAaQBzAHAAZQBuAHMAYQBiAGwAZQAg
+AHAAYQByAGEAIABkAGEAcgAgAGkAbgBpAGMAaQBvACAAYQBsACAAcAByAG8AYwBl
+AHMAbwAgAGQAZQAgAGMAZQByAHQAaQBmAGkAYwBhAGMAaQDzAG4ALgAgAFAAbwBz
+AHQAZQByAGkAbwByAG0AZQBuAHQAZQAsMB0GA1UdDgQWBBQEjYoZLS5J74VYnEqc
+7dslhV/wLTALBgNVHQ8EBAMCBPAwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgox
+MzQxMjE3OS0zMB8GA1UdIwQYMBaAFHjhPp/SErN6PI3NMA5Ts0MpB7NVMD4GA1Ud
+HwQ3MDUwM6AxoC+GLWh0dHA6Ly9jcmwuZS1jZXJ0Y2hpbGUuY2wvZWNlcnRjaGls
+ZWNhRkVTLmNybDA6BggrBgEFBQcBAQQuMCwwKgYIKwYBBQUHMAGGHmh0dHA6Ly9v
+Y3NwLmVjZXJ0Y2hpbGUuY2wvb2NzcDA9BgkrBgEEAYI3FQcEMDAuBiYrBgEEAYI3
+FQiC3IMvhZOMZoXVnReC4twnge/sPGGBy54UhqiCWAIBZAIBBDAjBgNVHRIEHDAa
+oBgGCCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQEFBQADggEBAExi
+tpMxfYvOiF7TXdEvvYSVVnOmQuy5JX8NArOGtwGNvIvS9oeY2H5hepz0x0ml0pV6
+l2CfsbrWYJT2eskTbTeSgNOWGnggLakopZbxUKsCXJth8A15yf56jwl55b7Ipb3d
+u4IEAbxv5W4mqQZqYBa8LaKbf08NmzP++neg3NJFdSY27qT+0+8XM760nT02rWVt
+ZrkCrYsCx4ENdVM1anCvxAuo9J8jvf/4pqKlA5B5kNDszieyKptvy3oOsJPEr/rd
+rkukQpu5quMofOP0U4nBocpPB1tir0GvyCtG4S8GTOv1wTmeYVKpf72JaxjaL+dV
+ODm2I59SspmbZ4inFds=</X509Certificate></X509Data></KeyInfo></Signature></DTE>
+  </SetDTE>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_SetDoc"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>mpIaLWvdapuhy4L3XGrtV9wDxVk=</DigestValue></Reference></SignedInfo><SignatureValue>0diwlkjEi9s6y0rIE4so3tv/zzvAP/lDowQ7SRUVP/F0YY8g9PqcC9oM+ZGABmeR
+PPX1tvtAK4hz0uEHzJWCqroFcgo1YtkhVdDRNUR9qrFfN8iUAbzYy5OcCI47hVoR
+JRM/5gkL7j5Wb8Hq5iaUGJ1H6096YXNp6rJ/aqTJyO8=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs
+51DlggMDn448MLykdKgXhASmu7o4DK2Y1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwf
+c8ToNP9GwxJ8sMj3cD44sul5HyV4gcafHzt3103TGJk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGajCCBVKgAwIBAgIKQ3yB9gAAABBGbzANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0yMDAyMDYxODQ5MTVaFw0yMzAyMDUxODQ5MTVaMIHr
+MQswCQYDVQQGEwJDTDEmMCQGA1UECAwdUkVHScOTTiBERSBBUklDQSBZIFBBUklO
+QUNPVEExDjAMBgNVBAcTBUFyaWNhMS4wLAYDVQQKEyVKT1NFIEZSQU5DSVNDTyBU
+Uk9OQ09TTyBUUk9OQ09TTyBFSVJMMRswGQYDVQQLExJWRU5UQSBERSBSRVBVRVNU
+T1MxKTAnBgNVBAMTIEpPU0UgRlJBTkNJU0NPIFRST05DT1NPIFRST05DT1NPMSww
+KgYJKoZIhvcNAQkBFh1wY29ycmVhLmF1ZGljb25zdWx0QGdtYWlsLmNvbTCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA7f1ylkTZEJJWVM/c+QnVSNeDh8hF8xbk
+05YK9WId5MiNv3HqWAhZm0AFfwZ2vQPs51DlggMDn448MLykdKgXhASmu7o4DK2Y
+1BXxtnArDNA4fHxIAxOkGlIVT3Ki5jwfc8ToNP9GwxJ8sMj3cD44sul5HyV4gcaf
+Hzt3103TGJkCAwEAAaOCAqkwggKlMIIBTwYDVR0gBIIBRjCCAUIwggE+BggrBgEE
+AcNSBTCCATAwLQYIKwYBBQUHAgEWIWh0dHA6Ly93d3cuZS1jZXJ0Y2hpbGUuY2wv
+Q1BTLmh0bTCB/gYIKwYBBQUHAgIwgfEege4ARQBsACAAcgBlAHMAcABvAG4AZABl
+AHIAIABlAHMAdABlACAAZgBvAHIAbQB1AGwAYQByAGkAbwAgAGUAcwAgAHUAbgAg
+AHIAZQBxAHUAaQBzAGkAdABvACAAaQBuAGQAaQBzAHAAZQBuAHMAYQBiAGwAZQAg
+AHAAYQByAGEAIABkAGEAcgAgAGkAbgBpAGMAaQBvACAAYQBsACAAcAByAG8AYwBl
+AHMAbwAgAGQAZQAgAGMAZQByAHQAaQBmAGkAYwBhAGMAaQDzAG4ALgAgAFAAbwBz
+AHQAZQByAGkAbwByAG0AZQBuAHQAZQAsMB0GA1UdDgQWBBQEjYoZLS5J74VYnEqc
+7dslhV/wLTALBgNVHQ8EBAMCBPAwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgox
+MzQxMjE3OS0zMB8GA1UdIwQYMBaAFHjhPp/SErN6PI3NMA5Ts0MpB7NVMD4GA1Ud
+HwQ3MDUwM6AxoC+GLWh0dHA6Ly9jcmwuZS1jZXJ0Y2hpbGUuY2wvZWNlcnRjaGls
+ZWNhRkVTLmNybDA6BggrBgEFBQcBAQQuMCwwKgYIKwYBBQUHMAGGHmh0dHA6Ly9v
+Y3NwLmVjZXJ0Y2hpbGUuY2wvb2NzcDA9BgkrBgEEAYI3FQcEMDAuBiYrBgEEAYI3
+FQiC3IMvhZOMZoXVnReC4twnge/sPGGBy54UhqiCWAIBZAIBBDAjBgNVHRIEHDAa
+oBgGCCsGAQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQEFBQADggEBAExi
+tpMxfYvOiF7TXdEvvYSVVnOmQuy5JX8NArOGtwGNvIvS9oeY2H5hepz0x0ml0pV6
+l2CfsbrWYJT2eskTbTeSgNOWGnggLakopZbxUKsCXJth8A15yf56jwl55b7Ipb3d
+u4IEAbxv5W4mqQZqYBa8LaKbf08NmzP++neg3NJFdSY27qT+0+8XM760nT02rWVt
+ZrkCrYsCx4ENdVM1anCvxAuo9J8jvf/4pqKlA5B5kNDszieyKptvy3oOsJPEr/rd
+rkukQpu5quMofOP0U4nBocpPB1tir0GvyCtG4S8GTOv1wTmeYVKpf72JaxjaL+dV
+ODm2I59SspmbZ4inFds=</X509Certificate></X509Data></KeyInfo></Signature></EnvioDTE>

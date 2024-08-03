@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<EnvioDTE xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sii.cl/SiiDte EnvioDTE_v10.xsd" version="1.0">
+  <SetDTE ID="PR_SetDoc">
+    <Caratula version="1.0">
+      <RutEmisor>5483206-0</RutEmisor>
+      <RutEnvia>5483206-0</RutEnvia>
+      <RutReceptor>60803000-K</RutReceptor>
+      <FchResol>2020-06-17</FchResol>
+      <NroResol>0</NroResol>
+      <TmstFirmaEnv>2020-08-04T12:35:39</TmstFirmaEnv>
+      <SubTotDTE>
+        <TpoDTE>61</TpoDTE>
+        <NroDTE>1</NroDTE>
+      </SubTotDTE>
+    </Caratula>
+    <DTE version="1.0">
+  <Documento ID="PR_T61F3">
+    <Encabezado>
+      <IdDoc>
+        <TipoDTE>61</TipoDTE>
+        <Folio>3</Folio>
+        <FchEmis>2020-08-04</FchEmis>
+        <TpoTranVenta>1</TpoTranVenta>
+      </IdDoc>
+      <Emisor>
+        <RUTEmisor>5483206-0</RUTEmisor>
+        <RznSoc>JUANA EUSEBIA TRONCOSO SANCHEZ</RznSoc>
+        <GiroEmis>Venta de Repuestos Automotrices y Abarrotes por Menor</GiroEmis>
+        <Acteco>503000</Acteco>
+        <DirOrigen>Arica</DirOrigen>
+        <CmnaOrigen>Arica</CmnaOrigen>
+      </Emisor>
+      <Receptor>
+        <RUTRecep>60803000-K</RUTRecep>
+        <RznSocRecep>---Servicio de Impuestos Internos</RznSocRecep>
+        <GiroRecep>---Gobierno</GiroRecep>
+        <DirRecep>---Alonso Ovalle 680</DirRecep>
+        <CmnaRecep>---Santiago</CmnaRecep>
+      </Receptor>
+      <Totales>
+        <MntNeto>68319</MntNeto>
+        <MntExe>0</MntExe>
+        <TasaIVA>19</TasaIVA>
+        <IVA>12981</IVA>
+        <MntTotal>81300</MntTotal>
+      </Totales>
+    </Encabezado>
+    <Detalle>
+      <NroLinDet>1</NroLinDet>
+      <NmbItem>AMORTIGUADOR TRASERO IZQ DER GAS</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>25210</PrcItem>
+      <MontoItem>25210</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>2</NroLinDet>
+      <NmbItem>BANDEJA SUSPENSION DEL DER INF COMPLETA SUZUKI AERIO 1600 M16A 05/10</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>15126</PrcItem>
+      <MontoItem>15126</MontoItem>
+    </Detalle>
+    <Detalle>
+      <NroLinDet>3</NroLinDet>
+      <NmbItem>BENDIX - PIÑON ARRANQUE</NmbItem>
+      <QtyItem>1</QtyItem>
+      <PrcItem>27983</PrcItem>
+      <MontoItem>27983</MontoItem>
+    </Detalle>
+    <Referencia>
+      <NroLinRef>1</NroLinRef>
+      <TpoDocRef>33</TpoDocRef>
+      <FolioRef>40</FolioRef>
+      <FchRef>2020-07-28</FchRef>
+      <CodRef>1</CodRef>
+      <RazonRef>Anular Factura N° 40</RazonRef>
+    </Referencia>
+    <TED version="1.0">
+  <DD>
+    <RE>5483206-0</RE>
+    <TD>61</TD>
+    <F>3</F>
+    <FE>2020-08-04</FE>
+    <RR>60803000-K</RR>
+    <RSR>---Servicio de Impuestos Internos</RSR>
+    <MNT>81300</MNT>
+    <IT1>AMORTIGUADOR TRASERO IZQ DER GAS</IT1>
+    <CAF version="1.0">
+<DA>
+<RE>5483206-0</RE>
+<RS>JUANA EUSEBIA TRONCOSO SANCHEZ</RS>
+<TD>61</TD>
+<RNG><D>1</D><H>50</H></RNG>
+<FA>2020-07-29</FA>
+<RSAPK><M>6HcV9yo0bMY+9rMT90gW2WOnmzHX7EcnIyBd95Lrgv+iDgkjOrxdfQAtkBJzeMeMOfayUE2IJ0NEVLckaHjEXQ==</M><E>Aw==</E></RSAPK>
+<IDK>100</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">WwbRaVKKVSKqB3njP8Rs7aNoCCy5l5ljoFUD16LTHABL4PJednI7tmOBHjVYQHHIS6dZcoDEMhDYfzmQUWVVeA==</FRMA>
+</CAF>
+    <TSTED>2020-08-04T12:35:36</TSTED>
+  </DD>
+  <FRMT algoritmo="SHA1withRSA">RGV3vTJciiEBb50nqvgqvvYKvAQ5F9Bp9S9ObIaEBs74YE7NvmfKYaSN2SDocJVch2S6Lo+IBABQ/tVO9UR+kQ==</FRMT>
+</TED>
+  <TmstFirma>2020-08-04T12:35:36</TmstFirma></Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_T61F3"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>z/s7Yi1fc5gybiNqqbBdiZqyxQM=</DigestValue></Reference></SignedInfo><SignatureValue>tQPqc2TAKIzTHP10fVgupuUnT+FxHLDOWJTnmMEtide2Q2NfPBW04ZNpTIM4grXI
+ANQ6q26eWW1LhapfeiIl2X2zb3205e3DC92v0DHAWIaApyBluOkrwbYjzz7E/54w
+oCD4nRAakKoeTtxTMZAOgHkLXIOqNdkWRGHZPaYrAyI=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>124d8wTOHKxcGlarsNoYoLdhFRQ4n0vHMa8ZdtOVHFK+3Wd8FuujV9L5Xs6dsNbh
+xvAD0lidl/JB790IHjrTVLlFF5pfsJ46znllnfsWIhc+Vbj4bMnILseVzpJ/+WLP
+zVU0nZL4Vd7mc9hsGTiQDSjfM7lJcWoaNeOd8qIhcY0=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGXzCCBUegAwIBAgIKFsd3SAAAAA7p/zANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0xOTA4MjkyMDQzMTBaFw0yMjA4MjgyMDQzMTBaMIHg
+MQswCQYDVQQGEwJDTDEbMBkGA1UECBMSQVJJQ0EgWSBQQVJJTkFDT1RBMQ4wDAYD
+VQQHEwVBcmljYTEnMCUGA1UEChMeSnVhbmEgRXVzZWJpYSBUcm9uY29zbyBTYW5j
+aGV6MSgwJgYDVQQLEx9WRU5UQSBERSBSRVBVRVNUT1MgWSBBQ0NFU09SSU9TMScw
+JQYDVQQDEx5KdWFuYSBFdXNlYmlhIFRyb25jb3NvIFNhbmNoZXoxKDAmBgkqhkiG
+9w0BCQEWGWpvc2VmcmFuY2lzY290dEBnbWFpbC5jb20wgZ8wDQYJKoZIhvcNAQEB
+BQADgY0AMIGJAoGBANduHfMEzhysXBpWq7DaGKC3YRUUOJ9LxzGvGXbTlRxSvt1n
+fBbro1fS+V7OnbDW4cbwA9JYnZfyQe/dCB4601S5RReaX7CeOs55ZZ37FiIXPlW4
++GzJyC7Hlc6Sf/liz81VNJ2S+FXe5nPYbBk4kA0o3zO5SXFqGjXjnfKiIXGNAgMB
+AAGjggKpMIICpTCCAU8GA1UdIASCAUYwggFCMIIBPgYIKwYBBAHDUgUwggEwMC0G
+CCsGAQUFBwIBFiFodHRwOi8vd3d3LmUtY2VydGNoaWxlLmNsL0NQUy5odG0wgf4G
+CCsGAQUFBwICMIHxHoHuAEUAbAAgAHIAZQBzAHAAbwBuAGQAZQByACAAZQBzAHQA
+ZQAgAGYAbwByAG0AdQBsAGEAcgBpAG8AIABlAHMAIAB1AG4AIAByAGUAcQB1AGkA
+cwBpAHQAbwAgAGkAbgBkAGkAcwBwAGUAbgBzAGEAYgBsAGUAIABwAGEAcgBhACAA
+ZABhAHIAIABpAG4AaQBjAGkAbwAgAGEAbAAgAHAAcgBvAGMAZQBzAG8AIABkAGUA
+IABjAGUAcgB0AGkAZgBpAGMAYQBjAGkA8wBuAC4AIABQAG8AcwB0AGUAcgBpAG8A
+cgBtAGUAbgB0AGUALDAdBgNVHQ4EFgQUraix0Y3HiFqS3Tf5UUPPiATPhg4wCwYD
+VR0PBAQDAgTwMCMGA1UdEQQcMBqgGAYIKwYBBAHBAQGgDBYKMDU0ODMyMDYtMDAf
+BgNVHSMEGDAWgBR44T6f0hKzejyNzTAOU7NDKQezVTA+BgNVHR8ENzA1MDOgMaAv
+hi1odHRwOi8vY3JsLmUtY2VydGNoaWxlLmNsL2VjZXJ0Y2hpbGVjYUZFUy5jcmww
+OgYIKwYBBQUHAQEELjAsMCoGCCsGAQUFBzABhh5odHRwOi8vb2NzcC5lY2VydGNo
+aWxlLmNsL29jc3AwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIgtyDL4WTjGaF
+1Z0XguLcJ4Hv7DxhgcueFIaoglgCAWQCAQQwIwYDVR0SBBwwGqAYBggrBgEEAcEB
+AqAMFgo5NjkyODE4MC01MA0GCSqGSIb3DQEBBQUAA4IBAQAYme+pZsQfjBRzn4uS
+gMbglH2SNQhuHjxx/mbW26dh7PRhM65RHJaOKxysr6NFoYRnyenYASSAgQMT51aj
+ziF5I6NBYM59b9FTN5gZU0nczrUls7bOBo4ZL3Uc1NGtUkWAK7/ttc8JqA6fzMAf
+AQuaj5Z0dWSWfEZ0hIQd8d1vGfQbOtiKON4uenlmniW0HU/quNPoGvjMZyyaCuiI
+ll6uTvxA8jKDPEtd+M08zHdbkCwB9ozXsGXcF2rSwNdv3t5FEG7mab1WlGUgPXLx
+xXLOWrHw7rzIFQwKkzbplcOQxzpBG5dD+y9b3e3j4xRXZwsNXvrMvXY/21IsX78b
+S6R5</X509Certificate></X509Data></KeyInfo></Signature></DTE>
+  </SetDTE>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#PR_SetDoc"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>iBXsWDk9/T4hWqgaVNw+PMEltwY=</DigestValue></Reference></SignedInfo><SignatureValue>MyG28zwWU2z0C2JYkvdbryk10s84yFn5z1c8huTrvk7jtyrepflnnxOxXMay3r6q
+crwl9DWxJ6txAhucKAbsr1sLNRzbP51ZfDw9MprgBQrRSaAyDam1L/npyP7dkqM6
+wuSh40qLy8dTyKYdoRCy0gJ55BFbQ7XDQ4bAlVFiHRE=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>124d8wTOHKxcGlarsNoYoLdhFRQ4n0vHMa8ZdtOVHFK+3Wd8FuujV9L5Xs6dsNbh
+xvAD0lidl/JB790IHjrTVLlFF5pfsJ46znllnfsWIhc+Vbj4bMnILseVzpJ/+WLP
+zVU0nZL4Vd7mc9hsGTiQDSjfM7lJcWoaNeOd8qIhcY0=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGXzCCBUegAwIBAgIKFsd3SAAAAA7p/zANBgkqhkiG9w0BAQUFADCB0jELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMTAwLgYDVQQDEydFLUNFUlRDSElMRSBDQSBGSVJN
+QSBFTEVDVFJPTklDQSBTSU1QTEUxJzAlBgkqhkiG9w0BCQEWGHNjbGllbnRlc0Bl
+LWNlcnRjaGlsZS5jbDAeFw0xOTA4MjkyMDQzMTBaFw0yMjA4MjgyMDQzMTBaMIHg
+MQswCQYDVQQGEwJDTDEbMBkGA1UECBMSQVJJQ0EgWSBQQVJJTkFDT1RBMQ4wDAYD
+VQQHEwVBcmljYTEnMCUGA1UEChMeSnVhbmEgRXVzZWJpYSBUcm9uY29zbyBTYW5j
+aGV6MSgwJgYDVQQLEx9WRU5UQSBERSBSRVBVRVNUT1MgWSBBQ0NFU09SSU9TMScw
+JQYDVQQDEx5KdWFuYSBFdXNlYmlhIFRyb25jb3NvIFNhbmNoZXoxKDAmBgkqhkiG
+9w0BCQEWGWpvc2VmcmFuY2lzY290dEBnbWFpbC5jb20wgZ8wDQYJKoZIhvcNAQEB
+BQADgY0AMIGJAoGBANduHfMEzhysXBpWq7DaGKC3YRUUOJ9LxzGvGXbTlRxSvt1n
+fBbro1fS+V7OnbDW4cbwA9JYnZfyQe/dCB4601S5RReaX7CeOs55ZZ37FiIXPlW4
++GzJyC7Hlc6Sf/liz81VNJ2S+FXe5nPYbBk4kA0o3zO5SXFqGjXjnfKiIXGNAgMB
+AAGjggKpMIICpTCCAU8GA1UdIASCAUYwggFCMIIBPgYIKwYBBAHDUgUwggEwMC0G
+CCsGAQUFBwIBFiFodHRwOi8vd3d3LmUtY2VydGNoaWxlLmNsL0NQUy5odG0wgf4G
+CCsGAQUFBwICMIHxHoHuAEUAbAAgAHIAZQBzAHAAbwBuAGQAZQByACAAZQBzAHQA
+ZQAgAGYAbwByAG0AdQBsAGEAcgBpAG8AIABlAHMAIAB1AG4AIAByAGUAcQB1AGkA
+cwBpAHQAbwAgAGkAbgBkAGkAcwBwAGUAbgBzAGEAYgBsAGUAIABwAGEAcgBhACAA
+ZABhAHIAIABpAG4AaQBjAGkAbwAgAGEAbAAgAHAAcgBvAGMAZQBzAG8AIABkAGUA
+IABjAGUAcgB0AGkAZgBpAGMAYQBjAGkA8wBuAC4AIABQAG8AcwB0AGUAcgBpAG8A
+cgBtAGUAbgB0AGUALDAdBgNVHQ4EFgQUraix0Y3HiFqS3Tf5UUPPiATPhg4wCwYD
+VR0PBAQDAgTwMCMGA1UdEQQcMBqgGAYIKwYBBAHBAQGgDBYKMDU0ODMyMDYtMDAf
+BgNVHSMEGDAWgBR44T6f0hKzejyNzTAOU7NDKQezVTA+BgNVHR8ENzA1MDOgMaAv
+hi1odHRwOi8vY3JsLmUtY2VydGNoaWxlLmNsL2VjZXJ0Y2hpbGVjYUZFUy5jcmww
+OgYIKwYBBQUHAQEELjAsMCoGCCsGAQUFBzABhh5odHRwOi8vb2NzcC5lY2VydGNo
+aWxlLmNsL29jc3AwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIgtyDL4WTjGaF
+1Z0XguLcJ4Hv7DxhgcueFIaoglgCAWQCAQQwIwYDVR0SBBwwGqAYBggrBgEEAcEB
+AqAMFgo5NjkyODE4MC01MA0GCSqGSIb3DQEBBQUAA4IBAQAYme+pZsQfjBRzn4uS
+gMbglH2SNQhuHjxx/mbW26dh7PRhM65RHJaOKxysr6NFoYRnyenYASSAgQMT51aj
+ziF5I6NBYM59b9FTN5gZU0nczrUls7bOBo4ZL3Uc1NGtUkWAK7/ttc8JqA6fzMAf
+AQuaj5Z0dWSWfEZ0hIQd8d1vGfQbOtiKON4uenlmniW0HU/quNPoGvjMZyyaCuiI
+ll6uTvxA8jKDPEtd+M08zHdbkCwB9ozXsGXcF2rSwNdv3t5FEG7mab1WlGUgPXLx
+xXLOWrHw7rzIFQwKkzbplcOQxzpBG5dD+y9b3e3j4xRXZwsNXvrMvXY/21IsX78b
+S6R5</X509Certificate></X509Data></KeyInfo></Signature></EnvioDTE>

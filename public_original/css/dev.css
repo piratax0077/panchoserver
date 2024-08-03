@@ -1,0 +1,152 @@
+#logo{
+    width: 60px;
+    height: 60px;
+    border-radius: 100px;
+}
+
+.logoHeader{
+    width: 90px;
+    height: 60px;
+    border-radius: 10px;
+}
+
+.sidebar_reporte{
+    border: 1px solid black;
+}
+
+.logoInicio{
+    width: 85px;
+    height: 85px;
+    border-radius: 100px;
+    -webkit-box-shadow: 5px 5px 15px 5px #000000; 
+    box-shadow: 5px 5px 15px 5px #000000;
+}
+
+.busqueda_principal{
+    margin-top: 30px;
+    border: 1px solid black;
+    background: #eee;
+    padding: 20px;
+border-radius: 10px;
+}
+
+#navHeader{
+    height: 74px !important;
+    background-color: black !important;
+    
+}
+
+#progress-bar {
+  width: 100%;
+  height: 10px;
+  background-color: #ccc;
+}
+
+.logo_{
+    width: 150px;;
+}
+
+.titulazo{
+    text-align: center;
+    grid-column: 1/7;
+    background-color: #f2f4a9;
+    color: #000;
+  }
+
+#navHeader a{
+    color: white !important;
+    transition: all 300ms;
+}
+
+#navHeader a:hover{
+    background: #d6cb1b !important;
+    color: #000000 !important;
+}
+
+#navHeader .dropdown-item{
+    background-color: black !important;
+}
+
+.imagePerfil{
+    width: 140px;
+    height: 140px;
+    margin: 30px !important;
+    border-radius: 100px;
+    transition: all 300ms;
+}
+
+.imagePerfil:hover{
+    
+    filter: sepia(60%);
+}
+
+.enlacePerfil{
+    overflow: hidden !important;
+    transition: all 300ms;
+    font-size: 90px;
+  
+}
+
+.enlacePerfil:hover img{
+    -webkit-transform:scale(1.3);
+    transform:scale(1.3);
+    /* animation: showImage 300ms linear; */
+}
+
+@keyframes showImage {
+    from{
+        transform: translateY(-200%);
+    }to{
+        transform: translateY(0%);
+    }
+}
+
+#banner{
+    width: 100% !important;
+}
+
+.imgUserRol{
+    height: 300px;
+    width: 250px;
+    -webkit-box-shadow: 5px 5px 15px 5px #000000; 
+    box-shadow: 5px 5px 15px 5px #000000;
+    margin: 30px;
+}
+
+.list-user{
+    width: 80%; 
+    margin: 30px auto; 
+    margin-top: 20px;
+    text-align: center; 
+}
+.all-user{
+    margin-top: 100px;
+}
+
+.info-estado-usuario-activo{
+    background: green; 
+    color: white; 
+    border-radius: 10px; 
+    padding: 10px;
+}
+
+.info-estado-usuario-inactivo{
+    background: yellow; 
+    color: black; 
+    border-radius: 10px; 
+    padding: 10px;
+}
+
+.lbl-info-user{
+    border: 1px solid black;
+    border-radius: 10px;
+    padding: 10px;
+    width: 80%;
+    background: #eee;
+    text-align: center;
+}
+
+.letra_pequeña{
+    font-size: 13px;
+}
+

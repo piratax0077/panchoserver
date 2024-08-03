@@ -1,0 +1,101 @@
+/* Para ver los colores en hexadecimal
+* https://www.color-hex.com/
+*/
+
+
+/* ALTURA DEL NAVBAR SUPERIOR */
+
+.navbar,
+.navbar-nav>li>a,
+.navbar-brand {
+    padding-top: 2px !important;
+    padding-bottom: 1px !important;
+    height: 30px;
+}
+
+.dropdown-item {
+    padding-top: 0.5px;
+    padding-bottom: 0.5px;
+}
+
+.dropdown-divider {
+    margin-top: 0.5px;
+    margin-bottom: 0.5px;
+}
+
+
+/* TABLA CON SCROLL-Y */
+
+.tabla-scroll-y-200 {
+    position: relative;
+    height: 200px;
+    overflow: auto;
+    display: block;
+}
+
+.tabla-scroll-y-250 {
+    position: relative;
+    height: 250px;
+    overflow: auto;
+    display: block;
+}
+
+.tabla-scroll-y-300 {
+    position: relative;
+    height: 300px;
+    overflow: auto;
+    display: block;
+}
+
+.tabla-scroll-y-400 {
+    position: relative;
+    height: 400px;
+    overflow: auto;
+    display: block;
+}
+
+.tabla-scroll-y-500 {
+    position: relative;
+    height: 500px;
+    overflow: auto;
+    display: block;
+}
+
+.tabla-scroll-y-600 {
+    position: relative;
+    height: 600px;
+    overflow: auto;
+    display: block;
+}
+
+
+/*color cuando pones el puntero sobre una fila de la tabla */
+
+.table-hover>tbody>tr:hover {
+    background-color: #7051ff;
+}
+
+
+/* color de cabecera de las tablas*/
+
+.table>thead>tr>th {
+    background-color: #bbffee;
+}
+
+
+/* Tamaño de letras de la tabla */
+
+.letra-chica {
+    font-size: '7px';
+    font-family: 'Calibri', serif;
+}
+
+
+/* color para las cabeceras de los dataTables */
+
+table.dataTable thead {
+    background-color: #bbffee
+}
+
+
+/* Reducción de los márgenes de  h2 */
