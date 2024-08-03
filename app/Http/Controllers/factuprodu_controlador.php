@@ -809,6 +809,9 @@ class factuprodu_controlador extends Controller
         } else { // Ya existe
             $id_rep = $request->idrep;
             $r = repuesto::find($id_rep);
+            $r->id_responsable = null;
+            $r->id_responsable_dos = null;
+            $r->id_responsable_tres = null;
             if ($r->activo == 0) $r->activo = 1;
             if ($request->preciosug > $r->precio_venta) // Consultado con pancho el 22jun2020: guardar siempre el precio mayor
             {

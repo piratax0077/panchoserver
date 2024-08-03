@@ -2182,6 +2182,7 @@ public function similares(Request $request)
                     }
                 }
             }
+            $clonacion->delete();
             return 'ok';
         } catch (\Exception $e) {
             return $e->getMessage();
