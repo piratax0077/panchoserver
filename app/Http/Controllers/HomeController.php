@@ -10,6 +10,7 @@ use App\User;
 use App\user_server;
 use App\parametro;
 use App\oem;
+use App\pago;
 use App\Imports\OemsImport;
 use App\Imports\VehiclesImport;
 use Illuminate\Support\Facades\Hash;
@@ -40,6 +41,40 @@ class HomeController extends Controller
             
             $this->cargar_parametros_sistema();
             $ventas_controlador = new ventas_controlador();
+            $rolActual = Auth::user()->rol->nombrerol;
+            $esAdministrador = strcasecmp($rolActual, 'Administrador') === 0;
+            $esVendedor = strcasecmp($rolActual, 'Vendedor') === 0;
+            $resumenPagosMes = collect();
+            $totalPagosMes = 0;
+            $periodoPagos = Carbon::now()->locale('es')->translatedFormat('F Y');
+
+            if ($esAdministrador || $esVendedor) {
+                $pagosMes = pago::query()
+                    ->selectRaw('formapago.id, formapago.formapago, SUM(pagos.monto) as total')
+                    ->join('formapago', 'formapago.id', '=', 'pagos.id_forma_pago')
+                    ->where('pagos.activo', 1)
+                    ->whereIn('pagos.tipo_doc', ['bo', 'fa'])
+                    ->whereBetween('pagos.fecha_pago', [
+                        Carbon::now()->startOfMonth()->toDateString(),
+                        Carbon::now()->endOfMonth()->toDateString(),
+                    ])
+                    ->when($esVendedor, function ($query) {
+                        return $query->where('pagos.usuarios_id', Auth::id());
+                    })
+                    ->groupBy('formapago.id', 'formapago.formapago')
+                    ->orderByDesc('total')
+                    ->get();
+
+                $totalPagosMes = (float) $pagosMes->sum('total');
+                $resumenPagosMes = $pagosMes->map(function ($formaPago) use ($totalPagosMes) {
+                    $formaPago->total = (float) $formaPago->total;
+                    $formaPago->porcentaje = $totalPagosMes > 0
+                        ? round(($formaPago->total * 100) / $totalPagosMes, 1)
+                        : 0;
+
+                    return $formaPago;
+                });
+            }
             
             //Solo los administradores pueden ver los pedidos pendientes
             if(Auth::user()->rol->nombrerol == "Administrador"){
@@ -74,10 +109,19 @@ class HomeController extends Controller
                     'consignaciones' => $rc,
                     'fechaLimiteTerrestre' => Carbon::parse($fechaLimiteTerrestre)->format('d-m-Y'),
                     'fechaLimiteAereo' => Carbon::parse($fechaLimiteAereo)->format('d-m-Y'),
-                    'hoy' => $hoy
+                    'hoy' => $hoy,
+                    'resumenPagosMes' => $resumenPagosMes,
+                    'totalPagosMes' => $totalPagosMes,
+                    'periodoPagos' => $periodoPagos,
+                    'alcancePagos' => 'Ventas de todo el equipo'
                 ]);
             }else{
-                return view('home');
+                return view('home', [
+                    'resumenPagosMes' => $resumenPagosMes,
+                    'totalPagosMes' => $totalPagosMes,
+                    'periodoPagos' => $periodoPagos,
+                    'alcancePagos' => 'Tus ventas'
+                ]);
             }
             
         } catch (\Exception $e) {
@@ -102,6 +146,10 @@ class HomeController extends Controller
 
     public function dame_clave(Request $r){
         if($r->clave=='pan831'){
+            if ($r->accion === 'disminuir_stock') {
+                $r->session()->put('autoriza_disminuir_stock_hasta', now()->addMinutes(5)->timestamp);
+            }
+
             return "OK";
         }else{
             return "NEGATIVO";

@@ -16,7 +16,8 @@
             <th scope="col">Descripción</th>
             <th scope="col">Marca</th>
             <th scope="col">Medida</th>
-           
+            {{-- <th scope="col" style="background-color: #fff3cd;">Valor Máx</th> --}}
+            <th scope="col">Stock Disponible</th>
             <th scope="col"></th>
             <th scope="col"></th>
         </tr>
@@ -33,9 +34,8 @@
                 <td class="letra_pequeña">{{$repuesto->marcarepuesto}}</td>
                 
                 @php
-           //$porciones =explode(',',$repuesto->medidas);
-           // Usando explode con múltiples delimitadores
-            $porciones = preg_split('/[:,]/', $repuesto->medidas);
+                    // Las medidas ya vienen ordenadas del controlador
+                    $porciones = preg_split('/[:,]/', $repuesto->medidas);
                 @endphp
                 <td class="letra_pequeña" style="background-color:#eee;">
                         @foreach($porciones as $p)
@@ -46,6 +46,13 @@
                         @endif
                         
                         @endforeach
+                </td>
+                {{-- <td class="letra_pequeña" style="text-align: center; font-weight: bold; background-color: #fff3cd;">
+                    {{$repuesto->valor_orden}}
+                </td> --}}
+             
+                <td class="letra_pequeña" style="text-align: center; font-weight: bold; background-color: #d4edda;">
+                    {{$repuesto->stock_disponible}}
                 </td>
           
                

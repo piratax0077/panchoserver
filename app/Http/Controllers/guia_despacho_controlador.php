@@ -33,8 +33,12 @@ use App\factura_detalle;
 use App\pago;
 use App\devolucion_mercaderia;
 use App\devolucion_mercaderia_detalle;
+use App\Services\StockAuditContext;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class guia_despacho_controlador extends Controller
 {
@@ -340,7 +344,7 @@ class guia_despacho_controlador extends Controller
                                                     ->where('boletas_detalle.id_boleta',$buscado_doc->id)
                                                     ->get();
                        $devolucion = devolucion_mercaderia::where('usuario_id',Auth::user()->id)->where('activo',1)->first();
-                       $devoluciones_detalle = $this->damedevoluciones($numero_nc);
+                       $devoluciones_detalle = $this->damedevoluciones($numero_nc, 'nc');
 
                        $total = 0;
 
@@ -380,7 +384,7 @@ class guia_despacho_controlador extends Controller
                                                     ->where('facturas_detalle.id_factura',$buscado_doc->id)
                                                     ->get();
 
-                        $devoluciones_detalle = $this->damedevoluciones($numero_nc);
+                        $devoluciones_detalle = $this->damedevoluciones($numero_nc, 'nc');
 
 
                         $v = view('fragm.devolucion_mercaderia_nuevo',[
@@ -429,7 +433,7 @@ class guia_despacho_controlador extends Controller
                                                     ->get();
                       
                        $devolucion = devolucion_mercaderia::where('usuario_id',Auth::user()->id)->where('activo',1)->first();
-                       $devoluciones_detalle = $this->damedevoluciones($numero_doc);
+                       $devoluciones_detalle = $this->damedevoluciones($numero_doc, 'bo');
                        
                         $v = view('fragm.devolucion_mercaderia_nuevo',[
                             'documento' => $buscado_doc,
@@ -463,7 +467,7 @@ class guia_despacho_controlador extends Controller
                                                     ->where('facturas_detalle.id_factura',$buscado_doc->id)
                                                     ->get();
 
-                        $devoluciones_detalle = $this->damedevoluciones($numero_doc);
+                        $devoluciones_detalle = $this->damedevoluciones($numero_doc, 'fa');
 
 
                         $v = view('fragm.devolucion_mercaderia_nuevo',[
@@ -489,6 +493,7 @@ class guia_despacho_controlador extends Controller
     }
 
     public function devolucion(Request $req){
+        return $this->registrarDevolucionSegura($req);
        
         try {
             $id_repuesto = $req->repuesto_id;
@@ -548,6 +553,7 @@ class guia_despacho_controlador extends Controller
     }
 
     public function cerrar_devolucion($num_nc){
+        return $this->cerrarDevolucionDocumento($num_nc, 'nc');
        
         try {
 
@@ -566,6 +572,8 @@ class guia_despacho_controlador extends Controller
     }
     //Función creada para devoluciones de mercadería por vale de mercadería
     public function cerrar_devolucion_($num_doc,$tipo_doc){
+        abort_unless(in_array($tipo_doc, ['bo', 'fa'], true), 422, 'Tipo de documento inválido.');
+        return $this->cerrarDevolucionDocumento($num_doc, $tipo_doc);
         
         try {
 
@@ -602,7 +610,27 @@ class guia_despacho_controlador extends Controller
         
     }
 
+    public function dame_ventas_totem($id_carrito){
+        try {
+            $repuestos = $this->dame_repuestos_devolucion($num_nc);
+            $v = view('fragm.repuestos_devolucion',['repuestos' => $repuestos,'num_nc' => $num_nc])->render();
+            return $v;
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        } 
+    }
+
+    public function dame_venta_totem($id_carrito){
+        try {
+            return $id_carrito;
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
+    }
+
     public function opcion_devolucion(Request $req){
+        return $this->procesarDevolucionSegura($req);
         $repuesto_id = $req->repuesto_id;
         $cantidad = $req->cantidad;
         $id_local = $req->local_id;
@@ -681,13 +709,16 @@ class guia_despacho_controlador extends Controller
         
     }
 
-    public function damedevoluciones($num_nc){
+    public function damedevoluciones($num_nc, $tipoDoc = null){
         $devoluciones = devolucion_mercaderia::select('repuestos.*','devolucion_mercaderia.cantidad','locales.local_nombre','users.name')
                                             ->join('repuestos','devolucion_mercaderia.repuesto_id','repuestos.id')
                                             ->join('locales','devolucion_mercaderia.local_id','locales.id')
                                             ->join('users','devolucion_mercaderia.usuario_id','users.id')
                                             ->where('devolucion_mercaderia.usuario_id',Auth::user()->id)
                                             ->where('devolucion_mercaderia.num_nc',$num_nc)
+                                            ->when($tipoDoc, function ($query) use ($tipoDoc) {
+                                                return $query->where('devolucion_mercaderia.tipo_doc', $tipoDoc);
+                                            })
                                             ->where('devolucion_mercaderia.activo',1)
                                             ->get();
         return $devoluciones;
@@ -702,6 +733,181 @@ class guia_despacho_controlador extends Controller
                                             ->where('devolucion_mercaderia.activo',0)
                                             ->get();
         return $devoluciones_realizadas;
+    }
+
+    private function registrarDevolucionSegura(Request $request)
+    {
+        $datos = $request->validate([
+            'repuesto_id' => 'required|integer|exists:repuestos,id',
+            'local_id' => 'required|integer|exists:locales,id',
+            'cantidad' => 'required|integer|min:1',
+            'num_nc' => 'required|string|max:30',
+            'tipo_doc' => 'required|in:nc,bo,fa',
+        ]);
+
+        DB::transaction(function () use ($datos) {
+            $repuesto = repuesto::whereKey($datos['repuesto_id'])->where('activo', 1)->lockForUpdate()->firstOrFail();
+            $destinos = array_map('intval', array_filter([$repuesto->local_id, $repuesto->local_id_dos, $repuesto->local_id_tres]));
+            if (\App\Services\StockPorLocalService::habilitado()) { $destinos = \App\RepuestoStock::where('repuesto_id', $repuesto->id)->pluck('local_id')->map(function ($id) { return (int) $id; })->all(); }
+            if (!in_array((int) $datos['local_id'], $destinos, true)) {
+                throw ValidationException::withMessages(['local_id' => 'El destino no corresponde a una ubicación configurada para este repuesto.']);
+            }
+
+            $vendida = $this->cantidadVendida($datos['num_nc'], $datos['tipo_doc'], $datos['repuesto_id']);
+            if ($vendida < 1) {
+                throw ValidationException::withMessages(['repuesto_id' => 'El repuesto no pertenece al documento seleccionado o este ya fue procesado.']);
+            }
+            if ((int) $datos['cantidad'] > $vendida) {
+                throw ValidationException::withMessages(['cantidad' => 'La cantidad supera las '.$vendida.' unidades vendidas.']);
+            }
+
+            $existe = devolucion_mercaderia::where('num_nc', $datos['num_nc'])
+                ->where('tipo_doc', $datos['tipo_doc'])->where('repuesto_id', $datos['repuesto_id'])
+                ->where('activo', 1)->lockForUpdate()->exists();
+            if ($existe) {
+                throw ValidationException::withMessages(['repuesto_id' => 'Este repuesto ya está incluido en la devolución pendiente.']);
+            }
+
+            $correlativo = correlativo::whereKey(10)->lockForUpdate()->firstOrFail();
+            $numero = (int) $correlativo->correlativo + 1;
+            $registro = [
+                'num_devolucion' => $numero, 'tipo_doc' => $datos['tipo_doc'], 'num_nc' => $datos['num_nc'],
+                'usuario_id' => Auth::id(), 'repuesto_id' => $datos['repuesto_id'], 'local_id' => $datos['local_id'],
+                'cantidad' => $datos['cantidad'], 'fecha_emision' => Carbon::today()->toDateString(),
+                'activo' => 1,
+            ];
+            if ($this->devolucionTieneSeguimiento()) {
+                $registro['estado'] = 'PENDIENTE';
+            }
+            devolucion_mercaderia::create($registro);
+            $correlativo->correlativo = $numero;
+            $correlativo->save();
+        }, 3);
+
+        $devoluciones = $this->damedevoluciones($datos['num_nc'], $datos['tipo_doc']);
+        return response()->json([
+            'ok' => true,
+            'mensaje' => 'Producto agregado. El stock cambiará únicamente cuando inventario lo apruebe.',
+            'html' => view('fragm.devoluciones_table', compact('devoluciones'))->render(),
+        ]);
+    }
+
+    private function cantidadVendida($numero, $tipo, $repuestoId)
+    {
+        if ($tipo === 'nc') {
+            $nc = nota_de_credito::where('num_nota_credito', $numero)->where('devuelto', 0)->lockForUpdate()->first();
+            $partes = $nc ? explode('*', (string) $nc->docum_referencia) : [];
+            if (count($partes) < 2 || !in_array($partes[0], ['bo', 'fa'], true)) {
+                return 0;
+            }
+            return $this->cantidadVendida($partes[1], $partes[0], $repuestoId);
+        }
+
+        if ($tipo === 'bo') {
+            $documento = boleta::where('num_boleta', $numero)->where('estado_sii', 'ACEPTADO')->where('devuelto', 0)->lockForUpdate()->first();
+            return $documento ? (int) boleta_detalle::where('id_boleta', $documento->id)->where('id_repuestos', $repuestoId)->sum('cantidad') : 0;
+        }
+
+        $documento = factura::where('num_factura', $numero)->where('estado_sii', 'ACEPTADO')->where('devuelto', 0)->lockForUpdate()->first();
+        return $documento ? (int) factura_detalle::where('id_factura', $documento->id)->where('id_repuestos', $repuestoId)->sum('cantidad') : 0;
+    }
+
+    private function cerrarDevolucionDocumento($numero, $tipo)
+    {
+        $devoluciones = DB::transaction(function () use ($numero, $tipo) {
+            $pendientes = devolucion_mercaderia::where('num_nc', $numero)->where('tipo_doc', $tipo)
+                ->where('usuario_id', Auth::id())->where('activo', 1)->lockForUpdate()->get();
+            if ($pendientes->isEmpty()) {
+                throw ValidationException::withMessages(['devolucion' => 'No existen productos pendientes para enviar.']);
+            }
+
+            if ($tipo === 'nc') {
+                $documento = nota_de_credito::where('num_nota_credito', $numero)->where('devuelto', 0)->lockForUpdate()->firstOrFail();
+            } elseif ($tipo === 'bo') {
+                $documento = boleta::where('num_boleta', $numero)->where('devuelto', 0)->lockForUpdate()->firstOrFail();
+            } else {
+                $documento = factura::where('num_factura', $numero)->where('devuelto', 0)->lockForUpdate()->firstOrFail();
+            }
+            $documento->devuelto = 1;
+            $documento->save();
+            if ($this->devolucionTieneSeguimiento()) {
+                devolucion_mercaderia::whereIn('id', $pendientes->pluck('id'))->update(['estado' => 'EN_REVISION']);
+            }
+            return $pendientes;
+        }, 3);
+
+        $devoluciones = $this->damedevoluciones($numero, $tipo);
+        return response()->json([
+            'ok' => true,
+            'mensaje' => 'Devolución enviada a revisión. El stock aún no ha sido modificado.',
+            'html' => view('fragm.devoluciones_table', ['devoluciones' => $devoluciones, 'admin' => true])->render(),
+        ]);
+    }
+
+    private function procesarDevolucionSegura(Request $request)
+    {
+        $datos = $request->validate([
+            'repuesto_id' => 'required|integer', 'cantidad' => 'required|integer|min:1',
+            'local_id' => 'required|integer', 'num_nc' => 'required', 'opcion' => 'required|in:+,-',
+        ]);
+
+        DB::transaction(function () use ($datos) {
+            $devolucion = devolucion_mercaderia::where('num_nc', $datos['num_nc'])
+                ->where('repuesto_id', $datos['repuesto_id'])->where('activo', 1)->lockForUpdate()->firstOrFail();
+            if ((int) $devolucion->cantidad !== (int) $datos['cantidad'] || (int) $devolucion->local_id !== (int) $datos['local_id']) {
+                throw ValidationException::withMessages(['cantidad' => 'La devolución cambió. Recargue la pantalla antes de continuar.']);
+            }
+
+            if ($datos['opcion'] === '+') {
+                $repuesto = repuesto::whereKey($datos['repuesto_id'])->where('activo', 1)->lockForUpdate()->firstOrFail();
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $datos['local_id'], (int) $datos['cantidad'], [
+                        'tipo' => 'DEVOLUCION_MERCADERIA', 'motivo' => 'Devolución aprobada '.$devolucion->num_nc,
+                        'referencia_tipo' => 'devolucion_mercaderia', 'referencia_id' => $devolucion->id,
+                    ]);
+                } else {
+                $campos = [(int) $repuesto->local_id => 'stock_actual', (int) $repuesto->local_id_dos => 'stock_actual_dos', (int) $repuesto->local_id_tres => 'stock_actual_tres'];
+                if (!isset($campos[(int) $datos['local_id']])) {
+                    throw ValidationException::withMessages(['local_id' => 'La ubicación ya no está configurada para este repuesto.']);
+                }
+                $campo = $campos[(int) $datos['local_id']];
+                StockAuditContext::run([
+                    'tipo' => 'DEVOLUCION_MERCADERIA',
+                    'motivo' => 'Devolución aprobada del documento '.$devolucion->tipo_doc.' N° '.$devolucion->num_nc,
+                    'usuario_id' => Auth::id(), 'referencia_tipo' => 'devolucion_mercaderia', 'referencia_id' => $devolucion->id,
+                ], function () use ($repuesto, $campo, $datos) {
+                    $repuesto->{$campo} = (int) $repuesto->{$campo} + (int) $datos['cantidad'];
+                    $repuesto->usuario_id_modifica = Auth::id();
+                    $repuesto->save();
+                });
+                }
+                if ($this->devolucionTieneSeguimiento()) {
+                    $devolucion->estado = 'ACEPTADA';
+                }
+            } else {
+                if ($this->devolucionTieneSeguimiento()) {
+                    $devolucion->estado = 'RECHAZADA';
+                }
+            }
+            $devolucion->activo = 0;
+            if ($this->devolucionTieneSeguimiento()) {
+                $devolucion->procesado_por = Auth::id();
+                $devolucion->procesado_at = now();
+            }
+            $devolucion->save();
+        }, 3);
+
+        $repuestos = $this->dame_repuestos_devolucion($datos['num_nc']);
+        return view('fragm.repuestos_devolucion', ['repuestos' => $repuestos, 'num_nc' => $datos['num_nc']])->render();
+    }
+
+    private function devolucionTieneSeguimiento()
+    {
+        static $disponible;
+        if ($disponible === null) {
+            $disponible = Schema::hasColumn('devolucion_mercaderia', 'estado');
+        }
+        return $disponible;
     }
 
     public function traspasar_mercaderia(Request $request){

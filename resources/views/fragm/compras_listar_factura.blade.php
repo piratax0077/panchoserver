@@ -3,12 +3,10 @@
   <div class="row" id="opciones">
     <div class="btn-toolbar">
       <div class="btn-group btn-group-md" role="group">
-        @if(isset($pagos_factura))
-        @if($pagos_factura->count() == 0)
-        <button class="btn btn-success" type="button" data-toggle="modal" data-target="#formCabFac" onclick="dameFormasPago()">Pagada</button>
+        @if((int) $cabecera->pagada === 0)
+        <button class="btn btn-success" type="button" data-toggle="modal" data-target="#formCabFac" onclick="dameFormasPago()">Pagar factura</button>
         @else
-        <button class="btn btn-success" type="button" data-toggle="modal" data-target="#formCabFac" onclick="dameFormasPago()" disabled>Pagada</button>
-        @endif
+        <button class="btn btn-success" type="button" disabled>Factura pagada</button>
         @endif
         
       </div>
@@ -16,8 +14,18 @@
         <button class="btn btn-danger" type="button" onclick="eliminar_factura({{$cabecera['id']}})">Eliminar</button>
       </div>
       <div class="btn-group btn-group-md" role="group">
-        <button class="btn btn-secondary" type="button">Opcion 3</button>
-        <button class="btn btn-secondary" type="button">Opción 4</button>
+        <label for="">Responsable</label>
+        <select name="id_responsable" id="id_responsable" class="form-control form-control-sm">
+          <option value="">Seleccione</option>
+          @foreach($usuarios as $usuario)
+            @if($usuario->id == $cabecera->id_responsable)
+              <option value="{{$usuario->id}}" selected>{{$usuario->name}}</option>
+            @else
+              <option value="{{$usuario->id}}">{{$usuario->name}}</option>
+            @endif
+          @endforeach
+        </select>
+        <button role="button" class="btn btn-success btn-sm" onclick="guardar_responsable()"><i class="fas fa-save"></i></button>
       </div>
     </div> <!-- btn-toolbar -->
   </div>
@@ -28,7 +36,7 @@
             <tbody>
                 <tr>
                     <td><strong>Fact. Número:</strong>{{$cabecera['factura_numero']}}</td>
-                    <td><strong>Fecha: </strong>{{\Carbon\Carbon::parse($cabecera['factura_fecha'])->format("d-m-Y")}}</td>
+                    <td><strong>Fecha: </strong>{{ \Carbon\Carbon::parse($cabecera->getRawOriginal('factura_fecha'))->format('d-m-Y') }}</td>
                     <td><strong>Total:</strong> {{number_format($cabecera['factura_total'],2,',','.')}}</td>
                     <td><strong>Flete:</strong> {{number_format($suma_flete,2,',','.')}}</td>
                     <td></td>
@@ -79,7 +87,12 @@
                       <td class="text-right letra-chica">{{number_format($item->cantidad * $item->flete,2,',','.')}}</td>
                       <td class="text-right letra-chica">{{number_format(($item->cantidad * $item->pu),2,',','.')}}</td>
                       <td class="text-right letra-chica">{{number_format($item->precio_sugerido,2,',','.')}}</td>
-                      <td class="text-center" style="cursor: pointer;" onclick="eliminar_repuesto({{$cabecera['factura_numero']}},{{$item->id}})">X</td>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="eliminar_repuesto({{$cabecera['factura_numero']}},{{$item->id}})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        </td>
+                      
                       <td class="text-center">@if(isset($value)) @if($value == 1 || Auth::user()->rol->nombrerol == "Administrador")<button class="btn btn-warning btn-sm" onclick="editar_item({{$item->id}},{{$cabecera->id}})" data-toggle="modal" data-target="#modalEditarItem">Editar</button>@endif @endif</td>
                       <td class="text-center"><button class="btn btn-primary btn-sm" onclick="moverProducto({{$item->id}})" data-toggle="modal" data-target="#modalMoverProducto">Mover</button></td>
                     </tr>
@@ -111,7 +124,7 @@
             <tr>
               <td class="text-center letra-chica">{{$item->factura_numero}}</td>
               <td class="letra-chica">{{$item->formapago}}</td>
-              <td class="text-center letra-chica">{{\Carbon\Carbon::parse($item->fecha_pago)->format("d-m-Y")}}</td>
+              <td class="text-center letra-chica">{{ \Carbon\Carbon::parse($item->fecha_pago)->format('d-m-Y') }}</td>
               <td class="text-right letra-chica">{{number_format($item->monto,2,',','.')}}</td>
               <td class="text-right letra-chica">{{$item->referencia}}</td>
               <td class="text-right letra-chica">{{$item->name}}</td>
@@ -147,7 +160,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
-        <button type="button" class="btn btn-success" onclick="pagada({{$cabecera->id}})">Pagada</button>
+        <button type="button" class="btn btn-success" id="btnPagarFactura" onclick="pagada({{$cabecera->id}})">Confirmar pago</button>
       </div>
     </div>
   </div>
@@ -158,3 +171,53 @@
 
 
 
+<script>
+  function guardar_responsable(){
+    let id_cabecera = "{{$cabecera->id}}";
+    let id_responsable = $("#id_responsable").val();
+
+    console.log(id_cabecera, id_responsable);
+    if(id_responsable == ""){
+      Vue.swal(
+        'Debe seleccionar un responsable',
+        '',
+        'warning'
+      )
+      return false;
+    }
+    let url = "{{route('guardar_responsable_compra')}}";
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        }
+    });
+
+    $.ajax({
+        url: url,
+        method: 'POST',
+        data: {
+            id_cabecera: id_cabecera,
+            id_responsable: id_responsable
+        },
+        success: function(data) {
+          console.log(data);
+            if(data == "ok"){
+              Vue.swal(
+                'Responsable guardado',
+                '',
+                'success'
+              )
+            }else{
+              Vue.swal(
+                'Error al guardar responsable',
+                '',
+                'error'
+              )
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error en la solicitud AJAX:', error);
+        }
+    });
+  }
+</script>

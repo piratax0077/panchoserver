@@ -1,7 +1,7 @@
 @if($mes->count()>0)
 
     @php $total_mes=0; @endphp
-    <table class="table table-sm table-hover table-bordered" style="width:50%">
+    <table class="table table-sm table-hover table-bordered" style="width:100%">
         <thead>
             <th class="text-center" width="150px">FECHA</th>
             <th class="text-center" width="70px">OPER</th>

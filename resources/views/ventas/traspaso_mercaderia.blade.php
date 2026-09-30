@@ -325,142 +325,152 @@
     }
 
     function guardar_ubicacion(){
-          let ubicacion = document.getElementById('ubicacion').value;
-          let piso = document.getElementById('piso').value;
-          let estanteria = document.getElementById('estanteria').value;
-          let bandeja = document.getElementById('bandeja').value;
-          let pasillo = document.getElementById('pasillo').value;
-          let id_repuesto = document.getElementById('id_repuesto_ubicacion').value;
-        
-          let params = {
-              ubicacion: ubicacion,
-              piso: piso,
-              estanteria: estanteria,
-              bandeja: bandeja,
-              pasillo: pasillo,
-              id_repuesto: id_repuesto
-          }
-
-          let url = '/repuesto/modificarubicacion';
-          
-          $.ajaxSetup({
-                headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                }
-            });
-            
-            $.ajax({
-                type:'post',
-                data: params,
-                url: url,
-                beforeSend: function(){
-                    console.log('Enviando')
-                },
-                success: function(data){
-                 
-                   let id_repuesto = data[2];
-                    if(data[0] === 'OK'){
-                        console.log('stock actualizado');
-                        // $('#ubi_uno').empty();
-                        // $('$ubi_uno').append('<p>Ubicacion: '+data[1]+'  </p>');
-                        $('#ubicacion-'+id_repuesto).empty();
-                        $('#ubicacion-'+id_repuesto).append(data[1]);
-                        Vue.swal({
-                          text: "Ubicación guardada",
-                          position: 'top-end',
-                          icon: 'success',
-                          toast: true,
-                          showConfirmButton: false,
-                          timer: 4000,
-                          });
-                          $("#modal_modificar_ubicacion").modal('hide');
-                       
-                    }else{
-                      Vue.swal({
-                          text: "No se pueden guardar las dos ubicaciones en Tienda",
-                          position: 'top-end',
-                          icon: 'error',
-                          toast: true,
-                          showConfirmButton: false,
-                          timer: 4000,
-                          });
-                          $("#modal_modificar_ubicacion").modal('hide');
-                    }
-                },
-                error: function(err){
-                    console.log(err);
-                }
-            })
-      }
-
-      function notificar(){
-        let num_solicitud_ingreso = $('#num_solicitud_ingreso').val();
-        let num_solicitud = $('#num_solicitud').val();
-        if(num_solicitud == '' || num_solicitud == undefined || num_solicitud.trim() == 0  ){
-          var value = num_solicitud_ingreso;
-        }else{
-          var value = num_solicitud;
-        }
-
-        if(value == ''){
-          Vue.swal({
-            icon:'error',
-            showConfirmButton: false,
-            toast: true,
-            timer:3000,
-            text:'Seleccione un repuesto',
-            position: 'top-end'
-          });
-          return false;
-        }
-
-        let url = '/solicitud_traspaso';
-
-        $.ajaxSetup({
-                headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                }
-            });
-        
-            $.ajax({
-              type:'post',
-              url: url,
-              data: {num_solicitud: value},
-              beforeSend: function(){
-                Vue.swal({
-                  icon:'info',
-                  title:'Cargando ...',
-                  showConfirmButton: false
-                });
-
-              },
-              success: function(resp){
-                Vue.swal.close();
-                let r=JSON.parse(resp);
-                            if(r.estado=='OK'){
-                                var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
-                                var w=window.open(r.mensaje,'_blank',config);
-                                w.focus();
-                            }else{
-                                Vue.swal({
-                                    title: r.estado,
-                                    text: r.mensaje,
-                                    icon: 'error',
-                                });
-                            }
-              },
-              error: function(error){
-                Vue.swal({
-                  icon:'error',
-                  title:'error',
-                  text: error.responseText
-                });
-              }
-            })
-
-      }
-
+        let ubicacion = document.getElementById('ubicacion').value;
+        let piso = document.getElementById('piso').value;
+        let estanteria = document.getElementById('estanteria').value;
+        let bandeja = document.getElementById('bandeja').value;
+        let pasillo = document.getElementById('pasillo').value;
+        let id_repuesto = document.getElementById('id_repuesto_ubicacion').value;
       
+        let params = {
+            ubicacion: ubicacion,
+            piso: piso,
+            estanteria: estanteria,
+            bandeja: bandeja,
+            pasillo: pasillo,
+            id_repuesto: id_repuesto
+        }
+
+        let url = '/repuesto/modificarubicacion';
+        
+        $.ajaxSetup({
+              headers: {
+              'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+              }
+          });
+          
+          $.ajax({
+              type:'post',
+              data: params,
+              url: url,
+              beforeSend: function(){
+                  console.log('Enviando')
+              },
+              success: function(data){
+                
+                  let id_repuesto = data[2];
+                  if(data[0] === 'OK'){
+                      console.log('stock actualizado');
+                      // $('#ubi_uno').empty();
+                      // $('$ubi_uno').append('<p>Ubicacion: '+data[1]+'  </p>');
+                      $('#ubicacion-'+id_repuesto).empty();
+                      $('#ubicacion-'+id_repuesto).append(data[1]);
+                      Vue.swal({
+                        text: "Ubicación guardada",
+                        position: 'top-end',
+                        icon: 'success',
+                        toast: true,
+                        showConfirmButton: false,
+                        timer: 4000,
+                        });
+                        $("#modal_modificar_ubicacion").modal('hide');
+                      
+                  }else{
+                    Vue.swal({
+                        text: "No se pueden guardar las dos ubicaciones en Tienda",
+                        position: 'top-end',
+                        icon: 'error',
+                        toast: true,
+                        showConfirmButton: false,
+                        timer: 4000,
+                        });
+                        $("#modal_modificar_ubicacion").modal('hide');
+                  }
+              },
+              error: function(err){
+                  console.log(err);
+              }
+          })
+    }
+
+    function notificar(){
+      let num_solicitud_ingreso = $('#num_solicitud_ingreso').val();
+      let num_solicitud = $('#num_solicitud').val();
+      if(num_solicitud == '' || num_solicitud == undefined || num_solicitud.trim() == 0  ){
+        var value = num_solicitud_ingreso;
+      }else{
+        var value = num_solicitud;
+      }
+
+      if(value == ''){
+        Vue.swal({
+          icon:'error',
+          showConfirmButton: false,
+          toast: true,
+          timer:3000,
+          text:'Seleccione un repuesto',
+          position: 'top-end'
+        });
+        return false;
+      }
+
+      let url = '/solicitud_traspaso';
+
+      $.ajaxSetup({
+              headers: {
+              'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+              }
+          });
+      
+          $.ajax({
+            type:'post',
+            url: url,
+            data: {num_solicitud: value},
+            beforeSend: function(){
+              Vue.swal({
+                icon:'info',
+                title:'Cargando ...',
+                showConfirmButton: false
+              });
+
+            },
+            success: function(resp){
+              Vue.swal.close();
+              let r=JSON.parse(resp);
+                          if(r.estado=='OK'){
+                              var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
+                              var w=window.open(r.mensaje,'_blank',config);
+                              w.focus();
+                          }else{
+                              Vue.swal({
+                                  title: r.estado,
+                                  text: r.mensaje,
+                                  icon: 'error',
+                              });
+                          }
+            },
+            error: function(error){
+              Vue.swal({
+                icon:'error',
+                title:'error',
+                text: error.responseText
+              });
+            }
+          })
+
+    }
+
+    function excel_repuestos_sin_ubicacion(){
+      Vue.swal({
+          icon:'info',
+          position: 'top-end',
+          text:'En construcción',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return false;
+    }
 
   </script>
 @endsection
@@ -497,10 +507,14 @@
       <div class="form-group">
         <label for="">Codigo interno</label>
         <input type="text" name="" id="cod_int" class="form-control">
-        <input type="button" value="Buscar" class="btn btn-warning btn-sm mt-2" onclick="buscar_repuesto()">
-        
-        @if(Auth::user()->name == "Mauricio Eguren" || Auth::user()->name == "Francisco Rojo" || Auth::user()->name == "José Troncoso") <input type="button" value="Repuestos sin información" class="btn btn-danger btn-sm mt-2" onclick="buscar_repuestos_sin_ubicacion()"> @endif
-      </div>
+        <div class="d-flex justify-content-between">
+          <input type="button" value="Buscar" class="btn btn-warning btn-sm mt-2" onclick="buscar_repuesto()">
+          @if(Auth::user()->role_id == 10) 
+          <input type="button" value="Repuestos s/info" class="btn btn-danger btn-sm mt-2" onclick="buscar_repuestos_sin_ubicacion()"> 
+          <a href="/repuesto/descargar-repuestos-sin-ubi" class="btn btn-success btn-sm mt-2 w-100"><i class="fa-solid fa-file-excel"></i></a>
+          @endif
+        </div>
+        </div>
     </div>
     <div class="col-md-3">
       <div class="form-group">
@@ -510,13 +524,13 @@
       
     </div>
     <div class="col-md-5">
-      <p>Sección dedidaca al traspaso de mercadería entre bodega a tienda</p> 
       <button class="btn btn-success btn-sm" onclick="traspasar()">Confirmar</button>
     </div>
     </div>
     <div class="row" style="width: 100%">
     <div class="col-md-8">
-      <table class="table">
+      
+      <table class="table tabla-scroll-y-600">
         <thead class="thead-dark">
           <tr>
             <th scope="col" class="letra_pequeña">Cod Int</th>

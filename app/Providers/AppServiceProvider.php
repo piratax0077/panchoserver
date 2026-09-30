@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Observers\RepuestoStockObserver;
+use App\repuesto;
 use Illuminate\Support\ServiceProvider;
 use Debugbar;
 
@@ -24,6 +26,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-
+        repuesto::observe(RepuestoStockObserver::class);
     }
 }

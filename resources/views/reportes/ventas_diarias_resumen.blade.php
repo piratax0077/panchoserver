@@ -1,3 +1,102 @@
+<style>
+.diario-periodo{background:#dceeff;border:1px solid #c9e2f7;border-radius:5px;color:#315b7d;padding:13px 16px;margin-bottom:16px}
+.diario-card{min-height:124px;background:#f8f9fa;border:1px solid #e2e6ea;border-left:4px solid #6495ed;border-radius:4px;padding:14px;margin-bottom:14px}
+.diario-card.exito{border-left-color:#28a745}.diario-card.getnet{border-left-color:#6f42c1}.diario-card.nota{border-left-color:#fd7e14}
+.diario-card .etiqueta{color:#5f6b76;font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:7px}
+.diario-card .valor{color:#17212b;font-size:23px;font-weight:700;line-height:1.2}
+.diario-card .detalle-card{color:#6c757d;font-size:12px;margin-top:8px}
+.diario-card .positivo{color:#218838}.diario-card .negativo{color:#c82333}
+.diario-tablas{background:#fff;border:1px solid #dfe3e8;border-radius:4px;padding:14px;margin-bottom:18px;overflow-x:auto}
+.diario-tablas h5{background:#f1f3f5;border-bottom:1px solid #dfe3e8;margin:-14px -14px 12px;padding:11px 14px;font-weight:700}
+.diario-tablas thead th{background:#bff7ea;border-bottom:2px solid #5bb9a6;white-space:nowrap;text-transform:uppercase;font-size:12px}
+.diario-periodo{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+}
+.diario-periodo .btn{
+    white-space:nowrap;
+}
+</style>
+
+<div class="diario-periodo">
+    <strong>RESUMEN DEL DÍA</strong>
+
+    <button type="button"
+            id="btn_ver_resumen"
+            class="btn btn-sm btn-outline-secondary"
+            onclick="solicitar_clave_resumen_diario()">
+        <i class="fa fa-key"></i>
+        Ver indicadores
+    </button>
+</div>
+
+<div id="bloque_resumen_diario_protegido" style="display:none;">
+<div class="row">
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card">
+        <div class="etiqueta">Ventas brutas (con IVA)</div>
+        <div class="valor">${{number_format($resumenDiario['venta_bruta'],0,',','.')}}</div>
+        <div class="detalle-card">Monto final vendido durante el día.</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card">
+        <div class="etiqueta">Ventas netas (sin IVA)</div>
+        <div class="valor">${{number_format($resumenDiario['venta_neta'],0,',','.')}}</div>
+        <div class="detalle-card">Base utilizada para calcular rentabilidad.</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card">
+        <div class="etiqueta">Costo productos vendidos</div>
+        <div class="valor">${{number_format($resumenDiario['costo_productos_vendidos'],0,',','.')}}</div>
+        <div class="detalle-card">Costo histórico de los productos vendidos.</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card exito">
+        <div class="etiqueta">Utilidad bruta</div>
+        <div class="valor {{$resumenDiario['utilidad_bruta']>=0?'positivo':'negativo'}}">
+            ${{number_format($resumenDiario['utilidad_bruta'],0,',','.')}}
+        </div>
+        <div class="detalle-card">Margen {{number_format($resumenDiario['margen_bruto'],2,',','.')}}%</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card">
+        <div class="etiqueta">Documentos</div>
+        <div class="valor">{{number_format($resumenDiario['cantidad_documentos'],0,',','.')}}</div>
+        <div class="detalle-card">{{$resumenDiario['cantidad_facturas']}} facturas / {{$resumenDiario['cantidad_boletas']}} boletas</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card">
+        <div class="etiqueta">Unidades vendidas</div>
+        <div class="valor">{{number_format($resumenDiario['cantidad_unidades'],0,',','.')}}</div>
+        <div class="detalle-card">Suma de cantidades de los detalles.</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card getnet">
+        <div class="etiqueta">Cobros Getnet</div>
+        <div class="valor">${{number_format($resumenDiario['cobros_getnet'],0,',','.')}}</div>
+        <div class="detalle-card">{{$resumenDiario['operaciones_getnet']}} operaciones · {{number_format($resumenDiario['porcentaje_getnet'],2,',','.')}}% del total cobrado</div>
+    </div></div>
+
+    <div class="col-xl-3 col-lg-4 col-md-6"><div class="diario-card nota">
+        <div class="etiqueta">Notas de crédito</div>
+        <div class="valor">{{number_format($resumenDiario['cantidad_notas_credito'],0,',','.')}}</div>
+        <div class="detalle-card">${{number_format($resumenDiario['monto_notas_credito'],0,',','.')}}</div>
+    </div></div>
+</div>
+
+@if($resumenDiario['cantidad_items_sin_costo']>0)
+<div class="alert alert-warning">
+    Existen {{$resumenDiario['cantidad_items_sin_costo']}} líneas por
+    ${{number_format($resumenDiario['venta_sin_costo'],0,',','.')}}
+    sin costo histórico. No fueron incluidas en el margen.
+</div>
+@endif
+
+
+</div>
+
+<div class="diario-tablas">
 <h5>TOTALES</h5>
     @php
         $totales_forma=0;
@@ -13,6 +112,7 @@
         $total_bc = 0;
         $total_fc = 0;
         $total_nc=0;
+        $total_nc_efectivo=0;
         $total_rechazados=0;
         $total_delivery_pendientes=0;
         $total_delivery_pagado=0;
@@ -121,7 +221,7 @@
     @endphp
 @endforeach
 <br>
-<h5>BANCO ESTADO RESUMEN</h5>
+{{-- <h5>BANCO ESTADO RESUMEN</h5>
 <table class="table table-sm table-hover table-bordered">
     <thead>
         <th>Banco Estado</th>
@@ -167,7 +267,8 @@
                 <td class="text-right">@php echo "<b>".number_format($total,0,',','.')."</b>" @endphp</td>
             </tr>
     </tbody>
-</table>
+</table> --}}
+</div><div class="diario-tablas">
 <h5>GETNET RESUMEN</h5>
 
     <table class="table table-sm table-hover table-bordered">
@@ -230,7 +331,9 @@
         </thead>
         <tbody>
                 @foreach($notcred as $nc)
-                @php $total_nc+=$nc->total; @endphp
+                @php 
+                    $total_nc+=$nc->total; 
+                @endphp
                 <tr>
                     <td class="letra-chica text-center"><a href="javascript:imprimir_xml('{{$nc->url_xml}}')">{{$nc->num_nota_credito}}</a></td>
                     <td class="letra-chica">
@@ -264,6 +367,63 @@
     <br>
 @endif
 <input type="hidden" name="totalNc" id="totalNc" value="{{$total_nc}}">
+<input type="hidden" name="totalNcEfectivo" id="totalNcEfectivo" value="{{$notcred_total}}">
+
+@if($notdeb->count()>0)
+    <br>
+    <h5>NOTAS DE DÉBITO</h5>
+    <table class="table table-sm table-hover table-bordered">
+        <thead>
+            <th class="text-center" width="50px" scope="col">N°</th>
+            <th width="200px" scope="col">Referencia</th>
+            <th width="200px" scope="col">Motivo</th>
+            <th width="70px" scope="col">Total</th>
+            <th width="100px" scope="col">Pago</th>
+            <th width="100px" scope="col">Usuario</th>
+        </thead>
+        <tbody>
+                @php 
+                    $total_nd=0; 
+                @endphp
+                @foreach($notdeb as $nd)
+                @php 
+                    $total_nd+=$nd->total; 
+                @endphp
+                <tr>
+                    <td class="letra-chica text-center"><a href="javascript:imprimir_xml('{{$nd->url_xml}}')">{{$nd->num_nota_debito}}</a></td>
+                    <td class="letra-chica">
+                        <a href="javascript:detalle('bo','0','0')">
+                            @php
+                                list($doc,$ref,$fec)=explode("*",$nd->docum_referencia);
+                                if($doc=='bo') $docu="Boleta";
+                                if($doc=='fa') $docu="Factura";
+                                echo "<a href=\"javascript:detalle('".$doc."','0','-".$ref."')\">". $docu." N° ".$ref."</a> del ".\Carbon\Carbon::parse($fec)->format("d-m-Y");
+                            @endphp
+                    </td>
+                    <td class="letra-chica">
+                        @php
+                            echo substr($nd->motivo_correccion,2);
+                        @endphp
+                    </td>
+                    <td class="letra-chica text-right">{{number_format(intval($nd->total),0,',','.')}}</td>
+                    <td class="letra-chica">{{$nd->url_pdf}}</td>
+                    <td class="letra-chica">{{trim($nd->usuario)}}</td>
+                </tr>
+                @endforeach
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td class="text-right" ><b>TOTAL:</b></td>
+                    <td class="text-right" style="background-color: rgb(219, 219, 255)">@php echo "<b>".number_format($total_nd,0,',','.')."</b>"@endphp</td>
+                    <td></td>
+                </tr>
+        </tbody>
+    </table>
+    <br>
+@endif
+<input type="hidden" name="totalNd" id="totalNd" value="{{$total_nd ?? 0}}">
+<input type="hidden" name="totalNdEfectivo" id="totalNdEfectivo" value="{{$notdeb_total ?? 0}}">
+
 @if($rechazados->count()>0)
     <h5>RECIBIDOS NO ACEPTADOS</h5>
     <table class="table table-sm table-hover table-bordered">
@@ -309,6 +469,7 @@
 @endif
 
 
+</div><div class="diario-tablas">
 <h5>BOLETAS</h5>
 <table class="table table-sm table-hover table-bordered">
     <thead>
@@ -357,6 +518,7 @@
     </tbody>
 </table>
 
+</div><div class="diario-tablas">
 <h5>FACTURAS</h5>
 <table class="table table-sm table-hover table-bordered">
     <thead>
@@ -659,7 +821,7 @@
   <script>
     function calcularValores(totalEfectivo){
     
-        let totalNc = $('#totalNc').val();
+        let totalNc = $('#totalNcEfectivo').val();
         let resultado = parseInt(totalEfectivo) - parseInt(totalNc);
 
         $('#tbodyTotalEfectivo').empty();
@@ -674,3 +836,5 @@
         console.log(resultado);
     }
   </script>
+
+</div>

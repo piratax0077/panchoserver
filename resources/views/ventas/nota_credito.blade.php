@@ -288,6 +288,17 @@
     }
     let mot_correccion=document.getElementById("motivo").value;
     let cliente_id=document.getElementById("id_cliente_h").value;
+    if(cliente_id == 4 ){
+      Vue.swal({
+            text: 'Debe ingresar un cliente válido para emitir la nota de crédito',
+            position: 'top-end',
+            icon: 'warning',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+      });
+      return false;
+    }
     let tnc=document.getElementById("total_nc").value;
 
    

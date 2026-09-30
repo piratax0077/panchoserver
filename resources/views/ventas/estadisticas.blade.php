@@ -84,6 +84,7 @@
                     });
                 },
                 success:function(resp){
+                    console.log(resp);
                     Vue.swal.close();
                     $('#resumen').html(resp);
                   

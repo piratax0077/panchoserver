@@ -355,7 +355,7 @@
             <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_boleta" value="39" checked><label for="radio_boleta">Boleta</label></div>
             <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_factura" value="33"><label for="radio_factura">Factura</label></div>
             <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_notacredito" value="61"><label for="radio_notacredito">Nota Cred.</label></div>
-            <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_notadebito" value="56" disabled><label for="radio_notadebito">Nota Deb.</label></div>
+            <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_notadebito" value="56"><label for="radio_notadebito">Nota Deb.</label></div>
             <div style="padding-left:2px"><input type="radio" name="tipo_dte" id="radio_guiadespacho" value="52"><label for="radio_guiadespacho">Guía Desp.</label></div>
         </div>
         <div id="fechainicial">

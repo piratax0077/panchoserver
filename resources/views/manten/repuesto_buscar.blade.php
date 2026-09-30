@@ -2,6 +2,189 @@
 
 @section('titulo','Buscar Repuestos')
 
+@section('style')
+<style>
+  #buscar-repuesto-modal .modal-dialog {
+    width: calc(100vw - 32px);
+    max-width: 1540px;
+    margin: 16px auto;
+  }
+  #buscar-repuesto-modal .modal-content {
+    height: calc(100vh - 32px);
+    overflow: hidden;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: 0 22px 70px rgba(15, 23, 42, .3);
+  }
+  #buscar-repuesto-modal .repuesto-modal__header {
+    flex: 0 0 auto;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 12px 18px 16px;
+    border-bottom: 1px solid #273449;
+    background: #111827;
+    color: #fff;
+  }
+  #buscar-repuesto-modal .repuesto-modal__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  #buscar-repuesto-modal .repuesto-modal__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  #buscar-repuesto-modal .repuesto-modal__title {
+    flex: 1 1 auto;
+    margin: 0;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+  }
+  #buscar-repuesto-modal .repuesto-modal__search {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 7px 10px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 11px;
+    background: rgba(255,255,255,.07);
+  }
+  #buscar-repuesto-modal .repuesto-modal__search label {
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  #buscar-repuesto-modal .repuesto-modal__search .form-control {
+    height: 38px !important;
+    padding: 7px 14px;
+    border: 1px solid #d7dee8;
+    border-radius: 9px;
+  }
+  #buscar-repuesto-modal .repuesto-modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #f4f6f9;
+  }
+  #buscar-repuesto-modal .repuesto-modal__layout {
+    height: 100%;
+    margin: 0;
+    flex-wrap: nowrap;
+  }
+  #buscar-repuesto-modal #panel-buscar {
+    height: 100%;
+    padding: 14px;
+    overflow-y: auto;
+    border-right: 1px solid #dfe4ea;
+    background: #fff;
+  }
+  #buscar-repuesto-modal #grilla {
+    height: 100%;
+    min-width: 0;
+    padding: 0;
+    background: #f8fafc;
+  }
+  #buscar-repuesto-modal #zona_grilla {
+    height: 100%;
+    overflow: auto;
+    background: #f8fafc;
+  }
+  #buscar-repuesto-modal .repuesto-modal__footer {
+    min-height: 42px;
+    flex: 0 0 auto;
+    padding: 8px 18px;
+    border-top: 1px solid #273449;
+    background: #111827;
+    color: #fff;
+  }
+  #buscar-repuesto-modal .repuesto-modal__status {
+    width: 100%;
+    min-height: 20px;
+    margin: 0;
+    font-size: 13px;
+  }
+  #buscar-repuesto-modal .close {
+    flex: 0 0 auto;
+    color: #fff;
+    opacity: .85;
+    text-shadow: none;
+  }
+  #buscar-repuesto-modal .close:hover { color: #fff; opacity: 1; }
+  #buscar-repuesto-modal .repuesto-modal__toolbar > .col-1 {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+    padding: 0;
+  }
+  #buscar-repuesto-modal button p { display: inline; margin: 0; }
+  #foto-modal .modal-dialog { max-width: 980px; margin: 24px auto; }
+  #foto-modal .modal-content {
+    overflow: hidden;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .35);
+  }
+  #foto-modal .modal-header {
+    align-items: center;
+    padding: 13px 18px;
+    border-bottom: 1px solid #263449;
+    background: #111827;
+    color: #fff;
+  }
+  #foto-modal .modal-title { font-size: 17px; font-weight: 700; }
+  #foto-modal .close { color: #fff; opacity: .85; text-shadow: none; }
+  #foto-modal .modal-body {
+    min-height: 360px;
+    max-height: calc(100vh - 150px);
+    padding: 18px;
+    overflow: auto;
+    background: #eef2f7;
+  }
+  #foto-modal #aqui_foto {
+    display: flex;
+    min-height: 320px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #foto-modal #aqui_foto img {
+    display: block;
+    max-width: 100% !important;
+    max-height: calc(100vh - 210px);
+    width: auto !important;
+    height: auto !important;
+    margin: auto;
+    border-radius: 10px;
+    object-fit: contain;
+    background: #fff;
+    box-shadow: 0 8px 25px rgba(15, 23, 42, .16);
+  }
+  #foto-modal .foto-estado { color: #64748b; font-size: 14px; }
+  #foto-modal .foto-estado i { display: block; margin-bottom: 9px; font-size: 30px; }
+
+  @media (max-width: 767.98px) {
+    #buscar-repuesto-modal .modal-dialog { width: 100%; margin: 0; }
+    #buscar-repuesto-modal .modal-content { height: 100vh; border-radius: 0; }
+    #buscar-repuesto-modal .repuesto-modal__toolbar { align-items: flex-start; }
+    #buscar-repuesto-modal .repuesto-modal__title { font-size: 15px; }
+    #buscar-repuesto-modal .repuesto-modal__layout { flex-wrap: wrap; overflow-y: auto; }
+    #buscar-repuesto-modal #panel-buscar,
+    #buscar-repuesto-modal #grilla { width: 100%; height: auto; max-width: 100%; flex: 0 0 100%; }
+    #buscar-repuesto-modal #panel-buscar { max-height: 38vh; border-right: 0; border-bottom: 1px solid #dfe4ea; }
+    #buscar-repuesto-modal #zona_grilla { min-height: 55vh; }
+  }
+</style>
+@endsection
+
 @section('contenido_titulo_pagina')
     <center><h3 class="titulazo">Buscar Repuestos</h3></center>
  @endsection
@@ -54,6 +237,34 @@
   var editando_anio_similares=false;
 
   var antiguo_valor_anio_similar="";
+
+  function establecer_panel_busqueda(visible)
+  {
+    var panel = $("#panel-buscar");
+    var grilla = $("#grilla");
+
+    panel.stop(true, true).toggle(visible);
+    grilla.removeClass("col-sm-9 col-sm-12").addClass(visible ? "col-sm-9" : "col-sm-12");
+    $("#txtBotonPanel").text(visible ? "Ocultar filtros" : "Mostrar filtros");
+    mostrar_panel_buscar = !visible;
+  }
+
+  function restablecer_modal_busqueda()
+  {
+    modal_relacionado = false;
+    establecer_panel_busqueda(true);
+    window.vistaRepuestosActual = "imagenes";
+    $("#tabla_info_completa").hide();
+    $("#tabla_info_imagenes").show();
+    $("#mensajes-modal").empty();
+    $("#buscar_por_descripcion").attr("placeholder", "Descripción, código, marca o medida");
+    $("#zona_rv").removeClass("d-block").addClass("d-none").empty();
+    $("#zona_similares").removeClass("col-3").addClass("col-5");
+
+    if (modifikar_precio_panel) {
+      cerrar_panel_modifikar();
+    }
+  }
 
 
 
@@ -427,25 +638,14 @@
 
   function buscar()
   {
-    if(!modifikar_precio_panel)
-    {
-        if(mostrar_panel_buscar==false)
-        {
-            $("#panel-buscar").fadeOut(300,function(){
-                document.getElementById("grilla").className = "col-sm-12";
-            });
-            $("#txtBotonPanel").html("Mostrar Marcas y Modelos");
-        }else{
-            document.getElementById("grilla").className = "col-sm-9";
-            $("#panel-buscar").fadeIn("slow");
-            $("#txtBotonPanel").html("<p>Ocultar Marcas y Modelos</p>");
-            clic_en(5);
-        }
-        mostrar_panel_buscar=!mostrar_panel_buscar;
+    if(modifikar_precio_panel) return;
+
+    var mostrar = mostrar_panel_buscar;
+    establecer_panel_busqueda(mostrar);
+
+    if (mostrar && $("#zona_familia").is(":empty")) {
+      clic_en(5);
     }
-
-
-
   }
 
   function buscar_sinborrarlateral(){
@@ -470,15 +670,25 @@
   }
 
 
-function buscar_imagenes(data){
-  
-  $("#tabla_info_completa").css('display','none');
-  $('#tabla_info_imagenes').css('display','block');
+function cambiar_vista_repuestos(modo){
+  if(modifikar_precio_panel){
+    cerrar_panel_modifikar();
+  }
+
+  var conImagenes = modo === 'imagenes';
+  window.vistaRepuestosActual = modo;
+  $("#tabla_info_completa").toggle(!conImagenes);
+  $("#tabla_info_imagenes").toggle(conImagenes);
+  $("#btn-vista-imagenes").toggleClass("is-active", conImagenes).attr("aria-pressed", conImagenes);
+  $("#btn-vista-lista").toggleClass("is-active", !conImagenes).attr("aria-pressed", !conImagenes);
+}
+
+function buscar_imagenes(){
+  cambiar_vista_repuestos('imagenes');
 }
 
 function buscar_info(){
-  $("#tabla_info_completa").css('display','block');
-  $('#tabla_info_imagenes').css('display','none');
+  cambiar_vista_repuestos('lista');
 }
 
 
@@ -741,11 +951,11 @@ function buscar_info(){
 
         })
 
-        $('#buscar-repuesto-modal').on('shown.bs.modal', function () {
-            $("#repuesto_id").focus();
+        $('#exampleModal').one('shown.bs.modal', function () {
+            $("#cantidad_transferir").trigger("focus");
         });
 
-        $("#buscar-repuesto-modal").modal("show");
+        $("#exampleModal").modal("show");
 
     }
 
@@ -911,16 +1121,12 @@ function buscar_info(){
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
-
             title: 'ERROR '+error.status,
-
             text: formatear_error(error.responseText),
-
             icon: 'error',
-
         });
 
       }
@@ -1015,7 +1221,7 @@ function buscar_info(){
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1119,7 +1325,7 @@ function buscar_info(){
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1223,7 +1429,7 @@ function buscar_info(){
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1327,7 +1533,7 @@ function buscar_info(){
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1430,12 +1636,8 @@ function buscar_info(){
 
 
     function buscar_por_modelo(idmodelo)
-
     {
-      
-    
       $("#zona_familia").html("<small>Buscando Familias</small>");
-
       $("#buscar-marcamodelo-modal").modal("hide");
 
       var valor=0;
@@ -1507,7 +1709,7 @@ function buscar_info(){
       url:url_buscar,
 
       success:function(resp){
-        console.log('exito');
+        console.log(resp);
         Vue.swal.close();
         $("#mensajes-modal").html("Listo...");
 
@@ -1519,7 +1721,7 @@ function buscar_info(){
 
       error: function(error){
         console.log('error');
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1623,6 +1825,7 @@ function damerepuestos(id_familia,dato)
         url:url,
 
         success:function(repuestos){
+          console.log(repuestos);
           
           $("#mensajes-modal").html("Listo...");
 
@@ -1687,7 +1890,7 @@ function damerepuestos(id_familia,dato)
       },
 
       error: function(error){
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
         Vue.swal({
             title: 'ERROR',
             text: formatear_error(error.responseText),
@@ -1760,7 +1963,7 @@ function damerepuestos(id_familia,dato)
 
       error: function(error){
 
-        $("#busca-repuesto-modal").modal("hide");
+        $("#buscar-repuesto-modal").modal("hide");
 
         Vue.swal({
 
@@ -1785,14 +1988,6 @@ function damerepuestos(id_familia,dato)
   function buscar_repuesto()
 
   {
-
-    modal_relacionado=false;
-
-    $('#buscar-repuesto-modal').on('shown.bs.modal', function () {
-
-        $("#buscar_por_descripcion").focus();
-
-      });
 
     $("#buscar-repuesto-modal").modal("show");
 
@@ -2133,6 +2328,30 @@ function agregar_repuesto_xpress(){
         data:parametros,
         success:function(resp){
           console.log(resp);
+          if(resp == "bujia_minimo"){
+            $("#mensajes-modal").html("Upss!!!");
+            Vue.swal({
+                    text: 'La cantidad mínima para bujías es de 3 unidades',
+                    position: 'center',
+                    icon: 'warning',
+                    toast: true,
+                    showConfirmButton: false,
+                    timer: 3000,
+              });
+              return false;
+          }
+
+          if(resp == 'valvula_minimo'){
+            Vue.swal({
+                    text: 'La cantidad mínima para valvulas es de 4 unidades',
+                    position: 'center',
+                    icon: 'warning',
+                    toast: true,
+                    showConfirmButton: false,
+                    timer: 3000,
+              });
+            return false;
+          }
          if(resp == 'viejo'){
           $("#mensajes-modal").html("Upss!!!");
             Vue.swal({
@@ -2295,7 +2514,7 @@ function ver_relacionados(idrep)
 
 
 
-    $('#poner-nombre-carrito-modal').on('shown.bs.modal', function () {
+    $('#poner-nombre-carrito-modal').one('shown.bs.modal', function () {
 
         $("#nombre-carrito").focus();
 
@@ -2853,6 +3072,7 @@ function modifikar_precio(idrep)
             },
         url:url,
         success:function(compras){
+            console.log(compras);
             $("#compras_repuesto").html(compras);//datos en la vista
             //muestra los datos
 
@@ -2862,15 +3082,38 @@ function modifikar_precio(idrep)
 
             mostrar_panel_buscar=true;
             buscar_sinborrarlateral();
+            console.log("idrep: "+idrep);
             precio_a_modifikar=parseInt(document.getElementById("pv-"+idrep).value.replace(/\./g,""));
             id_precio_a_modifikar=idrep;
             precio_a_modificar.value=precio_a_modifikar;
-            document.getElementById("rezultadoz").className="col-sm-9 tabla-scroll-y-300";
-            document.getElementById("rezultadoz_fieldset").disabled=true;
-            document.getElementById("zona_detalle_fieldset").disabled=true;
-            document.getElementById("modifikar_precio").className="col-sm-3";
-            document.getElementById("modifikar_precio").style="display:visible";
-            document.getElementById("modifikar_precio").style="padding-right:1px";
+            var vistaImagenes = $("#tabla_info_imagenes").is(":visible");
+            var contenedorPrecio = document.getElementById(
+              vistaImagenes ? "tabla_info_imagenes" : "tabla_info_completa"
+            );
+            var resultados = document.getElementById(
+              vistaImagenes ? "rezultadoz_imagenes" : "rezultadoz"
+            );
+            var resultadosFieldset = document.getElementById(
+              vistaImagenes ? "rezultadoz_fieldset_imagenes" : "rezultadoz_fieldset"
+            );
+            var detalleFieldset = document.getElementById("zona_detalle_fieldset");
+            var panelPrecio = document.getElementById("modifikar_precio");
+
+            if (panelPrecio && contenedorPrecio) {
+              contenedorPrecio.appendChild(panelPrecio);
+              contenedorPrecio.classList.add("panel-precio-activo");
+            }
+            if (resultados) {
+              resultados.classList.remove("col-12");
+              resultados.classList.add("col-sm-9");
+            }
+            if (resultadosFieldset) resultadosFieldset.disabled = true;
+            if (detalleFieldset) detalleFieldset.disabled = true;
+            if (panelPrecio) {
+              panelPrecio.className = "col-sm-3";
+              panelPrecio.style.display = "block";
+              panelPrecio.style.paddingRight = "1px";
+            }
             modifikar_precio_panel=true;
         },
 
@@ -2909,15 +3152,31 @@ function cerrar_panel_modifikar()
 
         precio_a_modifikar=0;
 
-        document.getElementById("rezultadoz").className="col-sm-12 tabla-scroll-y-300";
+        var resultados = document.getElementById("rezultadoz");
+        var resultadosImagenes = document.getElementById("rezultadoz_imagenes");
+        var resultadosFieldset = document.getElementById("rezultadoz_fieldset");
+        var resultadosImagenesFieldset = document.getElementById("rezultadoz_fieldset_imagenes");
+        var detalleFieldset = document.getElementById("zona_detalle_fieldset");
+        var panelPrecio = document.getElementById("modifikar_precio");
 
-        document.getElementById("rezultadoz_fieldset").disabled=false;
-
-        document.getElementById("zona_detalle_fieldset").disabled=false;
-
-        document.getElementById("modifikar_precio").className="col-sm-0";
-
-        document.getElementById("modifikar_precio").style="display:none";
+        [resultados, resultadosImagenes].forEach(function(contenedor){
+          if (contenedor) {
+            contenedor.classList.remove("col-sm-9");
+            contenedor.classList.add("col-12");
+          }
+        });
+        ["tabla_info_completa", "tabla_info_imagenes"].forEach(function(idContenedor){
+          var contenedor = document.getElementById(idContenedor);
+          if (contenedor) contenedor.classList.remove("panel-precio-activo");
+        });
+        if (resultadosFieldset) resultadosFieldset.disabled = false;
+        if (resultadosImagenesFieldset) resultadosImagenesFieldset.disabled = false;
+        if (detalleFieldset) detalleFieldset.disabled = false;
+        if (panelPrecio) {
+          panelPrecio.className = "d-none";
+          panelPrecio.style.display = "none";
+          panelPrecio.style.paddingRight = "";
+        }
 
         modifikar_precio_panel=false;
 
@@ -3043,11 +3302,11 @@ function guardar_precio_venta(nuevo_precio,antiguo_precio)
 
             {
 
-                $("#ppv-"+id_precio_a_modifikar).html("<b>"+rpta[0]+"</b>");
+                $('[id="ppv-'+id_precio_a_modifikar+'"]').html("<b>"+rpta[0]+"</b>");
 
-                $("#pv-"+id_precio_a_modifikar).val(rpta[0]);
+                $('[id="pv-'+id_precio_a_modifikar+'"]').val(rpta[0]);
 
-                $('#dias_precio-'+id_precio_a_modifikar).html("<b>"+rpta[1]+"</b>");
+                $('[id="dias_precio-'+id_precio_a_modifikar+'"]').html("<b>"+rpta[1]+"</b>");
 
                 $("#mensajes-modal").html("Nuevo Precio Guardado...");
 
@@ -3201,26 +3460,22 @@ function dame_relacionados(idrep)
   {
 
     var url='/repuesto/dame_fotos_repuesto/'+id_repuesto;
+    var zonaFoto = $("#aqui_foto");
+
+    zonaFoto.html('<div class="foto-estado"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i>Cargando imagen...</div>');
+    $('#foto-modal').modal({backdrop: 'static', keyboard: true});
+    $("#foto-modal").modal("show");
 
     $.ajax({
       type:'get',
       url: url,
       success: function(fotos){
-        console.log(fotos);
-        
-        $("#aqui_foto").html(fotos);
+        zonaFoto.html(fotos);
       },
       error: function(error){
-          console.log(error);
+        zonaFoto.html('<div class="foto-estado text-danger"><i class="fas fa-image" aria-hidden="true"></i>No fue posible cargar la imagen.</div>');
       }
-    })
-
-    //$("#aqui_foto").html("<img src='"+enlace+"' width='100%' />");
-
-
-    $('#foto-modal').modal({backdrop: 'static', keyboard: false})
-
-    $("#foto-modal").modal("show");
+    });
 
   }
 
@@ -3231,6 +3486,7 @@ function dame_relacionados(idrep)
   {
 
     $("#foto-modal").modal("hide");
+    $("#aqui_foto").empty();
 
   }
 
@@ -3766,7 +4022,7 @@ function dame_relacionados(idrep)
 
     document.getElementById("buscado").value="";
 
-    $('#buscar-cliente-modal').on('shown.bs.modal', function () {
+    $('#buscar-cliente-modal').one('shown.bs.modal', function () {
 
       $("#buscado").focus();
 
@@ -3782,87 +4038,74 @@ function dame_relacionados(idrep)
 
   {
 
-    //medir var t_ini=milis();
+      //medir var t_ini=milis();
 
-    var url="{{url('clientes/buscar/')}}";
+      var url="{{url('clientes/buscar/')}}";
 
-    var quien="ventas";
+      var quien="ventas";
 
-    var ax=document.getElementById("buscaxnombres").checked;
+      var ax=document.getElementById("buscaxnombres").checked;
 
-    if(ax)
-
-    {
-
-      var nombres=document.getElementById("buscado").value.trim();
-
-      if(nombres.length==0)
+      if(ax)
 
       {
 
-        Vue.swal({
+        var nombres=document.getElementById("buscado").value.trim();
 
-                    text: 'Criterio Búsqueda Vacío. Ingrese NOMBRES',
+        if(nombres.length==0)
 
-                    position: 'top-end',
+        {
 
-                    icon: 'error',
+          Vue.swal({
 
-                    toast: true,
+                      text: 'Criterio Búsqueda Vacío. Ingrese NOMBRES',
 
-                    showConfirmButton: false,
+                      position: 'top-end',
 
-                    timer: 3000,
+                      icon: 'error',
 
-                    });
+                      toast: true,
 
-        $("#buscado").focus();
+                      showConfirmButton: false,
 
-        return false;
+                      timer: 3000,
+
+                      });
+
+          $("#buscado").focus();
+
+          return false;
+
+        }
+
+        var parametros={buscax:"nombres",buscado:nombres,quien:quien};
 
       }
 
-      var parametros={buscax:"nombres",buscado:nombres,quien:quien};
-
-    }
-
-
-
-
-
     var bx=document.getElementById("buscaxrut").checked;
-
     if(bx) //Elegido el rut
-
     {
-
       //DEJAMOS SOLO NÚMEROS
-
       var ruut=document.getElementById("buscado");
-
       var rut=ruut.value.replace(/[^\d]/g, '');
 
       ruut.value=rut;
-
       if(rut.length==0)
-
       {
-
         Vue.swal({
+          text: 'Criterio Búsqueda Vacío. Ingrese RUT',
 
-                    text: 'Criterio Búsqueda Vacío. Ingrese RUT',
+          position: 'top-end',
 
-                    position: 'top-end',
+          icon: 'error',
 
-                    icon: 'error',
+          toast: true,
 
-                    toast: true,
+          showConfirmButton: false,
 
-                    showConfirmButton: false,
+          timer: 3000,
 
-                    timer: 3000,
-
-                    });
+        });
 
         $("#buscado").focus();
 
@@ -4416,12 +4659,6 @@ function dame_relacionados(idrep)
 
     function abrir_referencias(){
 
-        $('#referencias-modal').on('shown.bs.modal', function () {
-
-
-
-        });
-
         $("#referencias-modal").modal("show");
 
     }
@@ -4438,13 +4675,13 @@ function dame_relacionados(idrep)
 
             $("#cliente_xpress_mensaje").html("");
 
-            document.getElementById( 'cliente_xpress_div' ).style="display:visible";
+            document.getElementById('cliente_xpress_div').style.display = "block";
 
         }else{
 
             $("#boton_cliente_xpress_en_envio").html("Abrir Cliente Xpress");
 
-            document.getElementById( 'cliente_xpress_div' ).style="display:none";
+            document.getElementById('cliente_xpress_div').style.display = "none";
 
         }
 
@@ -4471,12 +4708,6 @@ function dame_relacionados(idrep)
     function abrir_procesar_envio(){
 
         $("#titulo_procesar_envio_modal").html("PROCESANDO "+documento_procesado.toUpperCase());
-
-        $('#procesar-envio-modal').on('shown.bs.modal', function () {
-
-
-
-        });
 
         $("#procesar-envio-modal").modal("show");
 
@@ -5047,7 +5278,7 @@ function dame_relacionados(idrep)
 
                 let r=JSON.parse(resp);
 
-                if(r.estado='OK'){
+                if(r.estado === 'OK'){
 
                     imprimir_cotizacion(r.cotizacion);
 
@@ -5665,12 +5896,25 @@ function dame_relacionados(idrep)
 
       aplicar_descuentos_cliente(0);
 
-    //Al cerrar la ventana modal de buscar repuestos
+    // Ciclo de vida único: cada apertura parte desde un estado visual consistente.
+    $("#buscar-repuesto-modal")
+      .off(".repuestoBuscar")
+      .on("show.bs.modal.repuestoBuscar", function () {
+        restablecer_modal_busqueda();
+      })
+      .on("shown.bs.modal.repuestoBuscar", function () {
+        $("#buscar_por_descripcion").trigger("focus");
+      })
+      .on("hidden.bs.modal.repuestoBuscar", function () {
+        restablecer_modal_busqueda();
+        dame_carrito();
+      });
 
-    $("#buscar-repuesto-modal").on('hidden.bs.modal', function () {
-
-      dame_carrito();
-
+    // Bootstrap 4 puede quitar modal-open al cerrar un modal apilado.
+    $(document).on("hidden.bs.modal.repuestoBuscarApilado", ".modal", function () {
+      if ($(".modal.show").length) {
+        $("body").addClass("modal-open");
+      }
     });
 
 
@@ -5815,6 +6059,30 @@ function verificar_carrito_transferido(){
 // }
 
 
+function imprimir_cotizacion(num_cotizacion)
+{
+  if (!num_cotizacion) {
+    return Vue.swal({
+      title: 'No se pudo imprimir',
+      text: 'La cotización no tiene un número válido.',
+      icon: 'error'
+    });
+  }
+
+  var url = "{{ url('ventas/imprimir_cotizacion') }}/" + encodeURIComponent(num_cotizacion);
+  var ventana = window.open(url, '_blank');
+
+  if (!ventana) {
+    Vue.swal({
+      title: 'Ventana bloqueada',
+      text: 'Permite las ventanas emergentes para imprimir la cotización.',
+      icon: 'warning'
+    });
+  } else {
+    ventana.opener = null;
+  }
+}
+
 function generate_codebar(id_repuesto){
   
   let url = "/generate-barcode/"+id_repuesto;
@@ -5932,7 +6200,7 @@ function detalleStockMinimo(id_rep){
 
 <!-- Ventana modal BUSCAR REPUESTO -->
 
-<div role="dialog" tabindex="-1" class="modal fade" id="buscar-repuesto-modal">
+<div role="dialog" tabindex="-1" class="modal fade" id="buscar-repuesto-modal" aria-labelledby="buscar-repuesto-modal-titulo" aria-hidden="true">
 
     <div class="modal-dialog modal-xl modal-ventas" role="document" >
 
@@ -5940,31 +6208,27 @@ function detalleStockMinimo(id_rep){
 
  
 
-        <div class="modal-header modal-header-80" style="background: #000;"> <!-- CABECERA -->
+        <div class="modal-header modal-header-80 repuesto-modal__header"> <!-- CABECERA -->
 
-         <div class="row" style="width:100%">
+         <div class="repuesto-modal__toolbar">
 
-             <div class="col-2" style="padding-left:2px">
+             <div class="repuesto-modal__actions">
 
-                 <button class="btn btn-warning btn-sm" onclick="buscar()" style="height: 20px"><p id="txtBotonPanel">Ocultar Marcas y Modelos</p></button>
-                <button class="btn btn-primary btn-sm d-none" onclick="verificar_carrito_transferido()" id="btn_cargar_carrito" style="height: 20px"><p id="txtBotonCarritoTransferido">Cambiar Carrito Transferido</p></button>
+                 <button type="button" class="btn btn-warning btn-sm" onclick="buscar()" id="btnAlternarPanel"><i class="fas fa-filter mr-1" aria-hidden="true"></i><span id="txtBotonPanel">Ocultar filtros</span></button>
+                <button type="button" class="btn btn-primary btn-sm d-none" onclick="verificar_carrito_transferido()" id="btn_cargar_carrito"><i class="fas fa-shopping-cart mr-1" aria-hidden="true"></i><span id="txtBotonCarritoTransferido">Cambiar carrito</span></button>
              </div>
 
-             <div class="col-9"><p class="d-flex justify-content-center" id="buscar-repuesto-modal-titulo" style="color:white;font-weight:bold">BUSCAR REPUESTO</p></div>
+             <h2 class="repuesto-modal__title" id="buscar-repuesto-modal-titulo">Buscar repuesto</h2>
 
              <div class="col-1" style="padding-right: 1px"><button type="button" class="close" data-dismiss="modal" aria-label="Close" style="padding-right: 1px"><span aria-hidden="true">×</span></button></div>
 
          </div>
 
-         <div class="row" style="width:90%">
+         <div class="repuesto-modal__search">
 
-             <div class="col-2 alin-der" style="padding-right:2px;color:white">Buscar:</div>
-
-             <div class="col-10" style="margin-bottom:5px;padding-left:2px">
+             <label for="buscar_por_descripcion">Buscar:</label>
 
                  <input type="search" class="form-control" style="height:25px;" name="txtDescripcion" id="buscar_por_descripcion" placeholder="¿Qué desea encontrar?" onkeyup="enter_press(event,'d')" onclick="clic_en(1)" >
-
-             </div>
 
          </div>
 
@@ -5972,13 +6236,13 @@ function detalleStockMinimo(id_rep){
 
  
 
-        <div class="modal-body modal-body-alto" style="padding-top: 0px; background-color: rgb(242, 245, 169);"> <!-- CONTENIDO -->
+        <div class="modal-body modal-body-alto repuesto-modal__body"> <!-- CONTENIDO -->
 
-         <div class="row">
+         <div class="row repuesto-modal__layout">
 
          <!-- Columna 1 : elegir -->
 
-                 <div class="col-sm-3" id="panel-buscar" style="background-color: #F2F5A9;">
+                 <aside class="col-sm-3" id="panel-buscar" aria-label="Filtros y categorías">
 
                  <div class="row row-25 " id="zona_elegir">
 
@@ -6048,7 +6312,7 @@ function detalleStockMinimo(id_rep){
 
                      <div class="col-12 col-sm-12 col-md-12" style="margin-bottom:5px;">
 
-                         <button class="btn btn-info btn-md btn-block" style="height:25px; padding-top:2px" onclick="clic_en(5)">Volver a Abrir</button>
+                         <button type="button" class="btn btn-info btn-md btn-block" onclick="clic_en(5)"><i class="fas fa-car mr-1" aria-hidden="true"></i>Elegir marca y modelo</button>
 
                      </div>
 
@@ -6060,15 +6324,15 @@ function detalleStockMinimo(id_rep){
 
                  </div>
 
-                 </div> <!-- FIN Columna 1 : elegir -->
+                 </aside> <!-- FIN Columna 1 : elegir -->
 
  
 
          <!-- Columna 2 : grilla y detalles -->
 
-                 <div class="col-sm-9" id="grilla" style="background-color: #81BEF7;padding-left:0px;padding-right:0px">
+                 <section class="col-sm-9" id="grilla" aria-label="Resultados de búsqueda">
 
-                 <div id="zona_grilla"  style="height:500px;background-color: #F2F5A9;"></div> <!-- fragm.ventas_repuestos.blade -->
+                 <div id="zona_grilla"></div> <!-- fragm.ventas_repuestos.blade -->
 
                  {{-- <div class="row row-cero-margen d-none" id="zona_detalle">
 
@@ -6092,7 +6356,7 @@ function detalleStockMinimo(id_rep){
 
  
 
-                 </div><!-- FIN Columna 2 : grilla y detalles  -->
+                 </section><!-- FIN Columna 2 : grilla y detalles  -->
 
  
 
@@ -6102,14 +6366,8 @@ function detalleStockMinimo(id_rep){
 
  
 
-        <div class="modal-footer" style="flex-direction:column; align-content: start; background: black;
-        color: white;"> <!-- PIE -->
-
-             <div class="row" style="width:90%">
-
-                 <div class="col-sm-8 col-offset-4" id="mensajes-modal"></div>
-
-             </div>
+        <div class="modal-footer repuesto-modal__footer"> <!-- PIE -->
+             <div class="repuesto-modal__status" id="mensajes-modal" role="status" aria-live="polite"></div>
 
         </div> <!-- FIN MODAL-FOOTER -->
 
@@ -6185,20 +6443,20 @@ function detalleStockMinimo(id_rep){
 
   </div> <!-- FIN VENTANA MODAL BUSCAR POR MARCA Y MODELO"-->
 
-  <div role="dialog" tabindex="-1" class="modal fade bd-example-modal-lg" id="foto-modal" style="z-index: 2000;">
+  <div role="dialog" tabindex="-1" class="modal fade bd-example-modal-lg" id="foto-modal" aria-labelledby="fotoModalLabel" aria-hidden="true" style="z-index: 2000;">
 
     <div class="modal-dialog modal-lg" role="document"  >
 
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="exampleModalLabel">PanchoRepuestos</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <h5 class="modal-title" id="fotoModalLabel">Imagen del repuesto</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar visor de imagen">
             <span aria-hidden="true">&times;</span>
           </button>
         </div>
         <div class="modal-body"> <!-- CONTENIDO -->
          
-            <div id="aqui_foto"></div>
+            <div id="aqui_foto" aria-live="polite"></div>
           
        </div> <!-- FIN DE modal-body -->
 
@@ -6209,12 +6467,12 @@ function detalleStockMinimo(id_rep){
   </div> <!-- FIN VENTANA MODAL FOTO GRANDE"-->
 
 <!-- Modal -->
-<div class="modal fade bd-example-modal-lg" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<div class="modal fade bd-example-modal-lg" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="traspasoModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <img src="{{asset('storage/imagenes/logo_pos.png')}}" alt="" srcset="" class="logoHeader">
-        <h5 class="modal-title" id="exampleModalLabel">Traspaso de repuesto</h5>
+        <h5 class="modal-title" id="traspasoModalLabel">Traspaso de repuesto</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -6256,11 +6514,11 @@ function detalleStockMinimo(id_rep){
 
 
 <!-- Modal -->
-<div class="modal fade" id="exampleModal_precionormal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<div class="modal fade" id="exampleModal_precionormal" tabindex="-1" role="dialog" aria-labelledby="precioNormalModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="exampleModalLabel">Información Oferta</h5>
+        <h5 class="modal-title" id="precioNormalModalLabel">Información de oferta</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -6277,11 +6535,11 @@ function detalleStockMinimo(id_rep){
 </div>
 
 <!-- Modal -->
-<div class="modal fade bd-example-modal-xl" id="detalleModal" tabindex="1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<div class="modal fade bd-example-modal-xl" id="detalleModal" tabindex="-1" role="dialog" aria-labelledby="detalleModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl" role="document">
     <div class="modal-content">
       <div class="modal-header bg-dark text-white">
-        <h5 class="modal-title " id="exampleModalLabel">PanchoRepuestos</h5>
+        <h5 class="modal-title" id="detalleModalLabel">Detalle del repuesto</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -6325,7 +6583,7 @@ function detalleStockMinimo(id_rep){
 </div>
 
 <!-- Modal -->
-<div class="modal fade" id="modalStockMinimo" tabindex="1" role="dialog" aria-labelledby="modalStockMinimoLabel" aria-hidden="true">
+<div class="modal fade" id="modalStockMinimo" tabindex="-1" role="dialog" aria-labelledby="modalStockMinimoLabel" aria-hidden="true">
   <div class="modal-dialog " role="document">
     <div class="modal-content">
       <div class="modal-header bg-dark text-white">

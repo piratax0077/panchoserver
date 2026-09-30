@@ -12,7 +12,7 @@
 	  	<tbody>
 	  	@foreach($facturas as $factura)
 	      <tr>
-	        <td>{{$factura->factura_fecha}}</td>
+	        <td>{{ \Carbon\Carbon::parse($factura->getRawOriginal('factura_fecha'))->format('d-m-Y') }}</td>
 	        <td><a href="javascript:void(0);" onclick="dameFactura({{$factura->id}})">{{$factura->factura_numero}}</a></td>
 			<td id="idfactura_lista-{{$factura->id}}">@if($factura->pagada == 1) <span class="badge badge-success">Pagada</span> @else <span class="badge badge-danger">No pagada</span> @endif</td>
 	      </tr>

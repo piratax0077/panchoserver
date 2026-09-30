@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use App\repuesto;
 use App\boleta;
 use App\boleta_detalle;
+use App\cliente_direcciones;
+use App\clientes_giro;
+use App\ciudades;
 use App\factura;
 use App\factura_detalle;
 use App\nota_de_debito;
@@ -17,6 +20,7 @@ use App\cliente_modelo;
 use App\correlativo;
 use App\folio;
 use App\permissions_detail;
+use App\pago;
 use App\servicios_sii\ClsSii;
 use Illuminate\Support\Facades\Auth;
 
@@ -43,125 +47,205 @@ class nota_debito_controlador extends Controller
         }else{
             return redirect('home');
         }
-        
+
     }
 
-    public function cargar_documento($doc)
+    public function cargar_documento($dat)
     {
-        $tip_doc=substr($doc,0,2); //bo
-        $num_doc=trim(substr($doc,2)); //el número buscado
+        try {
+            list($doc,$n,$mot)=explode("-",$dat);
+            $tip_doc=substr($doc,0,2); //bo
+            $num_doc=$n; //el número buscado
 
-        if($tip_doc=='bo')
-        {
-            $documento="Boleta";
-            $num_documento=$num_doc;
-            //Buscar si no se emitió nota de crédito para este documento
-            $hay=nota_de_debito::where('docum_referencia','bo'.$num_documento)->first();
-            if(!is_null($hay))
+            if($tip_doc=='bo')
             {
-                $h=$hay->toArray();
-                return "La boleta N° ".$num_doc." ya tiene nota de débito N° <b>".$h['num_nota_debito']."</b> por un valor de ".$h['total']." de fecha ".Carbon::parse($h['fecha_emision'])->format('d-m-Y')." motivo: ".$h['motivo_correccion'];
-            }
-
-            $buscado_doc=boleta::where('num_boleta',$num_doc)->first();
-            if(!is_null($buscado_doc))
-            {
-                $buscado_doc=$buscado_doc->toArray();
-                $id_documento=$buscado_doc['id'];
-                $fecha_documento=Carbon::parse($buscado_doc['fecha_emision'])->format('d-m-Y');
-                $cliente=cliente_modelo::where('id',$buscado_doc['id_cliente'])->first()->toArray();
-
-                $cliente_id=$cliente['id'];
-                $cliente_rut=$cliente['rut'];
-                $cliente_razon_social=$cliente['razon_social'];
-                if(substr($cliente_rut,0,5)=='00000')
+                $documento="Boleta";
+                $num_documento=$num_doc;
+                //Buscar si no se emitió nota de crédito para este documento
+                $hay=nota_de_debito::where('docum_referencia','bo'.$num_documento)->first();
+                if(!is_null($hay))
                 {
-                    $cliente_id="0";
-                    $cliente_rut="Sin Cliente";
-                    $cliente_razon_social="";
+                    $h=$hay->toArray();
+                    return "La boleta N° ".$num_doc." ya tiene nota de débito N° <b>".$h['num_nota_debito']."</b> por un valor de ".$h['total']." de fecha ".Carbon::parse($h['fecha_emision'])->format('d-m-Y')." motivo: ".$h['motivo_correccion'];
                 }
 
-                $cliente_direccion=$cliente['direccion']."      Comuna: ".$cliente['direccion_comuna']."     Ciudad: ".$cliente['direccion_ciudad'];
-                $detalle=boleta_detalle::select('boletas_detalle.*','repuestos.codigo_interno','repuestos.descripcion')
-                                                        ->where('boletas_detalle.id_boleta',$buscado_doc['id'])
-                                                        ->join('repuestos','boletas_detalle.id_repuestos','repuestos.id')
-                                                        ->get();
-
-
-                //dd($buscado_doc);
-                //return $buscado_doc['fecha_emision'];
-                $v = view('fragm.nota_debito_boleta',
-                    compact('documento','id_documento',
-                                    'num_documento',
-                                    'fecha_documento',
-                                    'cliente_id',
-                                    'cliente_rut',
-                                    'cliente_razon_social',
-                                    'cliente_direccion',
-                                    'detalle'
-                                    ))->render();
-                return $v;
-
-            }else{
-                return "No Existe la Boleta N° ".$num_doc;
-            }
-        }
-
-        if($tip_doc=='fa')
-        {
-            $documento="Factura";
-            $num_documento=$num_doc;
-            //Buscar si no se emitió nota de crédito para este documento
-            $hay=nota_de_debito::where('docum_referencia','fa'.$num_documento)->first();
-            if(!is_null($hay))
-            {
-                $h=$hay->toArray();
-                return "La factura N° ".$num_doc." ya tiene nota de débito N° <b>".$h['num_nota_debito']."</b> por un valor de ".$h['total']." de fecha ".Carbon::parse($h['fecha_emision'])->format('d-m-Y')." motivo: ".$h['motivo_correccion'];
-            }
-
-            $buscado_doc=factura::where('num_factura',$num_doc)->first();
-            if(!is_null($buscado_doc))
-            {
-                $buscado_doc=$buscado_doc->toArray();
-                $id_documento=$buscado_doc['id'];
-                $fecha_documento=Carbon::parse($buscado_doc['fecha_emision'])->format('d-m-Y');
-                $cliente=cliente_modelo::where('id',$buscado_doc['id_cliente'])->first()->toArray();
-
-                $cliente_id=$cliente['id'];
-                $cliente_rut=$cliente['rut'];
-                $cliente_razon_social=$cliente['razon_social'];
-                if(substr($cliente_rut,0,5)=='00000')
+                $buscado_doc=boleta::where('num_boleta',$num_doc)->first();
+                if(!is_null($buscado_doc))
                 {
-                    $cliente_id="0";
-                    $cliente_rut="Sin Cliente";
-                    $cliente_razon_social="";
+                    $buscado_doc=$buscado_doc->toArray();
+                    $id_documento=$buscado_doc['id'];
+                    $fecha_documento=Carbon::parse($buscado_doc['fecha_emision'])->format('d-m-Y');
+                    $cliente=cliente_modelo::where('id',$buscado_doc['id_cliente'])->first()->toArray();
+
+                    $cliente_id=$cliente['id'];
+                    $cliente_rut=$cliente['rut'];
+                    $cliente_razon_social=$cliente['razon_social'];
+                    if(substr($cliente_rut,0,5)=='00000')
+                    {
+                        $cliente_id="0";
+                        $cliente_rut="Sin Cliente";
+                        $cliente_razon_social="";
+                    }
+
+                    $cliente_direccion=$cliente['direccion']."      Comuna: ".$cliente['direccion_comuna']."     Ciudad: ".$cliente['direccion_ciudad'];
+                    $detalle=boleta_detalle::select('boletas_detalle.*','repuestos.codigo_interno','repuestos.descripcion')
+                                                            ->where('boletas_detalle.id_boleta',$buscado_doc['id'])
+                                                            ->join('repuestos','boletas_detalle.id_repuestos','repuestos.id')
+                                                            ->get();
+
+
+                    //dd($buscado_doc);
+                    //return $buscado_doc['fecha_emision'];
+                    $v = view('fragm.nota_debito_documento',
+                        compact('documento','id_documento',
+                                        'num_documento',
+                                        'fecha_documento',
+                                        'cliente_id',
+                                        'cliente_rut',
+                                        'cliente_razon_social',
+                                        'cliente_direccion',
+                                        'detalle'
+                                        ))->render();
+                    return $v;
+
+                }else{
+                    return "No Existe la Boleta N° ".$num_doc;
+                }
+            }
+
+            if($tip_doc=='fa')
+            {
+                $documento="Factura";
+                $num_documento=$num_doc;
+                //Buscar si no se emitió nota de crédito para este documento
+                $hay=nota_de_debito::where('docum_referencia','fa'.$num_documento)->first();
+                if(!is_null($hay))
+                {
+                    $h=$hay->toArray();
+                    return "La factura N° ".$num_doc." ya tiene nota de débito N° <b>".$h['num_nota_debito']."</b> por un valor de ".$h['total']." de fecha ".Carbon::parse($h['fecha_emision'])->format('d-m-Y')." motivo: ".$h['motivo_correccion'];
                 }
 
-                $cliente_direccion=$cliente['direccion']."      Comuna: ".$cliente['direccion_comuna']."     Ciudad: ".$cliente['direccion_ciudad'];
-                $detalle=factura_detalle::select('facturas_detalle.*','repuestos.codigo_interno','repuestos.descripcion')
-                                                        ->where('facturas_detalle.id_factura',$buscado_doc['id'])
-                                                        ->join('repuestos','facturas_detalle.id_repuestos','repuestos.id')
-                                                        ->get();
+                $buscado_doc=factura::where('num_factura',$num_doc)->first();
+                if(!is_null($buscado_doc))
+                {
+                    $buscado_doc=$buscado_doc->toArray();
+                    $id_documento=$buscado_doc['id'];
+                    $fecha_documento=Carbon::parse($buscado_doc['fecha_emision'])->format('d-m-Y');
+                    $cliente=cliente_modelo::where('id',$buscado_doc['id_cliente'])->first()->toArray();
+
+                    $cliente_id=$cliente['id'];
+                    $cliente_rut=$cliente['rut'];
+                    $cliente_razon_social=$cliente['razon_social'];
+                    if(substr($cliente_rut,0,5)=='00000')
+                    {
+                        $cliente_id="0";
+                        $cliente_rut="Sin Cliente";
+                        $cliente_razon_social="";
+                    }
+
+                    $cliente_direccion=$cliente['direccion']."      Comuna: ".$cliente['direccion_comuna']."     Ciudad: ".$cliente['direccion_ciudad'];
+                    $detalle=factura_detalle::select('facturas_detalle.*','repuestos.codigo_interno','repuestos.descripcion')
+                                                            ->where('facturas_detalle.id_factura',$buscado_doc['id'])
+                                                            ->join('repuestos','facturas_detalle.id_repuestos','repuestos.id')
+                                                            ->get();
 
 
-                //dd($buscado_doc);
-                //return $buscado_doc['fecha_emision'];
-                $v = view('fragm.nota_debito_factura',
-                    compact('documento','id_documento',
-                                    'num_documento',
-                                    'fecha_documento',
-                                    'cliente_id',
-                                    'cliente_rut',
-                                    'cliente_razon_social',
-                                    'cliente_direccion',
-                                    'detalle'
-                                    ))->render();
-                return $v;
+                    //dd($buscado_doc);
+                    //return $buscado_doc['fecha_emision'];
+                    $v = view('fragm.nota_debito_documento',
+                        compact('documento','id_documento',
+                                        'num_documento',
+                                        'fecha_documento',
+                                        'cliente_id',
+                                        'cliente_rut',
+                                        'cliente_razon_social',
+                                        'cliente_direccion',
+                                        'detalle'
+                                        ))->render();
+                    return $v;
 
-            }else{
-                return "No Existe la Factura N° ".$num_doc;
+                }else{
+                    return "No Existe la Factura N° ".$num_doc;
+                }
             }
-        }
+
+            if($tip_doc== 'nc')
+            {
+                $documento="Nota de Crédito";
+
+                $num_documento=$num_doc;
+                //Buscar si no se emitió nota de crédito para este documento
+                $hay=nota_de_debito::where('docum_referencia','nc'.$num_documento)->first();
+                if(!is_null($hay))
+                {
+                    $h=$hay->toArray();
+                    return "La nota de crédito N° ".$num_doc." ya tiene nota de débito N° <b>".$h['num_nota_debito']."</b> por un valor de ".$h['total']." de fecha ".Carbon::parse($h['fecha_emision'])->format('d-m-Y')." motivo: ".$h['motivo_correccion'];
+                }
+
+                $buscado_doc=nota_de_credito::where('num_nota_credito',$num_doc)->first();
+                if(!is_null($buscado_doc))
+                {
+                    $buscado_doc=$buscado_doc->toArray();
+                    $id_documento=$buscado_doc['id'];
+                    $fecha_documento=Carbon::parse($buscado_doc['fecha_emision'])->format('d-m-Y');
+                    $cliente=cliente_modelo::where('id',$buscado_doc['id_cliente'])->first()->toArray();
+
+                    $cliente_id=$cliente['id'];
+                    $cliente_rut=$cliente['rut'];
+                    // $girox = clientes_giro::where('id_cliente',$cliente_id)->first();
+                    // $cliente_giro=$girox->giro;
+                    $cliente_razon_social=$cliente['razon_social'];
+                    if(substr($cliente_rut,0,5)=='00000')
+                    {
+                        $cliente_id="0";
+                        $cliente_rut="Sin Cliente";
+                        $cliente_razon_social="";
+                    }
+
+                    // $direccionx = cliente_direcciones::where('id_cliente',$cliente_id)->first();
+                    // $cliente_direccion=$direccionx->direccion;
+                    // $comunax = ciudades::where('id',$direccionx->id_comuna)->first();
+                    $cliente_giro = $cliente['giro'];
+                    $cliente_direccion=$cliente['direccion'];
+                    $cliente_comuna=$cliente['direccion_comuna'];
+                    $cliente_ciudad=$cliente['direccion_ciudad'];
+                    $detalle=nota_de_credito_detalle::select('notas_de_credito_detalle.*','repuestos.codigo_interno','repuestos.descripcion')
+                                                            ->where('notas_de_credito_detalle.id_nota_de_credito',$buscado_doc['id'])
+                                                            ->join('repuestos','notas_de_credito_detalle.id_repuestos','repuestos.id')
+                                                            ->get();
+
+                    //Revisar pago de la factura
+                    $pago_buscado_doc=pago::select('pagos.*','formapago.formapago')
+                                    ->join('formapago','pagos.id_forma_pago','formapago.id')
+                                    ->where('tipo_doc','fa')
+                                    ->where('id_doc',$buscado_doc['id'])
+                                    ->get();
+
+                    $v = view('fragm.nota_debito_documento',
+                        compact('documento','id_documento',
+                                        'num_documento',
+                                        'fecha_documento',
+                                        'cliente_id',
+                                        'cliente_rut',
+                                        'cliente_razon_social',
+                                        'cliente_giro',
+                                        'cliente_direccion',
+                                        'cliente_comuna',
+                                        'cliente_ciudad',
+                                        'detalle',
+                                        'mot',
+                                        'pago_buscado_doc'
+                                        ))->render();
+
+                    return $v;
+                }else{
+                    return "No Existe la Nota de Crédito N° ".$num_doc;
+                }
+            }
+    } catch (\Exception $e) {
+        //throw $th;
+        return $e->getMessage();
+    }
 
     }
 
@@ -206,11 +290,13 @@ class nota_debito_controlador extends Controller
 
     public function generar_xml(Request $r)
     {
+       
+        list($tdoc,$ndoc,$fdoc)=explode("*",$r->docum_referencia);
         //Sacamos toda la info de la nota de crédito
-        $num_nc=$r->num_nc;
+        $num_nc=$ndoc;
 
         $nc=nota_de_credito::where('num_nota_credito',$num_nc)
-                                            ->where('estado_sii','ACEPTADO')
+                                            // ->where('estado_sii','ACEPTADO')
                                             ->first();
         if(is_null($nc))
         {
@@ -231,28 +317,120 @@ class nota_debito_controlador extends Controller
         }
 
         $Detalle=[];
-        foreach($ncd as $i){
-            $item=array('CdgItem'=>['TpoCodigo'=>'INT1','VlrCodigo'=>$i->id_repuestos],
-                                    'NmbItem'=>$i->descripcion,
-                                    'QtyItem'=>$i->cantidad,
-                                    'PrcItem'=>$i->pu_neto);
-            array_push($Detalle,$item);
-        }
 
+        //DESJSOINIZAR
+        $item=json_decode($r->items_num);
+
+        $ids=json_decode($r->items_id);
+        $idreps=json_decode($r->items_idrep);
+        $idcodigos=json_decode($r->items_codigos);
+        $descripciones=json_decode($r->items_descripcion);
+
+        $precios=json_decode($r->items_precio);
+        $cantidades=json_decode($r->items_cantidad);
+        $subtotales=json_decode($r->items_subtotal); //este no tiene sentido traerlo
+
+        if($r->motivo_codigo=="2"){
+
+            $item=array('NmbItem'=>'Corrige Textos Receptor',
+            'QtyItem'=>0.1,
+            'PrcItem'=>0.1);
+            array_push($Detalle,$item);
+        //FALTA: AGREGAR DESCUENTOS CONDICIONAL
+
+        }else{
+            for($i=0;$i<count($cantidades);$i++)
+            {
+                if($cantidades[$i]>0) // Sólo los items que se devuelven
+                {
+                    //FALTA: DISCERNIR SI ES BOLETA (valores totales) O FACTURA (valores netos)
+                    if($tdoc=='fa'){
+                        if($cliente->porcentaje > 0){
+                            $item=array(
+                            'CdgItem' => $idcodigos[$i],
+                            'NmbItem'=>$descripciones[$i],
+                            'QtyItem'=>$cantidades[$i], //FALTA: AGREGAR DESCUENTOS CONDICIONAL
+                            //'PrcItem'=>$precio_neto_item);
+                            'PrcItem'=>round($precios[$i],0),
+                            'DescuentoMonto' =>$cantidades[$i] * ($precios[$i] * ($cliente->porcentaje / 100)));
+                        }else{
+                            $item=array(
+                            'CdgItem' => $idcodigos[$i], //FALTA: AGREGAR CODIGO DE BARRAS
+                            'NmbItem'=>$descripciones[$i],
+                            'QtyItem'=>$cantidades[$i], //FALTA: AGREGAR DESCUENTOS CONDICIONAL
+                            //'PrcItem'=>$precio_neto_item);
+                            'PrcItem'=>round($precios[$i],0));
+                        }
+
+                    }
+                    if($tdoc=='bo'){
+
+                        //$precio_neto_item=round($precios[$i]/(1+Session::get('PARAM_IVA')),0);
+                        $item=array('NmbItem'=>$descripciones[$i],
+                                    'QtyItem'=>$cantidades[$i], //FALTA: AGREGAR DESCUENTOS CONDICIONAL
+                                    'PrcItem'=>$precios[$i]);
+
+                    }
+                    if($tdoc=='nc'){
+                        $item=array('NmbItem'=>$descripciones[$i],
+                                    'QtyItem'=>$cantidades[$i], //FALTA: AGREGAR DESCUENTOS CONDICIONAL
+                                    'PrcItem'=>$precios[$i]);
+                    }
+                    array_push($Detalle,$item);
+                }
+            }
+
+        }
 
         //Obtener cliente
         $cliente=cliente_modelo::find($id_cliente);
+      
         $rutCliente_con_guion=substr($cliente->rut,0,strlen($cliente->rut)-1)."-".substr($cliente->rut,strlen($cliente->rut)-1);
+   
+        if($cliente->tipo_cliente==0){ //persona natural
+            $rzsoc=$cliente->nombres." ".$cliente->apellidos;
+            $direccion = $cliente->direccion;
+            $comuna = $cliente->direccion_comuna;
+            $giro = $cliente->giro;
 
-        $Receptor=['RUTRecep'=>$rutCliente_con_guion,
-                'RznSocRecep'=>$cliente->razon_social,
-                'GiroRecep'=>$cliente->giro,
-                'DirRecep'=>$cliente->direccion,
-                'CmnaRecep'=>$cliente->direccion_comuna,
+        }
+        if($cliente->tipo_cliente==1){ //empresa
+            $rzsoc=$cliente->nombres;
+            $direccion = $cliente->direccion;
+            $comuna = $cliente->direccion_comuna;
+            $giro = $cliente->giro;
+        }
+
+        if($r->motivo_codigo=="2"){
+            $pos=strpos($r->texto_modificado,"[");
+            $t=substr($r->texto_modificado,$pos);
+            $t=str_replace("[","",$t);
+            $t=str_replace("]","",$t);
+            $texto_modificado=str_replace("*",". ",$t).".";
+            list($rz,$giro,$dir,$com,$ciu)=explode("*",$t);
+            $Receptor=['RUTRecep'=>$rutCliente_con_guion,
+            'RznSocRecep'=>$rzsoc,
+            'GiroRecep'=>$giro,
+            'DirRecep'=>$dir,
+            'CmnaRecep'=>$com,
+            'CiudadRecep'=>$ciu
+            ];
+        }else{
+            $Receptor=['RUTRecep'=>$rutCliente_con_guion,
+                'RznSocRecep'=>$rzsoc,
+                'GiroRecep'=>$giro,
+                'DirRecep'=>$direccion,
+                'CmnaRecep'=>$comuna,
                 'CiudadRecep'=>$cliente->direccion_ciudad
             ];
+            $texto_modificado="";
+        }
 
+        $raz=$r->motivo_correccion.": ".$texto_modificado;
+        $Datos['RazonRef']=substr($raz,0,89);
+        
         $nume=$this->dame_correlativo(); //kaka
+      
         if($nume<0) //Se acabó el correlativo autorizado por SII
         {
             $estado=['estado'=>'ERROR_CAF','mensaje'=>"Nota Débito: No hay correlativo autorizado por SII. Descargar nuevo CAF"];
@@ -268,7 +446,7 @@ class nota_debito_controlador extends Controller
         $Datos['FchRef']=$nc->fecha_emision;
         $Datos['CodRef']=1; //Anulación de Nota de Crédito
         $Datos['RazonRef']="Cliente se retractó";
-
+    
         $estado=ClsSii::generar_xml($Receptor,$Detalle,$Datos); //devuelve array
         if($estado['estado']=='GENERADO'){
             Session::put('xml',$Datos['tipo_dte']."_".$Datos['folio_dte'].".xml");
@@ -283,12 +461,30 @@ class nota_debito_controlador extends Controller
             Session::put('folio_dte',0);
             Session::put('idcliente',0);
         }
+        $this->actualizar_correlativo($nume);
 
         return json_encode($estado);
     } // fin generar_xml
 
+    public function buscar(Request $req){
+        // buscar la nota de crédito
+        $nc = nota_de_credito::where('num_nota_credito',$req->num_nc)
+                                // ->where('estado_sii','ACEPTADO')
+                                ->first();
+        if(is_null($nc)){
+            $estado=['estado'=>'ERROR','mensaje'=>"No existe Nota de Crédito ACEPTADA por SII"];
+        }else{
+            $detalle = nota_de_credito_detalle::where('id_nota_de_credito',$nc->id)
+                                                ->join('repuestos','notas_de_credito_detalle.id_repuestos','repuestos.id')
+                                                ->get();
+            $estado=['estado'=>'OK','mensaje'=>'Nota de Crédito encontrada','nc'=>$nc,'detalle'=>$detalle];
+        }
+        return json_encode($estado);
+    }
+
     public function enviar_sii(Request $r)
     {
+
         $id_cliente=$r->id_cliente;
 
         $d=Session::get('xml');
@@ -310,7 +506,9 @@ class nota_debito_controlador extends Controller
        //Recuperar el XML Generado para enviar
         try {
             $envio=file_get_contents($doc);
+
             $rs=ClsSii::enviar_sii($RutEnvia,$RutEmisor,$envio); //recibe un array asoc, si OK, trackID es $estado['trackid']
+
             if($rs['estado']=='OK'){
                 $resultado_envio=$rs['mensaje'];
                 $xml=new \SimpleXMLElement($envio, LIBXML_COMPACT);
@@ -346,7 +544,8 @@ class nota_debito_controlador extends Controller
 
             //detalle
             $nc_ref=nota_de_credito::where('num_nota_credito',$FolioRef)
-                                                        ->where('estado_sii','ACEPTADO')->first();
+                                                        // ->where('estado_sii','ACEPTADO')
+                                                        ->first();
 
 
             foreach($xml->SetDTE->DTE->Documento->Detalle as $Det){

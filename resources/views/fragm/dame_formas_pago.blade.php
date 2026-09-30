@@ -15,17 +15,17 @@
                     <td>
                         <input type="checkbox" name="forma_pago" id="formita-{{$forma->id}}" value="{{$forma->id}}" checked>{{$forma->formapago}}
                     </td>
-                    <td><input type="text" name="forma_pago_monto" id="monto-{{$forma->id}}" value="" placeholder="monto" style="width:90%;padding-top:0px;padding-bottom:0px;text-align:right"></td>
+                    <td><input type="text" name="forma_pago_monto" inputmode="numeric" autocomplete="off" id="monto-{{$forma->id}}" value="" placeholder="monto" style="width:90%;padding-top:0px;padding-bottom:0px;text-align:right"></td>
                     <td><input type="hidden" value="Efectivo" id="referencia-{{$forma->id}}"></td>
                     <!-- para hacer mas bonito podría usarse en el input text: onkeyup='total_pago()' -->
                 </tr>
                 @else
                 <tr>
                     <td>
-                        <input type="checkbox" name="forma_pago" id="formita-{{$forma->id}}" value="{{$forma->id}}" onclick="activar_forma_pago({{$forma->id}})">{{$forma->formapago}}
+                        <input type="checkbox" name="forma_pago" id="formita-{{$forma->id}}" value="{{$forma->id}}" onchange="activar_forma_pago({{$forma->id}})">{{$forma->formapago}}
                     </td>
                     <td>
-                        <input type="text" name="forma_pago_monto" id="monto-{{$forma->id}}" value="" placeholder="monto" style="width:90%;padding-top:0px;padding-bottom:0px;text-align:right" disabled>
+                        <input type="text" name="forma_pago_monto" inputmode="numeric" autocomplete="off" id="monto-{{$forma->id}}" value="" placeholder="monto" style="width:90%;padding-top:0px;padding-bottom:0px;text-align:right" disabled>
                     </td>
                     <td>
                         @if($forma->formapago=="Cheque")

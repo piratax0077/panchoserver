@@ -1,3 +1,4 @@
+{{-- @if(Auth::user()->id == 5 )  --}}
 <div class="col-12 tabla-scroll-y-300">
 	<p align="center"><strong>OEM's: {{$oems->count()}}</strong></p>
 	@if($oems->count()>0)
@@ -19,3 +20,6 @@
 		<p>No hay OEMs agregados...</p>
 	@endif
 </div>
+{{-- @else
+	<p align="center"><strong>OEM's: 0</strong></p>
+@endif --}}

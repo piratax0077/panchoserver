@@ -29,7 +29,7 @@
             <td>@if($desde == 'i') <a href="/repuesto/modificar/{{$rep->id}}" target="_blank">{{$rep->codigo_interno}}</a>  @else {{$rep->codigo_interno}}  @endif</td>
             <td>{{$rep->descripcion}}</td>
             <td>$ {!!number_format($rep->precio_venta,0,',','.')!!}</td>
-            <td>{{$rep->stock_actual + $rep->stock_actual_dos + $rep->stock_actual_tres}}</td>
+            <td>{{\App\Services\StockPorLocalService::total($rep)}}</td>
             <td>{{$rep->created_at}}</td>
             @if($desde == 'i')<td><button class="btn btn-success btn-sm" onclick="activarRepuesto('{{$rep->codigo_interno}}')">Activar</button></td>@endif
         </tr>

@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
-use App\Mail\EnviarCorreo_comentario; 
 use App\User;
 
 class ForgotPasswordController extends Controller
@@ -26,10 +27,10 @@ class ForgotPasswordController extends Controller
 
     public function sendResetLinkEmail(Request $request)
     {
-        try {
-            // Validar los datos del formulario de solicitud de restablecimiento de contraseña
-            $this->validateEmail($request);
+        // Mantener los errores de validación junto al campo de correo.
+        $this->validateEmail($request);
 
+        try {
             $email = $request->input('email'); // Obtener el correo electrónico del usuario desde la solicitud
 
             //Rol de usuarios que son clientes en la página web.
@@ -45,31 +46,23 @@ class ForgotPasswordController extends Controller
             // Generar un nuevo token de restablecimiento de contraseña
             $token = app('auth.password.broker')->createToken($user);
             
-            // Obtener el email del formulario
-            $correo_origen = 'ventas_online@panchorepuestos.cl';
-            $usuario = 'Francisco';
-            $a = 'ROJO GALLARDO';
             $correo_destino = $request->input('email');
-            $telefono = '133';
-            $comentario = 'pruieba';
+
             //Se le envia el token a la clase mail con el token del usuario
-            $correo=new ResetPasswordMail($correo_origen,$correo_destino,$token);
-          
-            \Mail::send($correo); //Devuelve void
-            $rpta=$correo_destino." enviado. Revise su bandeja de entrada.";
-                    
-                    if( count(\Mail::failures()) > 0 ) {
+            Mail::send(new ResetPasswordMail($correo_destino, $token));
 
-                        $rpta= "Error al enviar: <br>";
+            return redirect('login')->with(
+                'status',
+                'Enviamos el enlace de recuperación. Revise su bandeja de entrada y la carpeta de spam.'
+            );
+        } catch (\Throwable $e) {
+            Log::error('No fue posible enviar el correo de recuperación de contraseña.', [
+                'exception' => $e,
+            ]);
 
-                        foreach(\Mail::failures() as $email_malo) {
-                            $rpta.=" - $email_malo <br>";
-                        }
-
-                    }
-            return redirect('login')->with('status', $rpta);;
-        } catch (\Exception $e) {
-            return $e->getMessage();
+            return back()
+                ->withInput($request->only('email'))
+                ->with('error', 'No fue posible enviar el correo de recuperación. Inténtelo nuevamente más tarde.');
         }
         
     }

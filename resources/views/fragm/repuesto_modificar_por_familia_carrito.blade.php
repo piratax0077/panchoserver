@@ -81,6 +81,14 @@
             <td>Precio venta</td>
             <td><p class="card-text">${{number_format($repuesto->precio_venta)}}</p></td>
           </tr>
+          <tr>
+            <td>Aplicaciones</td>
+            @if(count($aplicaciones) > 0)
+            <td class="tabla-scroll-y-250" style="font-size: 11px;">@foreach($aplicaciones as $app) <span>{{$app->marcanombre}} - {{$app->modelonombre}}</span> <br> @endforeach</td>
+            @else
+            <td><p class="card-text" style="font-size: 11px;">Sin aplicaciones</p></td>
+            @endif
+          </tr>
           
             @if($repuesto->local_id == 1 && $repuesto->local_id_dos == 3)
             <tr>

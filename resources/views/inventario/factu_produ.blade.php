@@ -230,6 +230,77 @@ function guardar_motor(){
       console.log($('#ubicacion_repuesto').val());
     }
 
+    // FUNCIONES PARA FORMATEAR NÚMEROS CON FORMATO CHILENO (1.234.567,89)
+    function formatNumberChile(value) {
+      if (value === '' || value === null || value === undefined) return '';
+      let str = String(value);
+
+      // Separar parte entera y decimal por la coma
+      let hasComma = str.indexOf(',') !== -1;
+      let parts    = str.split(',');
+
+      // Limpiar parte entera: solo dígitos
+      let intPart = parts[0].replace(/\D/g, '');
+      if (intPart.length > 1) intPart = intPart.replace(/^0+/, '') || '0';
+
+      // Agregar separadores de miles
+      intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+      if (hasComma) {
+        // Parte decimal: máximo 2 dígitos, solo números
+        let decPart = (parts[1] || '').replace(/\D/g, '').substring(0, 2);
+        return intPart + ',' + decPart;
+      }
+      return intPart;
+    }
+
+    // Limpiar número formateado chileno para obtener valor numérico
+    function cleanNumberChile(value) {
+      if (value === '' || value === null || value === undefined) return 0;
+      let str = String(value).trim();
+      if (str === '') return 0;
+      // Quitar puntos de miles y cambiar coma decimal por punto
+      str = str.replace(/\./g, '').replace(',', '.');
+      return parseFloat(str) || 0;
+    }
+
+    // Aplicar máscara a input mientras se tipea
+    function applyMaskChile(input) {
+      // Bloquear teclas no permitidas
+      input.addEventListener('keydown', function(e) {
+        const navKeys = [8, 9, 13, 27, 46, 37, 38, 39, 40, 35, 36];
+        if (navKeys.indexOf(e.keyCode) !== -1) return;
+        if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88].indexOf(e.keyCode) !== -1) return;
+        if (!/^[\d,]$/.test(e.key)) { e.preventDefault(); return; }
+        // Solo una coma
+        if (e.key === ',' && this.value.indexOf(',') !== -1) e.preventDefault();
+      });
+
+      // Formatear mientras se escribe (solo miles, sin forzar decimales)
+      input.addEventListener('input', function() {
+        let pos    = this.selectionStart;
+        let oldLen = this.value.length;
+        let formatted = formatNumberChile(this.value);
+        if (formatted !== this.value) {
+          this.value = formatted;
+          let diff   = formatted.length - oldLen;
+          let newPos = Math.max(0, pos + diff);
+          this.setSelectionRange(newPos, newPos);
+        }
+      });
+
+      // Al salir del campo: completar con 2 decimales
+      input.addEventListener('blur', function() {
+        if (this.value.trim() === '') return;
+        let num = cleanNumberChile(this.value);
+        if (!isNaN(num) && num > 0) {
+          let p = num.toFixed(2).split('.');
+          p[0]  = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          this.value = p.join(',');
+        }
+      });
+    }
+
 
     function clonar()
     {
@@ -1741,11 +1812,11 @@ function guardar_motor(){
 
 
 
-    var cantidad = document.getElementById("cantidad").value;
+    var cantidad = cleanNumberChile(document.getElementById("cantidad").value);
 
 
 
-    var pu = document.getElementById("pu").value;
+    var pu = cleanNumberChile(document.getElementById("pu").value);
 
 
 
@@ -1753,7 +1824,9 @@ function guardar_motor(){
 
 
 
-        document.getElementById("subtotalitem").value=cantidad*pu;
+        var subtotal = cantidad * pu;
+
+        document.getElementById("subtotalitem").value = formatNumberChile(subtotal);
 
 
 
@@ -1825,7 +1898,7 @@ function guardar_motor(){
       return false;
     }
 
-    var cant=document.getElementById("cantidad").value;
+    var cant = cleanNumberChile(document.getElementById("cantidad").value);
     if(cant=="0" || cant.length==0 || isNaN(cant) || Number(cant)<1)
     {
         Vue.swal({
@@ -1839,7 +1912,7 @@ function guardar_motor(){
       document.getElementById("cantidad").focus();
       return false;
     }
-    var pu=document.getElementById("pu").value;
+    var pu = cleanNumberChile(document.getElementById("pu").value);
 
     if(pu=="0.00" || pu.length==0 || isNaN(pu) || Number(pu)<1)
     {
@@ -1855,7 +1928,7 @@ function guardar_motor(){
       return false;
     }
 
-    var fle=document.getElementById("flete").value;
+    var fle = cleanNumberChile(document.getElementById("flete").value);
     var flete=0;
 
     if(isNaN(fle) || Number(fle)<0 || fle.length==0 )
@@ -1911,7 +1984,7 @@ function guardar_motor(){
 
     }
 
-    var pu=parseInt(document.getElementById("pu").value);
+    var pu=cleanNumberChile(document.getElementById("pu").value);
     var iva=0.19; // Leer de la tabla parámetros
     var utilidad=parseFloat(document.getElementById("utilidad").value)/100.0;
     var ps=document.getElementById("preciosug");
@@ -1943,10 +2016,15 @@ function guardar_motor(){
         ps.value=valor_redondeado;
     }
 */
-    if(flete==0 && ps.value>0) //calcula el flete
+    if(flete==0 && cleanNumberChile(ps.value)>0) //calcula el flete
     {
-        flete=ps.value-elvalor;
+        flete=Math.round(cleanNumberChile(ps.value)-elvalor);
         document.getElementById("flete").value=flete;
+    } else if(cleanNumberChile(ps.value)==0) {
+        // Mostrar precio sugerido calculado con formato chileno
+        let p = elvalor.toFixed(2).split('.');
+        p[0]  = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        ps.value = p.join(',');
     }
     //ps.select();
   }
@@ -2410,6 +2488,7 @@ function editar_medida_familia(idmedida){
         let rpta=false;
         let idFactura=document.getElementById("id_factura_cab").value;
         let idProveedor=document.getElementById("proveedor").value;
+        console.log(idProveedor);
         let url='{{url("factuprodu")}}'+'/'+cod+'/proveedor/'+idProveedor+'/factura/'+idFactura; //petición
         console.log(url);
         $.ajax({
@@ -2770,8 +2849,9 @@ function editar_medida_familia(idmedida){
 
       //Valores del item de factura
       var idFactura=document.getElementById("id_factura_cab").value;
-      var cantidad = document.getElementById("cantidad").value.trim();
-      if(cantidad==0 || cantidad==0.00 || cantidad.length==0 || isNaN(cantidad))
+      // Leer y limpiar valores con formato chileno
+      var cantidad = cleanNumberChile(document.getElementById("cantidad").value);
+      if(cantidad==0 || isNaN(cantidad) || cantidad < 1)
       {
         Vue.swal({
             text: 'Ingrese Cantidad...',
@@ -2788,7 +2868,7 @@ function editar_medida_familia(idmedida){
       
         El stock máximo se debe respetar, no le puedo colocar una cantidad mayor al stock máximo
       */
-     if(parseInt(cantidad) > parseInt(stockmax)){
+     if(cantidad > cleanNumberChile(stockmax)){
       Vue.swal({
             text: 'La cantidad no puede ser mayor que el stock máximo',
             position: 'top-end',
@@ -2799,9 +2879,9 @@ function editar_medida_familia(idmedida){
             });
         return false
      }
-      var pu = document.getElementById("pu").value.trim();
+      var pu = cleanNumberChile(document.getElementById("pu").value);
 
-      if(pu==0 || pu==0.00 || pu.length==0 || isNaN(pu))
+      if(pu==0 || isNaN(pu) || pu < 1)
       {
         Vue.swal({
             text: 'Ingrese precio unitario...',
@@ -2814,13 +2894,13 @@ function editar_medida_familia(idmedida){
         return false
       }
 
-      var subtotalitem=document.getElementById("subtotalitem").value;
+      var subtotalitem = cleanNumberChile(document.getElementById("subtotalitem").value);
       calculapreciosug();
-      var flete=document.getElementById("flete").value;
+      var flete = cleanNumberChile(document.getElementById("flete").value);
       if(flete<0) flete=0;
-      var preciosug=document.getElementById("preciosug").value.trim();
+      var preciosug = cleanNumberChile(document.getElementById("preciosug").value);
 
-      if(preciosug==0 || preciosug==0.00 || preciosug.length==0 || isNaN(preciosug))
+      if(preciosug==0 || isNaN(preciosug) || preciosug < 1)
       {
         Vue.swal({
             text: 'Ingrese o Calcule Precio Sugerido',
@@ -2866,6 +2946,10 @@ function editar_medida_familia(idmedida){
       }
 */
       
+      // LIMPIAR VALORES DE STOCK (solo estos todavía no se han limpiado)
+      var stockmin_cleaned = cleanNumberChile(stockmin);
+      var stockmax_cleaned = cleanNumberChile(stockmax);
+
       var parametros={nuevo:nuevo,
         idrep:id_repuesto,
         idrep_clonado:id_repuesto_clonado,
@@ -2878,8 +2962,8 @@ function editar_medida_familia(idmedida){
         medidas:medidas,
         cod_oem:cod_oem.toUpperCase(),
         cod_repuesto_proveedor:cod_repuesto_proveedor.toUpperCase(),
-        stockmin:stockmin,
-        stockmax:stockmax,
+        stockmin:stockmin_cleaned,
+        stockmax:stockmax_cleaned,
         codbar:codbar,
         idFactura:idFactura,
         cantidad:cantidad,
@@ -5137,7 +5221,12 @@ function editar_medida_familia(idmedida){
       // }
       $('#busca-repuesto-modal').modal('hide');
       document.getElementById("id_repuesto").value=repuesto.id;
-      document.getElementById("familia").value=repuesto.id_familia;
+      // Establecer el valor de familia sin disparar el evento onchange
+      let familiaSelect = document.getElementById("familia");
+      let oldOnChange = familiaSelect.onchange;
+      familiaSelect.onchange = null;
+      familiaSelect.value = repuesto.id_familia;
+      familiaSelect.onchange = oldOnChange;
       if(repuesto.id_familia == '206'){
         console.log('regulador de voltaje');
         $('#rec_alt_rep').empty();
@@ -5219,7 +5308,17 @@ function editar_medida_familia(idmedida){
         document.getElementById("id_repuesto_clonado").value=0;
         document.getElementById("codigo_interno").value=repuesto.codigo_interno;
         document.getElementById("cod_repuesto_proveedor").value=repuesto.cod_repuesto_proveedor;
-        document.getElementById("pu").value=repuesto.precio_compra;
+        // Asignar precio de compra con formato chileno (miles con punto, decimales con coma)
+        (function(){
+          var puNum = parseFloat(repuesto.precio_compra) || 0;
+          // Formatear con 2 decimales y separador de miles
+          var parts = puNum.toFixed(2).split('.');
+          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          document.getElementById("pu").value = parts.join(',');
+          // Disparar evento input para que cualquier máscara aplicada reevalúe estado del campo
+          var ev = new Event('input', { bubbles: true });
+          document.getElementById("pu").dispatchEvent(ev);
+        })();
         document.getElementById("elegir").value="SI";
         document.getElementById("preal").value = repuesto.precio_real;
         document.getElementById("poferta").value = repuesto.precio_venta;
@@ -5312,7 +5411,7 @@ function editar_medida_familia(idmedida){
 
       var url_buscar='{{url("factuprodu")}}'+'/'+codigo+'/buscarepuesto/'+id_prov; //petición
 
-
+      console.log(url_buscar);
 
 
       $.ajax({
@@ -5542,7 +5641,6 @@ function editar_medida_familia(idmedida){
         document.getElementById("credito").disabled=true;
         document.getElementById("vencefactura").disabled=true;
         document.getElementById("btnGuardarCabeceraFactura").disabled=true;
-        document.getElementById("btn_calcular_preciosug").disabled=true;
 
         location.href="#ingreso_datos_titulo";
         document.getElementById("txtBuscar").focus();
@@ -5595,6 +5693,7 @@ function editar_medida_familia(idmedida){
           console.log(id_compras_cab);
           $('#btnEditarCabeceraFactura').removeAttr('disabled');
           $('#id_cab_factura').val(id_compras_cab);
+          document.getElementById('btn_calcular_preciosug').removeAttribute('disabled');
           Vue.swal.close();
 
           if(id_compras_cab>0)
@@ -5649,6 +5748,7 @@ function editar_medida_familia(idmedida){
           console.log(id_compras_cab);
           $('#btnEditarCabeceraFactura').removeAttr('disabled');
           $('#id_cab_factura').val(id_compras_cab);
+          document.getElementById('btn_calcular_preciosug').removeAttribute('disabled');
           Vue.swal.close();
 
           if(id_compras_cab>0)
@@ -5759,6 +5859,19 @@ window.onload = function(e){
     cargar_fabricantes();
     cargar_marca_repuesto();
     cargar_pais();
+
+    // APLICAR MÁSCARAS DE FORMATO CHILENO A INPUTS
+    const inputsConMascara = ['cantidad', 'pu', 'subtotalitem', 'stock_minimo', 'stock_maximo', 'preciosug'];
+    inputsConMascara.forEach(id => {
+      const input = document.getElementById(id);
+      if (input) {
+        applyMaskChile(input);
+        // Formatear valor inicial si existe
+        if (input.value && input.value !== '0' && input.value !== '0.00') {
+          input.value = formatNumberChile(input.value);
+        }
+      }
+    });
 
     $('#filtrar_modelo').keyup(function() {
         let filtro = $(this).val().toUpperCase();

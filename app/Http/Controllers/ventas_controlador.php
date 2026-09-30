@@ -30,6 +30,7 @@ use App\fabricante;
 use App\factura;
 use App\factura_detalle;
 use App\nota_de_credito;
+use App\nota_de_debito;
 use App\nota_de_credito_detalle;
 use App\familia;
 use App\formapago;
@@ -70,7 +71,10 @@ use App\servicios_sii\Sii;
 
 use App\Http\Controllers\clientes_controlador;
 
-use Illuminate\Support\Facades\Auth; 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use App\Helpers\MovimientoValeHelper;
+use App\vale_mercaderia_movimiento; 
 
 class ventas_controlador extends Controller
 {
@@ -113,6 +117,88 @@ class ventas_controlador extends Controller
 
      */
 
+
+
+    /**
+     * Valida que un pago asociado a boleta/factura tenga un documento real.
+     * Evita volver a generar registros históricos con id_doc = 0.
+     */
+    private function validarDocumentoPago($tipoDoc, $idDoc)
+    {
+        $tipoDoc = strtolower(trim((string) $tipoDoc));
+        $idDoc = (int) $idDoc;
+
+        if (!in_array($tipoDoc, ['bo', 'fa'], true)) {
+            return;
+        }
+
+        if ($idDoc <= 0) {
+            throw new \Exception('No se puede registrar el pago sin una boleta o factura asociada.');
+        }
+
+        if ($tipoDoc === 'bo' && !boleta::where('id', $idDoc)->exists()) {
+            throw new \Exception('La boleta asociada al pago no existe.');
+        }
+
+        if ($tipoDoc === 'fa' && !factura::where('id', $idDoc)->exists()) {
+            throw new \Exception('La factura asociada al pago no existe.');
+        }
+    }
+
+    /**
+     * Evita que un reintento de la misma operación Getnet vuelva a insertar
+     * exactamente el mismo pago para el mismo documento.
+     */
+    private function existePagoGetnetDuplicado($tipoDoc, $idDoc, $idFormaPago, $monto, $referencia, $fechaPago)
+    {
+        $idFormaPago = (int) $idFormaPago;
+
+        if (!in_array($idFormaPago, [2, 5], true)) {
+            return false;
+        }
+
+        return pago::where('activo', 1)
+            ->where('referencia_pago', 2)
+            ->where('tipo_doc', $tipoDoc)
+            ->where('id_doc', (int) $idDoc)
+            ->where('id_forma_pago', $idFormaPago)
+            ->where('monto', $monto)
+            ->where('referencia', trim((string) $referencia))
+            ->whereDate('fecha_pago', $fechaPago)
+            ->exists();
+    }
+
+    /**
+     * Guarda un pago validando documento e idempotencia básica para Getnet.
+     */
+    private function guardarPagoSeguro(pago $p)
+    {
+        $this->validarDocumentoPago($p->tipo_doc, $p->id_doc);
+
+        if ($this->existePagoGetnetDuplicado(
+            $p->tipo_doc,
+            $p->id_doc,
+            $p->id_forma_pago,
+            $p->monto,
+            $p->referencia,
+            $p->fecha_pago
+        )) {
+            Log::warning('Pago Getnet duplicado omitido', [
+                'tipo_doc' => $p->tipo_doc,
+                'id_doc' => $p->id_doc,
+                'id_forma_pago' => $p->id_forma_pago,
+                'monto' => $p->monto,
+                'referencia' => $p->referencia,
+                'fecha_pago' => $p->fecha_pago,
+            ]);
+
+            return false;
+        }
+
+        $p->save();
+
+        return true;
+    }
 
     public function confirmaringreso($path){
         $permisos_detalles = permissions_detail::all();
@@ -281,16 +367,16 @@ class ventas_controlador extends Controller
     
     
     
-      /*
-            if($conteo['marveh']['resultado']){
-                $repuestos=$this->revisar($repuestos,$conteo['marveh']['repuestos']);
-                $criterio.="marveh:".$repuestos->count()." ";
-            }
-            if($conteo['modveh']['resultado']){
-                $repuestos=$this->revisar($repuestos,$conteo['modveh']['repuestos']);
-                $criterio.="modveh:".$repuestos->count()." ";
-            }
-    */
+            /*
+                    if($conteo['marveh']['resultado']){
+                        $repuestos=$this->revisar($repuestos,$conteo['marveh']['repuestos']);
+                        $criterio.="marveh:".$repuestos->count()." ";
+                    }
+                    if($conteo['modveh']['resultado']){
+                        $repuestos=$this->revisar($repuestos,$conteo['modveh']['repuestos']);
+                        $criterio.="modveh:".$repuestos->count()." ";
+                    }
+            */
             $criterio.=" )";
             if($op==7){
                 return $repuestos->count();
@@ -345,6 +431,10 @@ class ventas_controlador extends Controller
             $stocks_repuesto = [];
     
             foreach($repuestos as $repuesto){
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    foreach (app(\App\Services\StockPorLocalService::class)->disponibles($repuesto->id) as $stockLocal) $stocks_repuesto[] = $stockLocal;
+                    continue;
+                }
                 $stock_bodega = repuesto::select('repuestos.stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
                                             ->join('locales', 'repuestos.local_id', 'locales.id')
                                             ->leftjoin('users as responsables','repuestos.id_responsable','responsables.id')
@@ -392,7 +482,15 @@ class ventas_controlador extends Controller
                 }else{
                     $permiso_modificar = false;
                 }
+
+            $permiso__ = permissions_detail::where('usuarios_id',Auth::user()->id)->where('path_ruta','/reportes/ultimas-compras')->first();
     
+                if($permiso__){
+                    $permiso_compras = true;
+                }else{
+                    $permiso_compras = false;
+                }
+
             $permiso_ = permissions_detail::where('usuarios_id',Auth::user()->id)->where('path_ruta','/actualizar-precio')->first();
                 if($permiso_){
                     $permiso_actualizar = true;
@@ -445,9 +543,9 @@ class ventas_controlador extends Controller
                     $r->oferta = 0;
                 }
             }
-
             
-            $v = view('fragm.ventas_repuestos', compact('repuestos', 'saldos', 'desde','criterio','tienen_foto','arreglo','stocks_repuesto','permiso_modificar','permiso_actualizar'))->render();
+            
+            $v = view('fragm.ventas_repuestos', compact('repuestos', 'saldos', 'desde','criterio','tienen_foto','arreglo','stocks_repuesto','permiso_modificar','permiso_actualizar','permiso_compras'))->render();
     
             //guardar en busquedas usando Query Builder
             //https://laravel.com/docs/7.x/queries#inserts
@@ -466,6 +564,172 @@ class ventas_controlador extends Controller
             return $e->getMessage();
         }
 
+    }
+
+    public function buscar_repuestos_stock_minimo($dato)
+    {
+        try {
+            $desc = trim($dato);
+
+            $descripcion = str_replace([" de ", " DE ", " dE ", " De "], " ", $desc);
+            $descripcion = str_replace("  ", " ", $descripcion);
+            $descripcion = str_replace("_&_", "/", $descripcion);
+
+            $buscado_original = trim($descripcion);
+            $buscado_sin_guiones = str_replace("-", "", $buscado_original);
+
+            $conteo = [];
+            $conteo["codint"]       = $this->buscar_en_codint($buscado_original);
+            $conteo["codprov"]      = $this->buscar_en_codprov($buscado_original);
+            $conteo["codalt"]       = $this->buscar_en_codAlternador($buscado_sin_guiones);
+            $conteo["codrec"]       = $this->buscar_en_codRectificador($buscado_sin_guiones);
+            $conteo["codmtr"]       = $this->buscar_en_codmotor($buscado_sin_guiones);
+            $conteo["codoem"]       = $this->buscar_en_codoem($buscado_sin_guiones);
+            $conteo["codfab"]       = $this->buscar_en_codfab($buscado_original);
+            $conteo["descrip"]      = $this->buscar_en_descrip($buscado_original);
+            $conteo["solo_descrip"] = $this->buscar_solo_en_descrip($buscado_original);
+
+            $repuestos = collect();
+
+            foreach ($conteo as $item) {
+                if (isset($item['resultado']) && $item['resultado']) {
+                    $repuestos = $this->revisar($repuestos, $item['repuestos']);
+                }
+            }
+
+            $repuestos = $repuestos
+                ->unique('id')
+                ->values();
+
+            $estados = [
+            'Pedido a otro proveedor', 
+            'Sin stock en proveedor',
+            'Con Stock', 
+            'Rechazado', 
+            'En transito',
+            'Aprobado',
+            'Cargado en carro',
+            'Inactivo',
+            'Pedido',
+            'Pendiente',
+            'En bodega, desembalando'
+        ];
+
+            return view('fragm.stock_minimo_repuestos_buscados', compact('repuestos', 'estados'))->render();
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+        public function buscar_meta(Request $req){
+            $meta = metas::find($req->id);
+      
+            $mesActual = $meta->mes;
+            $anioActual = $meta->año;
+
+            //$meta = metas::where('mes', $mesActual)->where('año', $anioActual)->first();
+          
+            // convertir las metas a valores int
+            if($meta){
+                $meta->meta = intval($meta->meta);
+                $meta->meta_mitad = intval($meta->meta_mitad);
+                $meta->meta_inicial = intval($meta->meta_inicial);
+            }
+
+
+            // buscar todos los pagos que se han hecho en el mes actual
+            $pagos = pago::whereMonth('fecha_pago', $mesActual)->whereYear('fecha_pago', $anioActual)->get();
+        
+            $facturas_suma = factura::whereRaw('MONTH(fecha_emision)=? AND YEAR(fecha_emision)=? AND activo=? AND (estado_sii=? OR estado_sii=?)', [$mesActual, $anioActual,1,'ACEPTADO','REPARO'])
+                                            ->sum('total');
+            $boletas_suma = boleta::whereRaw('MONTH(fecha_emision)=? AND YEAR(fecha_emision)=? AND activo=? AND (estado_sii=? OR estado_sii=?)', [$mesActual, $anioActual,1,'ACEPTADO','REPARO'])
+                                            ->sum('total');
+            
+            $uno_iva=1+Session::get('PARAM_IVA');
+            $boleta_neto = round($boletas_suma/$uno_iva,0);
+            $factura_neto = round($facturas_suma/$uno_iva,0);
+            $total_neto = $boleta_neto + $factura_neto;
+            $total = 0;
+            foreach($pagos as $p){
+                $total += $p->monto;
+            }
+
+
+            // restarle las notas de credito
+            $notas = nota_de_credito::whereMonth('fecha_emision', $mesActual)->whereYear('fecha_emision', $anioActual)->get();
+            $total_notas = 0;
+            foreach($notas as $n){
+                $total_notas += $n->monto;
+            }
+
+            $total -= $total_notas;
+
+            // porcentaje de la meta
+            $porcentaje = 0;
+            $porcentaje_mitad = 0;
+            $porcentaje_inicial = 0;
+            if($meta){
+                $porcentaje = ($total_neto * 100) / $meta->meta;
+                $porcentaje_mitad = ($total_neto * 100) / $meta->meta_mitad;
+                $porcentaje_inicial = ($total_neto * 100) / $meta->meta_inicial;
+            }
+
+            $iva_total = $total_neto * Session::get('PARAM_IVA');
+            $total = $total_neto + $iva_total;
+
+            return [
+                'mensaje' => 'OK',
+                'meta' => $meta,
+                'total' => $total,
+                'porcentaje' => $porcentaje,
+                'porcentaje_mitad' => $porcentaje_mitad,
+                'porcentaje_inicial' => $porcentaje_inicial,
+                'total_neto' => $total_neto,
+                'iva_total' => $iva_total
+            ];
+        }
+
+        public function totem(){
+            try {
+                $todo_el_carrito = carrito_transferido::select(
+                                            'carrito_transferido.*',
+                                            'repuestos.codigo_interno',
+                                            'repuestos.descripcion',
+                                            'repuestos.oferta',
+                                            'repuestos.precio_venta',
+                                            'repuestos.id as idrepuesto',
+                                            'u1.name as usuario_nombre',
+                                            'u2.name as bodeguero_nombre'
+                                        )
+                                        ->join('repuestos', 'carrito_transferido.id_repuestos', '=', 'repuestos.id')
+                                        ->join('users as u1', 'carrito_transferido.usuarios_id', '=', 'u1.id') // Alias para usuario
+                                        ->leftjoin('users as u2', 'carrito_transferido.id_bodeguero', '=', 'u2.id') // Alias para bodeguero
+                                        ->where('carrito_transferido.estado', 1)
+                                        ->distinct()
+                                        ->groupBy('carrito_transferido.cliente_id')
+                                        ->orderBy('carrito_transferido.id', 'asc')
+                                        ->get();
+
+
+                                    foreach($todo_el_carrito as $item){
+                                        // Convertir a objeto Carbon
+                                        $carbon = Carbon::parse($item->created_at);
+                                    
+                                        // Asignar fecha y hora correctamente
+                                        $item->fecha = $carbon->format('d-m-Y');
+                                        $item->hora = $carbon->format('H:i:s');
+                                    }
+            
+                return view('ventas.totem',['carrito' => $todo_el_carrito])->render();
+            } catch (\Exception $e) {
+                //throw $th;
+                return $e->getMessage();
+            }
+            
         }
 
         public function cargar_consignacion_home($num_consignacion){
@@ -4182,6 +4446,10 @@ class ventas_controlador extends Controller
     $stocks_repuesto = [];
 
         foreach($repuestos as $repuesto){
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    foreach (app(\App\Services\StockPorLocalService::class)->disponibles($repuesto->id) as $stockLocal) $stocks_repuesto[] = $stockLocal;
+                    continue;
+                }
             $stock_bodega = repuesto::select('repuestos.stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local')
                                         ->join('locales', 'repuestos.local_id', 'locales.id')
                                         ->where('repuestos.id',$repuesto->id)
@@ -4236,7 +4504,11 @@ class ventas_controlador extends Controller
                     $r->oferta = 0;
                 }
             }
-       
+
+        if($repuestos->count() > 120){
+            return $repuestos;
+        }
+    
         $v = view('fragm.ventas_repuestos', compact('repuestos', 'saldos', 'desde', 'quemodelo','criterio','tienen_foto','arreglo','stocks_repuesto','permiso_modificar','permiso_actualizar'))->render();
         return $v;
         } catch (\Exception $e) {
@@ -4247,6 +4519,7 @@ class ventas_controlador extends Controller
 
     public function dame_familias_repuestos($dato)
     {
+        
         //usando auth en el grupo de rutas. ver web.php //Valida sesión
         $op = substr($dato, 0, 1);
         $idmodelo = substr($dato, 1);
@@ -4451,6 +4724,10 @@ class ventas_controlador extends Controller
     $stocks_repuesto = [];
 
         foreach($repuestos as $repuesto){
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    foreach (app(\App\Services\StockPorLocalService::class)->disponibles($repuesto->id) as $stockLocal) $stocks_repuesto[] = $stockLocal;
+                    continue;
+                }
             $stock_bodega = repuesto::select('repuestos.stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local')
                                         ->join('locales', 'repuestos.local_id', 'locales.id')
                                         ->where('repuestos.id',$repuesto->id)
@@ -4509,6 +4786,7 @@ class ventas_controlador extends Controller
                     $r->oferta = 0;
                 }
             }
+            
         $v = view('fragm.ventas_repuestos', compact('repuestos', 'saldos', 'desde', 'quemodelo','criterio','tienen_foto','arreglo','stocks_repuesto','permiso_modificar','permiso_actualizar'))->render();
         return $v;
         } catch (\Exception $e) {
@@ -4709,25 +4987,167 @@ class ventas_controlador extends Controller
 
     public function generar_xml(Request $r)
     {
+        /*
+         * Las peticiones AJAX que llegan después de expirar la sesión deben
+         * recibir JSON y no una vista HTML de login.
+         */
+        if (!Auth::check()) {
+            return response()->json([
+                'estado' => 'SESION_EXPIRADA',
+                'mensaje' => 'La sesión expiró. Debe iniciar sesión nuevamente.',
+                'login_url' => route('login'),
+            ], 401);
+        }
+
+        $documentosPermitidos = [
+            'boleta',
+            'factura',
+            'notacredito',
+            'notadebito',
+            'cotizacion',
+        ];
+
+        $documentoSolicitado = strtolower(trim((string) $r->docu));
+
+        if (!in_array($documentoSolicitado, $documentosPermitidos, true)) {
+            return response()->json([
+                'estado' => 'ERROR_DOCUMENTO',
+                'mensaje' => 'El tipo de documento solicitado no es válido.',
+            ], 422);
+        }
+
+        $r->merge(['docu' => $documentoSolicitado]);
         //Recibimos el descuento, si viene vacio será 0
         $descuento = intval($r->dcto);
+        $numero_giftcard = $r->numero_giftcard ?? '';
+        
+        // Si la forma de pago corresponde a Giftcard, NO se debe generar XML,
+        // NO se debe consumir folio/CAF y NO se debe enviar al SII.
+        // En este flujo alternativo se descuenta stock y saldo de la giftcard
+        // dentro de una transacción para evitar inconsistencias.
+        if(!empty($numero_giftcard)){
+            $giftcard = vale_mercaderia::where('numero_boucher', $numero_giftcard)->first();
+
+            if(!isset($giftcard)){
+                return response()->json([
+                    'estado' => 'ERROR_GIFTCARD',
+                    'mensaje' => 'Giftcard no encontrada.'
+                ]);
+            }
+
+            if($giftcard->valor <= 0){
+                return response()->json([
+                    'estado' => 'ERROR_SALDO_INSUFICIENTE',
+                    'mensaje' => 'La giftcard no tiene saldo disponible.'
+                ]);
+            }
+
+            \DB::beginTransaction();
+
+            try {
+
+                // Descuenta el stock del carrito actual según id_repuestos, id_local y cantidad.
+                // Esto antes lo hacía enviar_sii(), pero giftcard no pasa por ese flujo.
+                $this->descontarStockCarritoGiftcard($r);
+
+                // Descuenta el saldo de la giftcard.
+                if(!$this->procesarPagoGiftcard($numero_giftcard)){
+                    throw new \Exception('No fue posible descontar el saldo de la giftcard. Revise saldo disponible y total de la venta.');
+                }
+
+                \DB::commit();
+
+            } catch (\Exception $e) {
+
+                \DB::rollBack();
+
+                Session::put('xml', 0);
+                Session::put('tipo_dte', 0);
+                Session::put('tipo_dte_nombre', '');
+                Session::put('folio_dte', 0);
+                Session::put('idcliente', 0);
+                Session::put('numero_giftcard', '');
+
+                return response()->json([
+                    'estado' => 'ERROR_GIFTCARD_STOCK',
+                    'mensaje' => $e->getMessage()
+                ]);
+            }
+
+            // Dejamos la sesión limpia para evitar que luego enviar_sii intente usar un XML anterior.
+            Session::put('xml', 0);
+            Session::put('tipo_dte', 0);
+            Session::put('tipo_dte_nombre', 'giftcard');
+            Session::put('folio_dte', 0);
+            Session::put('idcliente', $r->idcliente ?? 0);
+            Session::put('numero_giftcard', $numero_giftcard);
+
+            return response()->json([
+                'estado' => 'GIFTCARD_OK',
+                'mensaje' => 'Pago procesado con giftcard. Se descontó stock y saldo de giftcard. No se generó XML, no se consumió folio y no se enviará al SII.'
+            ]);
+        }
       
-        $ref1=json_decode($r->ref1);
-        $ref2=json_decode($r->ref2);
-        $ref3=json_decode($r->ref3);
+        /*
+        * No usar json_decode(..., true), porque FormatosDocSii espera objetos:
+        * $referencia[0]->docu
+        */
+        $ref1 = json_decode($r->input('ref1', '[]'));
+        $ref2 = json_decode($r->input('ref2', '[]'));
+        $ref3 = json_decode($r->input('ref3', '[]'));
 
-        $referencias=[];
-        if(count($ref1)>0){
-            array_push($referencias,$ref1);
-        }
-        if(count($ref2)>0){
-            array_push($referencias,$ref2);
-        }
-        if(count($ref3)>0){
-            array_push($referencias,$ref3);
+        $ref1 = is_array($ref1) ? $ref1 : [];
+        $ref2 = is_array($ref2) ? $ref2 : [];
+        $ref3 = is_array($ref3) ? $ref3 : [];
+
+        $referencias = [];
+
+        /*
+        * Cada referencia debe conservar esta forma:
+        *
+        * [
+        *     [
+        *         (object) [
+        *             'docu'  => '801',
+        *             'folio' => '123',
+        *             'fecha' => '2026-07-15',
+        *             'razon' => 'Orden de compra'
+        *         ]
+        *     ]
+        * ]
+        */
+
+        if (
+            isset($ref1[0]) &&
+            is_object($ref1[0]) &&
+            !empty($ref1[0]->docu) &&
+            !empty($ref1[0]->folio) &&
+            !empty($ref1[0]->fecha)
+        ) {
+            $referencias[] = $ref1;
         }
 
-        $Datos['referencias']=$referencias;
+        if (
+            isset($ref2[0]) &&
+            is_object($ref2[0]) &&
+            !empty($ref2[0]->docu) &&
+            !empty($ref2[0]->folio) &&
+            !empty($ref2[0]->fecha)
+        ) {
+            $referencias[] = $ref2;
+        }
+
+        if (
+            isset($ref3[0]) &&
+            is_object($ref3[0]) &&
+            !empty($ref3[0]->docu) &&
+            !empty($ref3[0]->folio) &&
+            !empty($ref3[0]->fecha)
+        ) {
+            $referencias[] = $ref3;
+        }
+
+        $Datos['referencias'] = $referencias;
 
         if($r->fmapago=='contado'){
             $Datos['FmaPago']=1;
@@ -4745,6 +5165,25 @@ class ventas_controlador extends Controller
 
         //PREPARAMOS LOS DATOS A ENTREGAR A CLSSII
 
+        /*
+         * El carrito se valida antes de solicitar el correlativo para evitar
+         * reservar o avanzar un folio cuando no hay productos que procesar.
+         */
+        if (!empty($r->vendedor_id)) {
+            $carritoParaValidar = (new carrito_transferido())
+                ->dame_todo_carrito_cliente($r->cliente_id);
+        } else {
+            $carritoParaValidar = (new carrito_compra())
+                ->dame_todo_carrito();
+        }
+
+        if (!$carritoParaValidar || $carritoParaValidar->count() === 0) {
+            return response()->json([
+                'estado' => 'ERROR_CARRITO_VACIO',
+                'mensaje' => 'El carrito está vacío o ya fue procesado.',
+            ], 422);
+        }
+
         //Correlativo
         $nume=$this->dame_correlativo($r->docu);
 
@@ -4752,7 +5191,7 @@ class ventas_controlador extends Controller
         {
             $docu=strtoupper($r->docu);
             $estado=['estado'=>'ERROR_CAF','mensaje'=>$nume.": No hay correlativo autorizado por SII. Descargar nuevo CAF"];
-            return json_encode($estado);
+            return response()->json($estado);
         }else{
             $nume++; //siguiente correlativo
             $Datos['folio_dte']=$nume;
@@ -4771,6 +5210,14 @@ class ventas_controlador extends Controller
         }
 
         $cliente=cliente_modelo::find($idcliente);
+
+        if (!$cliente) {
+            return response()->json([
+                'estado' => 'ERROR_CLIENTE',
+                'mensaje' => 'No se encontró el cliente asociado a la venta.',
+            ], 422);
+        }
+
         $rutCliente_con_guion=substr($cliente->rut,0,strlen($cliente->rut)-1)."-".substr($cliente->rut,strlen($cliente->rut)-1);
 
         //$rutCliente_con_guion=substr($cliente->rut,0,strlen($cliente->rut)-1)."-".substr($cliente->rut,strlen($cliente->rut)-1);
@@ -4806,7 +5253,15 @@ class ventas_controlador extends Controller
                 try {
                     //Si el repuesto esta en oferta, se respeta el valor del repuesto en la oferta.
                     $o = oferta_pagina_web::where('id_repuesto',$i->id_repuestos)->first();
-                    $d = descuento::where('id_familia',$i->id_familia)->where('activo',1)->first();
+                    // Obtener la fecha actual
+                    $hoy = Carbon::today()->format('Y-m-d');
+                    
+                    // Buscar el descuento con la condición de rango de fechas
+                    $d = descuento::where('id_familia', $i->id_familia)
+                        ->where('id_local', '<>', 2)
+                        ->whereDate('desde', '<=', $hoy)
+                        ->whereDate('hasta', '>=', $hoy)
+                        ->first();
                     if($i->oferta == 1){
                         if($r->confirmado === "ofertado"){
                             $i->pu = $o->precio_actualizado;
@@ -4827,7 +5282,10 @@ class ventas_controlador extends Controller
 
                     }
                    } catch (\Exception $e) {
-                    return $e->getMessage();
+                    return response()->json([
+                        'estado' => 'ERROR',
+                        'mensaje' => $e->getMessage(),
+                    ], 500);
                    }
                 //$precio_neto_item=$i->pu_neto; //round($i->pu/(1+Session::get('PARAM_IVA')),0);
                 if($Datos['tipo_dte']=='39'){ //boleta
@@ -4885,7 +5343,15 @@ class ventas_controlador extends Controller
                 try {
                     //Si el repuesto esta en oferta, se respeta el valor del repuesto en la oferta.
                     $o = oferta_pagina_web::where('id_repuesto',$i->idrepuesto)->first();
-                    $d = descuento::where('id_familia',$i->id_familia)->where('activo',1)->first();
+                    // Obtener la fecha actual
+                    $hoy = Carbon::today()->format('Y-m-d');
+                    
+                    // Buscar el descuento con la condición de rango de fechas
+                    $d = descuento::where('id_familia', $i->id_familia)
+                        ->where('id_local', '<>', 2)
+                        ->whereDate('desde', '<=', $hoy)
+                        ->whereDate('hasta', '>=', $hoy)
+                        ->first();
                     if($i->oferta == 1){
                         if($r->confirmado === "ofertado"){
                             $i->pu = $o->precio_actualizado;
@@ -4905,7 +5371,10 @@ class ventas_controlador extends Controller
 
                     }
                    } catch (\Exception $e) {
-                    return $e->getMessage();
+                    return response()->json([
+                        'estado' => 'ERROR',
+                        'mensaje' => $e->getMessage(),
+                    ], 500);
                    }
                 //$precio_neto_item=$i->pu_neto; //round($i->pu/(1+Session::get('PARAM_IVA')),0);
                 if($Datos['tipo_dte']=='39'){ //boleta
@@ -4951,7 +5420,37 @@ class ventas_controlador extends Controller
             }
         }
         
-        $estado=ClsSii::generar_xml($Receptor,$Detalle,$Datos); //devuelve array
+        try {
+            Log::info('Referencias enviadas al generador XML', [
+                'tipo_dte' => $Datos['tipo_dte'] ?? null,
+                'folio_dte' => $Datos['folio_dte'] ?? null,
+                'referencias' => $Datos['referencias'] ?? [],
+            ]);
+
+            $estado = ClsSii::generar_xml($Receptor, $Detalle, $Datos); // devuelve array
+        } catch (\Throwable $e) {
+            Log::error('Error al generar XML del DTE', [
+                'mensaje' => $e->getMessage(),
+                'archivo' => $e->getFile(),
+                'linea' => $e->getLine(),
+                'tipo_dte' => $Datos['tipo_dte'] ?? null,
+                'folio_dte' => $Datos['folio_dte'] ?? null,
+                'referencias' => $Datos['referencias'] ?? [],
+            ]);
+
+            Session::put('xml', 0);
+            Session::put('tipo_dte', 0);
+            Session::put('tipo_dte_nombre', '');
+            Session::put('folio_dte', 0);
+            Session::put('idcliente', 0);
+            Session::put('numero_giftcard', '');
+
+            return response()->json([
+                'estado' => 'ERROR_XML',
+                'mensaje' => 'No fue posible generar el XML del documento.',
+                'detalle' => $e->getMessage(),
+            ], 500);
+        }
         
         if($estado['estado']=='GENERADO'){
             Session::put('xml',$Datos['tipo_dte']."_".$Datos['folio_dte'].".xml");
@@ -4959,6 +5458,8 @@ class ventas_controlador extends Controller
             Session::put('tipo_dte_nombre',$r->docu);
             Session::put('folio_dte',$Datos['folio_dte']);
             Session::put('idcliente',$idcliente);
+            Session::put('numero_giftcard',$numero_giftcard);
+
             $this->actualizar_correlativo($r->docu, $nume);
         }else{
             Session::put('xml',0);
@@ -4966,144 +5467,154 @@ class ventas_controlador extends Controller
             Session::put('tipo_dte_nombre','');
             Session::put('folio_dte',0);
             Session::put('idcliente',0);
+            Session::put('numero_giftcard','');
             // en caso de que no se genere el xml, se debe guardar un registro en la tabla dte_rechazados
             $dte_rechazado = new dte_rechazados;
             $dte_rechazado->tipo_doc = $Datos['tipo_dte'];
             $dte_rechazado->fecha_emision = Carbon::today()->format('d-m-Y');
             $dte_rechazado->folio_doc = $Datos['folio_dte'];
             $dte_rechazado->id_cliente = $idcliente;
-            //$dte_rechazado->save();
-
+            $dte_rechazado->save();
         }
 
-        return json_encode($estado);
+        return response()->json([
+            'estado' => $estado['estado'] ?? 'ERROR_XML',
+            'mensaje' => $estado['mensaje'] ?? ($estado['estado'] ?? 'Resultado de generación XML'),
+            'xml' => Session::get('xml'),
+            'tipo_dte' => Session::get('tipo_dte'),
+            'tipo_dte_nombre' => Session::get('tipo_dte_nombre'),
+            'folio_dte' => Session::get('folio_dte'),
+            'idcliente' => Session::get('idcliente'),
+        ]);
     }
 
-    public function limpiar_sesion(){
-        Session::put('xml',0);
-        Session::put('tipo_dte',0);
-        Session::put('tipo_dte_nombre','');
-        Session::put('folio_dte',0);
-        Session::put('idcliente',0);
-    }
+    /**
+     * Descuenta stock de forma segura para una venta recibida por el SII.
+     * Este método debe ejecutarse dentro de una transacción.
+     */
+    private function descontarStockVenta($idRepuesto, $idLocal, $cantidad)
+    {
+        $cantidad = intval($cantidad);
 
-    public function set_xml_imprimir($xml){
-        Session::put('xml',$xml);
-    }
-
-    public function dame_historial_cotizaciones($id_cliente){
-        
-        $hoy=Carbon::today();
-        $fecha_hoy=$hoy->toDateString();
-
-        //Borramos las cotizaciones vencidas. Pancho dice que despues de 30 días.
-        //Si no se muestran las cotizaciones vencidas, por que no borrarlas de una vez???
-        $fecha_30=$hoy->subDays(30);
-        $borrados1=cotizacion::where('created_at','<',$fecha_30)
-                                            ->delete();
-        $borrados2=cotizacion_detalle::where('created_at','<',$fecha_30)
-                                            ->delete();
-
-        if($id_cliente==0){
-            $cot=cotizacion::select(\DB::raw('cotizaciones.id,cotizaciones.activo,cotizaciones.num_cotizacion,cotizaciones.nombre_cotizacion,DATE_FORMAT(cotizaciones.fecha_emision,\'%d-%m-%Y\') as fecha, \'Ninguno\' as elcliente'))
-                                ->where('cotizaciones.fecha_emision','>=',$fecha_30)
-                                ->where('cotizaciones.activo',2)
-                                ->orderBy('cotizaciones.id','DESC')
-                                ->get();
-        }else{
-            $cot=cotizacion::select(\DB::raw('cotizaciones.id,cotizaciones.activo,cotizaciones.num_cotizacion,cotizaciones.nombre_cotizacion,DATE_FORMAT(cotizaciones.fecha_emision,\'%d-%m-%Y\') as fecha, IF(clientes.tipo_cliente=0,CONCAT(clientes.nombres,\' \',clientes.apellidos),clientes.razon_social) as elcliente'))
-                                ->join('clientes','cotizaciones.id_cliente','clientes.id')
-                                ->where('cotizaciones.fecha_emision','>=',$fecha_30)
-                                ->where('cotizaciones.activo',2)
-                                ->orderBy('cotizaciones.id','DESC')
-                                ->get();
-        }
-        return [$cot->toJson(),Auth::user()];
-    }
-
-    public function cotizaciones(){
-        try {
-        $cot_json = $this->dame_historial_cotizaciones(0);
-        $todas_cotizaciones = json_decode($cot_json);
-        $cotizaciones = [];
-        foreach($todas_cotizaciones as $c){
-            if($c->activo == 1) array_push($cotizaciones, $c);
-        }
-        
-            $permisos_detalles = permissions_detail::all();
-            foreach($permisos_detalles as $permiso_detalle){
-                if($permiso_detalle->usuarios_id == Auth::user()->id && $permiso_detalle->path_ruta == '/ventas/cotizaciones'){
-                    try {
-                        return view('inventario.cotizaciones',['cotizaciones' => $cotizaciones]);
-                    } catch (\Exception $e) {
-                        return $e->getMessage();
-                    }
-                    }
-            }
-        if(Auth::user()->rol->nombrerol === "Administrador"){
-                $v = view('inventario.cotizaciones',['cotizaciones' => $cotizaciones]);
-                return $v;
-            }else{
-                return redirect('/home');
-            }
-        }catch (\Exception $e) {
-            return $e->getMessage();
+        if ($cantidad <= 0) {
+            throw new \RuntimeException('La cantidad a descontar debe ser mayor que cero.');
         }
 
-       
-    }
-
-    public function cambiar_estado_cotizacion($id, $opcion){
-        try {
-
-            $cotizacion = cotizacion::find($id);
-            if($opcion == 2){
-                // 2 es aceptado
-                $cotizacion->activo = 2;
-            }else{
-                // 0 es rechazado
-                $cotizacion->activo = 0;
-            }
-            
-            $cotizacion->save();
-    
-            $cot_json = $this->dame_historial_cotizaciones(0);
-            $todas_cotizaciones = json_decode($cot_json);
-            $cotizaciones = [];
-            foreach($todas_cotizaciones as $c){
-                if($c->activo == 1) array_push($cotizaciones, $c);
-            }
-           
-            return view('fragm.cotizaciones',compact('cotizaciones'));
-            //code...
-        } catch (\Exception $e) {
-            //throw $th;
-            return $e->getMessage();
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            app(\App\Services\StockPorLocalService::class)->mover($idRepuesto, $idLocal, -$cantidad, ['tipo' => 'VENTA']);
+            $this->revisar_stock_minimo($idRepuesto);
+            return;
         }
+
+        $repuesto = repuesto::where('id', $idRepuesto)->lockForUpdate()->first();
+
+        if (!$repuesto) {
+            throw new \RuntimeException('No se encontró el repuesto ID '.$idRepuesto.'.');
+        }
+
+        if (intval($repuesto->local_id) === intval($idLocal)) {
+            $campoStock = 'stock_actual';
+        } elseif (intval($repuesto->local_id_dos) === intval($idLocal)) {
+            $campoStock = 'stock_actual_dos';
+        } elseif (intval($repuesto->local_id_tres) === intval($idLocal)) {
+            $campoStock = 'stock_actual_tres';
+        } else {
+            throw new \RuntimeException(
+                'El local '.$idLocal.' no corresponde a ninguna ubicación del repuesto '.$repuesto->codigo_interno.'.'
+            );
+        }
+
+        $stockDisponible = intval($repuesto->{$campoStock});
+
+        if ($stockDisponible < $cantidad) {
+            throw new \RuntimeException(
+                'Stock insuficiente para '.$repuesto->codigo_interno.'. Disponible: '.$stockDisponible.', solicitado: '.$cantidad.'.'
+            );
+        }
+
+        $repuesto->{$campoStock} = $stockDisponible - $cantidad;
+        $repuesto->save();
+
+        $this->revisar_stock_minimo($repuesto->id);
     }
 
     public function enviar_sii(Request $r)
     {
-        
-        $id_cliente=$r->idcliente==0 ? $this->dame_cliente_sii() : $r->idcliente; //para guardar la boleta y factura
+        if (!Auth::check()) {
+            return response()->json([
+                'estado' => 'SESION_EXPIRADA',
+                'mensaje' => 'La sesión expiró. Debe iniciar sesión nuevamente.',
+                'login_url' => route('login'),
+            ], 401);
+        }
 
+        /*
+         * Primero se usan los datos de sesión. Si la sesión del proceso se
+         * regeneró, el frontend puede reenviar los metadatos recibidos desde
+         * generar_xml() mediante xml, tipo_dte, folio_dte e idcliente.
+         */
+        $xmlGenerado = Session::get('xml');
+
+        if (empty($xmlGenerado) || $xmlGenerado == 0) {
+            $xmlGenerado = $r->xml;
+        }
+
+        $tipoDteSesion = Session::get('tipo_dte');
+
+        if (empty($tipoDteSesion) || $tipoDteSesion == 0) {
+            $tipoDteSesion = $r->tipo_dte;
+        }
+
+        $folioDteSesion = Session::get('folio_dte');
+
+        if (empty($folioDteSesion) || $folioDteSesion == 0) {
+            $folioDteSesion = $r->folio_dte;
+        }
+
+        if (empty($xmlGenerado) || empty($tipoDteSesion)) {
+            return response()->json([
+                'estado' => 'PROCESO_DTE_EXPIRADO',
+                'mensaje' => 'No fue posible recuperar el XML generado. La sesión del proceso expiró. Vuelva a generar el documento antes de enviarlo al SII.',
+                'login_url' => route('login'),
+            ], 409);
+        }
+
+        /*
+         * Se restauran los datos en sesión para conservar compatibilidad con
+         * las funciones existentes de envío, consulta de estado e impresión.
+         */
+        Session::put('xml', $xmlGenerado);
+        Session::put('tipo_dte', $tipoDteSesion);
+
+        if (!empty($folioDteSesion)) {
+            Session::put('folio_dte', $folioDteSesion);
+        }
+
+        if (!empty($r->tipo_dte_nombre)) {
+            Session::put('tipo_dte_nombre', $r->tipo_dte_nombre);
+        }
+
+        if (!empty($r->idcliente)) {
+            Session::put('idcliente', $r->idcliente);
+        }
+
+        
+        $numero_giftcard = Session::get('numero_giftcard') ?? '';
+        $id_cliente=$r->idcliente==0 ? $this->dame_cliente_sii() : $r->idcliente; //para guardar la boleta y factura
+        
         $consignacion = $r->consignacion;
 
         $vendedor_id = $r->vendedor_id;
 
         $dcto = intval($r->dcto);
         
-        if(Session::get('xml')==0 )
-        {
-            $estado=['estado'=>'ERROR_XML','mensaje'=>'No se encuentra el XML generado.'];
-            return json_encode($estado);
-        }
-
         $RutEnvia = str_replace(".","",Session::get('PARAM_RUT_ENVIA'));
         $RutEmisor = str_replace(".","",Session::get('PARAM_RUT'));
-        $d=Session::get('xml');
-        $tipo_dte=Session::get('tipo_dte');
+        $d = $xmlGenerado;
+        $tipo_dte = (string) $tipoDteSesion;
         
+        $doc = null;
+
         if($tipo_dte=='39')
         {
             $doc=base_path().'/xml/generados/boletas/'.$d;
@@ -5119,6 +5630,21 @@ class ventas_controlador extends Controller
         if($tipo_dte=='56')
         {
             $doc=base_path().'/xml/generados/notas_de_debito/'.$d;
+        }
+
+        if ($doc === null) {
+            return response()->json([
+                'estado' => 'ERROR_TIPO_DTE',
+                'mensaje' => 'El tipo de documento tributario no es válido.',
+            ], 422);
+        }
+
+        if (!is_file($doc) || !is_readable($doc)) {
+            return response()->json([
+                'estado' => 'ERROR_ARCHIVO_XML',
+                'mensaje' => 'El archivo XML generado no existe o no puede ser leído.',
+                'archivo' => basename((string) $d),
+            ], 404);
         }
 
         $tipo_docu="nada";
@@ -5148,7 +5674,7 @@ class ventas_controlador extends Controller
                     $dte_rechazado->folio_doc = $Datos['folio_dte'];
                     $dte_rechazado->id_cliente = $idcliente;
                     //$dte_rechazado->save();
-                    return json_encode($rs);
+                    return response()->json($rs);
                 }
 
                 $b = new boleta;
@@ -5216,10 +5742,14 @@ class ventas_controlador extends Controller
                         //Buscamos el repuesto que se debe descontar el stock
                         $repuesto = repuesto::find($i->id_repuestos);
 
-                        //Si la variable consignacion viene vacía, significa que se le debe descontar el stock a la venta.
-                        if($consignacion == ''){
+                        //Si la variable consignacion viene vacía y NO es giftcard, significa que se le debe descontar el stock a la venta.
+                        // Con giftcard, el stock ya fue descountado al agregarse al carrito
+                        if($consignacion == '' && empty($numero_giftcard)){
                             //Descontamos el stock de acuerdo al local
-                            if($repuesto->local_id == $i->id_local){
+                            if (\App\Services\StockPorLocalService::habilitado()) {
+                                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $i->id_local, -intval($i->cantidad), ['tipo' => 'VENTA']);
+                            } else {
+if($repuesto->local_id == $i->id_local){
                                 $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                 $repuesto->save();
                             }elseif($repuesto->local_id_dos == $i->id_local){
@@ -5232,6 +5762,8 @@ class ventas_controlador extends Controller
                                 $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                 $repuesto->save();
                             }
+                            }
+
 
                             $this->revisar_stock_minimo($repuesto->id);
 
@@ -5243,7 +5775,7 @@ class ventas_controlador extends Controller
                 }else{
                     $carrito=new carrito_compra();
                     $c = $carrito->dame_todo_carrito();
-                    if($c->count()>0){
+                    if(count($c)>0){
                         foreach($c as $i){
                             $porcentaje = $dcto / 100;
                             $dcto_x_item = round(($i->pu * $porcentaje) * $i->cantidad);
@@ -5277,10 +5809,14 @@ class ventas_controlador extends Controller
                             
                             
 
-                            //Si la variable consignacion viene vacía, significa que se le debe descontar el stock a la venta.
-                            if($consignacion == ''){
+                            //Si la variable consignacion viene vacía y NO es giftcard, significa que se le debe descontar el stock a la venta.
+                            // Con giftcard, el stock ya fue descountado al agregarse al carrito
+                            if($consignacion == '' && empty($numero_giftcard)){
                                 //Descontamos el stock de acuerdo al local
-                                if($repuesto->local_id == $i->id_local){
+                                if (\App\Services\StockPorLocalService::habilitado()) {
+                                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $i->id_local, -intval($i->cantidad), ['tipo' => 'VENTA']);
+                            } else {
+if($repuesto->local_id == $i->id_local){
                                     $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                     $repuesto->save();
                                 }elseif($repuesto->local_id_dos == $i->id_local){
@@ -5293,6 +5829,8 @@ class ventas_controlador extends Controller
                                     $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                     $repuesto->save();
                                 }
+                            }
+
 
 
                                 $this->revisar_stock_minimo($repuesto->id);
@@ -5357,7 +5895,7 @@ class ventas_controlador extends Controller
                     $dte_rechazado->folio_doc = $Datos['folio_dte'];
                     $dte_rechazado->id_cliente = $idcliente;
                     $dte_rechazado->save();
-                    return json_encode($rs);
+                    return response()->json($rs);
                     //$TrackID="---";
                     //$estado_sii=$rs['estado'];
                 }
@@ -5422,9 +5960,12 @@ class ventas_controlador extends Controller
 
                         
     
-                        if($consignacion == ''){
+                        if($consignacion == '' && empty($numero_giftcard)){
                             //Descontamos el stock de acuerdo al local
-                            if($repuesto->local_id == $i->id_local){
+                            if (\App\Services\StockPorLocalService::habilitado()) {
+                                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $i->id_local, -intval($i->cantidad), ['tipo' => 'VENTA']);
+                            } else {
+if($repuesto->local_id == $i->id_local){
                                 $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                 $repuesto->save();
                             }elseif($repuesto->local_id_dos == $i->id_local){
@@ -5437,6 +5978,8 @@ class ventas_controlador extends Controller
                                 $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                 $repuesto->save();
                             }
+                            }
+
 
 
                             $this->revisar_stock_minimo($repuesto->id);
@@ -5484,7 +6027,10 @@ class ventas_controlador extends Controller
 
                             if($consignacion == ''){
                                 //Descontamos el stock de acuerdo al local
-                                if($repuesto->local_id == $i->id_local){
+                                if (\App\Services\StockPorLocalService::habilitado()) {
+                                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $i->id_local, -intval($i->cantidad), ['tipo' => 'VENTA']);
+                            } else {
+if($repuesto->local_id == $i->id_local){
                                     $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                     $repuesto->save();
                                 }elseif($repuesto->local_id_dos == $i->id_local){
@@ -5497,6 +6043,8 @@ class ventas_controlador extends Controller
                                     $repuesto->stock_actual = $repuesto->stock_actual - intval($i->cantidad);
                                     $repuesto->save();
                                 }
+                            }
+
 
                                 $this->revisar_stock_minimo($repuesto->id);
                                 $fd->save();
@@ -5573,10 +6121,13 @@ class ventas_controlador extends Controller
                     $p->id_forma_pago = $r->forma_pago[$i];
                     //Si la forma de pago es con tarjeta de crédito le asignamos el detalle del pago
                     if($r->forma_pago[$i] == 2){
-                        $p->referencia_pago = $r->nfp_credito;
+                     $p->referencia_pago =  2;
                         //Si la forma de pago es con tarjeta de débito le asignamos el detalle del pago
                     }elseif($r->forma_pago[$i] == 5){
-                        $p->referencia_pago = $r->nfp_debito;
+                     $p->referencia_pago = 2;
+                    }elseif($r->forma_pago[$i] == 6){
+                        // Si es giftcard, guardar el número del giftcard en referencia_pago
+                        $p->referencia_pago = $numero_giftcard;
                     }else{
                         //Por defecto debe guardar un 0
                         $p->referencia_pago = 0;
@@ -5590,7 +6141,7 @@ class ventas_controlador extends Controller
                     }else{
                         $p->usuarios_id = Auth::user()->id;
                     }
-                    $p->save();
+                    $this->guardarPagoSeguro($p);
                 }
             }
 
@@ -5628,11 +6179,26 @@ class ventas_controlador extends Controller
                 $cuenta->save();
             }
 
-        } catch (\Exception $e) {
-            $estado=['estado'=>'ERROR','mensaje'=>$e->getMessage()];
-            return json_encode($estado);
+        } catch (\Throwable $e) {
+            Log::error('Error procesando envío DTE al SII', [
+                'usuario_id' => Auth::id(),
+                'xml' => $d ?? null,
+                'tipo_dte' => $tipo_dte ?? null,
+                'folio_dte' => Session::get('folio_dte'),
+                'cliente_id' => $id_cliente ?? null,
+                'mensaje' => $e->getMessage(),
+                'archivo_error' => $e->getFile(),
+                'linea_error' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'No fue posible completar el envío al SII.',
+                'detalle' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
-        return json_encode($rs);
+
+        return response()->json($rs);
     }
 
     public function guardar_meta(Request $req){
@@ -5675,13 +6241,16 @@ class ventas_controlador extends Controller
         $hoy = Carbon::today()->toDateString(); //Solo la fecha
         $repuesto = repuesto::find($idrepuesto);
         // Si el stock total es igual o menor que el stock minimo lo guardamos en la tabla stock_minimo
-        $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres); 
+        $stock_total = \App\Services\StockPorLocalService::habilitado() ? (int) \App\RepuestoStock::where('repuesto_id', $idrepuesto)->sum('cantidad') : \App\Services\StockPorLocalService::total($repuesto); 
         if(intval($repuesto->stock_minimo) >= intval($stock_total)){
             // guardamos el registro si el stock total es menor que el stock actual
             $stock_minimo = new stock_minimo();
             $stock_minimo->id_repuesto = $idrepuesto;
             $stock_minimo->fecha_emision = $hoy;
             $stock_minimo->save();
+
+            $repuesto->estado = '';
+            $repuesto->save();
         }
     }
 
@@ -5761,6 +6330,9 @@ class ventas_controlador extends Controller
                 //Buscamos el repuesto y le descontamos el stock correspondiente al local de procedencia
                 // 1: Bodega, 3: Tienda, 4: Casa Matríz
                 $repuesto_buscado = repuesto::find($i->id_repuestos);
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    app(\App\Services\StockPorLocalService::class)->mover($repuesto_buscado->id, $i->id_local, -(int) $i->cantidad, ['tipo' => 'CONSIGNACION']);
+                } else {
                 switch ($i->id_local) {
                     case 1:
                         $repuesto_buscado->stock_actual -= $i->cantidad;
@@ -5774,6 +6346,7 @@ class ventas_controlador extends Controller
                 }
                 //Guardamos el nuevo stock del repuesto en consignacion
                 $repuesto_buscado->save();
+                }
                 $cd = new consignacion_detalle;
                 $cd->id_consignacion = $c->id;
                 $cd->id_repuestos = $i->id_repuestos;
@@ -6141,7 +6714,7 @@ class ventas_controlador extends Controller
                         $p->monto = $r->monto[$i];
                         $p->activo = 1;
                         $p->usuarios_id = Auth::user()->id;
-                        $p->save();
+                        $this->guardarPagoSeguro($p);
                     }
                 }
             }
@@ -6166,6 +6739,7 @@ class ventas_controlador extends Controller
     }
 
     public function dame_historial_cotizaciones_vista(){
+   
         return view('ventas.historial_cotizaciones');
     }
 
@@ -6201,9 +6775,71 @@ class ventas_controlador extends Controller
         
     }
 
+    public function cotizaciones(){
+        $cot_json = $this->dame_historial_cotizaciones(0);
+        $todas_cotizaciones = json_decode($cot_json);
+        $cotizaciones = [];
+        foreach($todas_cotizaciones as $c){
+            if($c->activo == 1) array_push($cotizaciones, $c);
+        }
+        try {
+            $permisos_detalles = permissions_detail::all();
+            foreach($permisos_detalles as $permiso_detalle){
+                if($permiso_detalle->usuarios_id == Auth::user()->id && $permiso_detalle->path_ruta == '/ventas/cotizaciones'){
+                    try {
+                        return view('inventario.cotizaciones',['cotizaciones' => $cotizaciones]);
+                    } catch (\Exception $e) {
+                        return $e->getMessage();
+                    }
+                    }
+            }
+        if(Auth::user()->rol->nombrerol === "Administrador"){
+                $v = view('inventario.cotizaciones',['cotizaciones' => $cotizaciones]);
+                return $v;
+            }else{
+                return redirect('/home');
+            }
+        }catch (\Exception $e) {
+            return $e->getMessage();
+        }
+
+
+    }
+
+    public function dame_historial_cotizaciones($id_cliente){
+     
+        $hoy=Carbon::today();
+        $fecha_hoy=$hoy->toDateString();
+
+        //Borramos las cotizaciones vencidas. Pancho dice que despues de 30 días.
+        //Si no se muestran las cotizaciones vencidas, por que no borrarlas de una vez???
+        $fecha_30=$hoy->subDays(30);
+        $borrados1=cotizacion::where('created_at','<',$fecha_30)
+                                            ->delete();
+        $borrados2=cotizacion_detalle::where('created_at','<',$fecha_30)
+                                            ->delete();
+
+        if($id_cliente==0){
+            $cot=cotizacion::select(\DB::raw('cotizaciones.id,cotizaciones.activo,cotizaciones.num_cotizacion,cotizaciones.usuarios_id,cotizaciones.nombre_cotizacion,DATE_FORMAT(cotizaciones.fecha_emision,\'%d-%m-%Y\') as fecha, \'Ninguno\' as elcliente'))
+                                ->where('cotizaciones.fecha_emision','>=',$fecha_30)
+                                ->where('cotizaciones.activo',2)
+                                // ->where('cotizaciones.usuarios_id',Auth::user()->id)
+                                ->orderBy('cotizaciones.id','DESC')
+                                ->get();
+        }else{
+            $cot=cotizacion::select(\DB::raw('cotizaciones.id,cotizaciones.activo,cotizaciones.num_cotizacion,cotizaciones.usuarios_id,cotizaciones.nombre_cotizacion,DATE_FORMAT(cotizaciones.fecha_emision,\'%d-%m-%Y\') as fecha, IF(clientes.tipo_cliente=0,CONCAT(clientes.nombres,\' \',clientes.apellidos),clientes.razon_social) as elcliente'))
+                                ->join('clientes','cotizaciones.id_cliente','clientes.id')
+                                ->where('cotizaciones.fecha_emision','>=',$fecha_30)
+                                // ->where('cotizaciones.usuarios_id',Auth::user()->id)
+                                ->where('cotizaciones.activo',2)
+                                ->orderBy('cotizaciones.id','DESC')
+                                ->get();
+        }
+        return [$cot->toJson(),Auth::user()];
+    }
+
     private function dameultimoitem($id_usu)
     {
-
         $ultimo = carrito_compra::where('usuarios_id', $id_usu)->max('item');//carrito_compra::where('usuarios_id', $id_usu)->latest()->value('item');
         if (is_null($ultimo)) {
             $ultimo = 0;
@@ -6297,7 +6933,19 @@ class ventas_controlador extends Controller
             }else{
                 //Aqui viene con un repuesto definido, que existe en bodega
                 $repuesto = repuesto::find($r->idrep);
-
+                $id_familia = $repuesto->id_familia;
+                // verificar que si la familia es 24 (bujias) la cantidad minima a agregar sea 3
+                if($id_familia == 24 || $id_familia == 29){
+                    if($r->cantidad < 3){
+                        return "bujia_minimo";
+                    }
+                }
+                // verificar que si la familia es 532 (valvulas) la cantidad minima a agregar sea 4
+                // if($id_familia == 532){
+                //     if($r->cantidad < 4){
+                //         return "valvula_minimo";
+                //     }
+                // }
                 //Fecha ultima actualización del precio del repuesto
                 $firstDate = $repuesto->fecha_actualiza_precio;
                 $secondDate = date('d-m-Y H:i:s');
@@ -6314,29 +6962,40 @@ class ventas_controlador extends Controller
 
                 //Recuperamos todas las familias que tengan descuentos
                 $descuentos = descuento::all();
-               
+                
                 //Solo agrega al carro repuestos que su precio halla sido actualizado en igual o menor a 60 días.
                 if($dias <= 60){
                     //Revisar si está en oferta
                     $o = oferta_pagina_web::where('id_repuesto',$r->idrep)->where('activo',1)->first();
-                    $dcto_familia = descuento::where('id_familia',$repuesto->id_familia)->where('activo',1)->first();
-
+                    // Obtener la fecha actual
+                    $hoy = Carbon::today()->format('Y-m-d');
+                    $dcto_familia = descuento::where('id_familia', $repuesto->id_familia)
+                    ->where('id_local', '<>', 2)
+                    ->whereDate('desde', '<=', $hoy)
+                    ->whereDate('hasta', '>=', $hoy)
+                    ->where('activo',1)
+                    ->first();
+              
                     $c = new carrito_compra;
                     $c->usuarios_id = Auth::user()->id;
                     $c->item = $this->dameultimoitem(Auth::user()->id) + 1;
                     $c->id_repuestos = $r->idrep;
-                    if($r->idlocal == 1 && ($r->cantidad > $repuesto->stock_actual)){
+                    if (\App\Services\StockPorLocalService::habilitado()) {
+                        if ((int) $r->cantidad <= 0 || app(\App\Services\StockPorLocalService::class)->cantidad($repuesto->id, $r->idlocal) < (int) $r->cantidad) return 'error';
+                    } else {
+if($r->idlocal == 1 && ($r->cantidad > $repuesto->stock_actual)){
                         return 'error';
                     }elseif($r->idlocal == 3 && ($r->cantidad > $repuesto->stock_actual_dos)){
                         return 'error';
                     }elseif($r->idlocal == 4 && ($r->cantidad > $repuesto->stock_actual_tres)){
                         return 'error';
                     }
+                    }
                     
                     $c->id_unidad_venta = $repuesto->id_unidad_venta;
                     $c->cantidad = $r->cantidad;
                     //Si existe en oferta
-                    if(isset($o)){
+                    if($o){
                         $c->pu = $o->precio_actualizado; //Ya incluye el IVA, ESTE PRECIO DEBE PREDOMINAR, (ademas contiene el valor con el descuento en oferta)
                     }elseif(!isset($o) && isset($dcto_familia) && ($dcto_familia->id_local <> 2)){
                         
@@ -6388,34 +7047,38 @@ class ventas_controlador extends Controller
             $carrito_id = $r->carrito_id;
 
             //Buscar si artículo ya esta en el carrito
-            $esta = carrito_transferido::where('cliente_id', $cliente_id)->where('id_repuestos',$idrep)->first();
+            $esta = carrito_transferido::where('cliente_id', $cliente_id)->where('id_repuestos',$idrep)->where('estado',1)->first();
             if (!is_null($esta)) {
                 return "existe";
             }
 
             // revisar si hay stock en el local seleccionado
             $repuesto = repuesto::find($idrep);
-            if($idlocal == 1 && ($cantidad > $repuesto->stock_actual)){
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                        if ((int) $cantidad <= 0 || app(\App\Services\StockPorLocalService::class)->cantidad($repuesto->id, $idlocal) < (int) $cantidad) return 'error';
+                    } else {
+if($idlocal == 1 && ($cantidad > $repuesto->stock_actual)){
                 return 'error';
             }elseif($idlocal == 3 && ($cantidad > $repuesto->stock_actual_dos)){
                 return 'error';
             }elseif($idlocal == 4 && ($cantidad > $repuesto->stock_actual_tres)){
                 return 'error';
             }
+                    }
 
          // buscamos el ultimo carrito_transferido hacia el cajero
-         $carrito_transferido = carrito_transferido::where('cajeros_id', $el_id_usuario)->orderBy('item', 'desc')->first();
+         $carrito_transferido = carrito_transferido::where('cajeros_id', $el_id_usuario)->orderBy('item', 'desc')->where('estado',1)->first();
+        
 
          // buscamos el ultimo carrito_transferido del usuario
-         $carrito_transferido = carrito_transferido::where('usuarios_id', $carrito_transferido->usuarios_id)->orderBy('item', 'desc')->first();
+         $carrito_transferido = carrito_transferido::where('usuarios_id', $carrito_transferido->usuarios_id)->where('estado',1)->orderBy('item', 'desc')->first();
            
             $cajero_id = $carrito_transferido->cajeros_id;
             // buscar el repuesto
             $repuesto = repuesto::find($idrep);
 
-            $el_id_usuario = Auth::user()->id;
             $ct=new carrito_transferido;
-            $ct->usuarios_id = $el_id_usuario;
+            $ct->usuarios_id = $carrito_transferido->usuarios_id;
            
             $ct->cajeros_id = $cajero_id;
             $ct->cliente_id = $cliente_id;
@@ -6427,7 +7090,13 @@ class ventas_controlador extends Controller
             $ct->id_unidad_venta=$repuesto->id_unidad_venta;
             $ct->cantidad=$cantidad;
             $o = oferta_pagina_web::where('id_repuesto',$r->idrep)->where('activo',1)->first();
-            $dcto_familia = descuento::where('id_familia',$repuesto->id_familia)->where('activo',1)->first();
+            $hoy = Carbon::today()->format('Y-m-d');
+            $dcto_familia = descuento::where('id_familia', $r->id_familia)
+                    ->where('id_local', '<>', 2)
+                    ->whereDate('desde', '<=', $hoy)
+                    ->whereDate('hasta', '>=', $hoy)
+                    ->where('activo',1)
+                    ->first();
            //Si existe en oferta
            if(isset($o)){
                 $ct->pu = $o->precio_actualizado; //Ya incluye el IVA, ESTE PRECIO DEBE PREDOMINAR, (ademas contiene el valor con el descuento en oferta)
@@ -6458,9 +7127,13 @@ class ventas_controlador extends Controller
     public function verificar_carrito_transferido(){
         try {
             $el_id_usuario = Auth::user()->id;
+            if(Auth::user()->rol->nombrerol == "Administrador"){
+                return [];
+            }
             // retornar todos los carritos transferidos del usuario
             $carrito_transferido = carrito_transferido::select('carrito_transferido.*','users.name')
                                                     ->where('carrito_transferido.cajeros_id', $el_id_usuario)
+                                                    ->where('carrito_transferido.estado',1)
                                                     ->join('users','carrito_transferido.usuarios_id','users.id')
                                                     ->groupBy('carrito_transferido.cliente_id')
                                                     ->get();
@@ -6504,6 +7177,99 @@ class ventas_controlador extends Controller
         
     }
 
+    public function dame_giftcard($codigo_giftcard){
+        try {
+            $giftcard = vale_mercaderia::where('numero_boucher',$codigo_giftcard)->first();
+            if(!isset($giftcard)){
+                return 'No existe este giftcard ... revise el código';
+            }
+            return [$giftcard];
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+        
+    }
+
+    public function agregarCarritoDesdeGiftcard($codigo_giftcard){
+        try {
+            $user = Auth::user();
+            
+            // Buscar el giftcard en vale_mercaderia por numero_boucher
+            $giftcard = vale_mercaderia::where('numero_boucher',$codigo_giftcard)->first();
+            
+            if(!isset($giftcard)){
+                return 'No existe este giftcard ... revise el número';
+            }
+            
+            // Obtener detalles del giftcard usando la función dame_repuestos_valemercaderia
+            $detalles = $this->dame_repuestos_valemercaderia($codigo_giftcard);
+            
+            if(count($detalles) == 0 || (is_string($detalles))){
+                return 'El giftcard no tiene detalles';
+            }
+            
+            // Borrar el carrito actual antes de cargar el giftcard
+            $this->borrar_carrito('actual');
+            
+            // Agregar cada repuesto al carrito
+            foreach($detalles as $detalle){
+                $repuesto = repuesto::find($detalle->idrep);
+                if(!isset($repuesto)){
+                    continue;
+                }
+                
+                $c = new carrito_compra;
+                $c->usuarios_id = $user->id;
+                $c->item = $this->dameultimoitem($user->id) + 1;
+                $c->id_repuestos = $detalle->idrep;
+                $c->id_local = $detalle->local_id;
+                $c->id_unidad_venta = $repuesto->id_unidad_venta;
+                $c->cantidad = $detalle->cantidad;
+                $c->pu = $repuesto->precio_venta;
+                $c->pu_neto = round($c->pu/(1+Session::get('PARAM_IVA')),2);
+                $c->descuento_item = 0.00;
+                $c->subtotal_item = $c->cantidad * $c->pu;
+                $c->total_item = $c->subtotal_item - $c->descuento_item;
+                $c->save();
+            }
+            
+            $this->re_enumera_items_carrito();
+            
+            // Retornar carrito actualizado con saldo disponible del giftcard
+            $car = new carrito_compra;
+            $carrito = $car->dame_todo_carrito();
+            $total = $car->dame_total();
+            
+            return ['success' => true, 'total' => $total, 'items' => $carrito->count(), 'saldo_disponible' => $giftcard->valor];
+            
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+        
+    }
+
+    public function dameSaldoGiftcard($codigo_giftcard){
+        try {
+            // Buscar el giftcard en vale_mercaderia por numero_boucher
+            $giftcard = vale_mercaderia::where('numero_boucher',$codigo_giftcard)->first();
+            
+            if(!isset($giftcard)){
+                return 'No existe este giftcard ... revise el número';
+            }
+
+            // Retornar SOLO el saldo/valor del giftcard sin crear carrito
+            return [
+                'success' => true, 
+                'saldo_disponible' => $giftcard->valor,
+                'numero_boucher' => $giftcard->numero_boucher
+            ];
+            
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+        
+    }
+
     public function filtrar_vales($value){
         
             $vales = vale_mercaderia::where('activo',$value)->orderBy('numero_boucher','asc')->get();
@@ -6517,28 +7283,81 @@ class ventas_controlador extends Controller
        
     }
 
-    public function detalle_vale_mercaderia($numero_vale){
-        try {
-            $vale = vale_mercaderia::select('vale_mercaderia.*','users.name')
-                            ->join('users','vale_mercaderia.usuarios_id','users.id')
-                            ->where('vale_mercaderia.numero_boucher',$numero_vale)
-                            ->first();
-            $detalles = vale_mercaderia_detalle::select('vale_mercaderia_detalle.*','locales.local_nombre','repuestos.id as idrep','repuestos.precio_venta','repuestos.codigo_interno')
-                                                ->where('vale_mercaderia_detalle.vale_mercaderia_id',$vale->id)
-                                                ->join('repuestos','vale_mercaderia_detalle.repuesto_id','repuestos.id')
-                                                ->join('locales','vale_mercaderia_detalle.local_id','locales.id')
-                                                ->get();
-      
-            $v = view('fragm.busqueda_vale_mercaderia',compact('detalles','vale'))->render();
-            return $v;
-        } catch (\Exception $e) {
-            return $e->getMessage();
+    public function detalle_vale_mercaderia($numero_vale)
+{
+    try {
+        $vale = vale_mercaderia::select(
+                    'vale_mercaderia.*',
+                    'users.name'
+                )
+                ->leftJoin(
+                    'users',
+                    'vale_mercaderia.usuarios_id',
+                    '=',
+                    'users.id'
+                )
+                ->where('vale_mercaderia.numero_boucher', $numero_vale)
+                ->first();
+
+        if (!$vale) {
+            return view('fragm.busqueda_vale_mercaderia', [
+                'vale' => null,
+                'detalles' => collect(),
+                'mensaje' => 'No se encontró el vale de mercadería N° '.$numero_vale.'.'
+            ])->render();
         }
-        
+
+        $detalles = vale_mercaderia_detalle::select(
+                    'vale_mercaderia_detalle.*',
+                    'locales.local_nombre',
+                    'repuestos.id as idrep',
+                    'repuestos.precio_venta',
+                    'repuestos.codigo_interno'
+                )
+                ->where(
+                    'vale_mercaderia_detalle.vale_mercaderia_id',
+                    $vale->id
+                )
+                ->leftJoin(
+                    'repuestos',
+                    'vale_mercaderia_detalle.repuesto_id',
+                    '=',
+                    'repuestos.id'
+                )
+                ->leftJoin(
+                    'locales',
+                    'vale_mercaderia_detalle.local_id',
+                    '=',
+                    'locales.id'
+                )
+                ->get();
+
+        return view(
+            'fragm.busqueda_vale_mercaderia',
+            compact('detalles', 'vale')
+        )->render();
+
+    } catch (\Exception $e) {
+        \Log::error('Error al buscar detalle de vale de mercadería', [
+            'numero_vale' => $numero_vale,
+            'mensaje' => $e->getMessage()
+        ]);
+
+        return view('fragm.busqueda_vale_mercaderia', [
+            'vale' => null,
+            'detalles' => collect(),
+            'mensaje' => 'No fue posible cargar el vale de mercadería.'
+        ])->render();
     }
+}
 
     public function detalle_ventas_vista(){
         $user = Auth::user();
+        $confirma = $this->confirmaringreso('/ventas/detalle_ventas');
+        if($confirma){
+            return view('ventas.detalle_ventas',compact('user'));
+        }
+
         if($user->rol->nombrerol == "Administrador"){
             return view('ventas.detalle_ventas');
         }else{
@@ -6608,31 +7427,54 @@ class ventas_controlador extends Controller
         return view('ventas.vale_por_mercaderia');
     }
 
-    public function busqueda_vale_mercaderia($num_vale){
-        try {
-            $vale = vale_mercaderia::select('vale_mercaderia.*','users.name')
-                                        ->join('users','vale_mercaderia.usuarios_id','users.id')
-                                        ->where('vale_mercaderia.numero_boucher',$num_vale)
-                                        ->first();
+    public function busqueda_vale_mercaderia($num_vale)
+{
+    try {
 
-            $detalles = $this->dame_repuestos_valemercaderia($num_vale);
-            $v = view('fragm.busqueda_vale_mercaderia',compact('vale','detalles'));
-            return $v;
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-        
+        $vale = vale_mercaderia::select(
+                    'vale_mercaderia.*',
+                    'users.name'
+                )
+                ->join(
+                    'users',
+                    'vale_mercaderia.usuarios_id',
+                    '=',
+                    'users.id'
+                )
+                ->where(
+                    'vale_mercaderia.numero_boucher',
+                    $num_vale
+                )
+                ->first();
+
+        $respuesta = $this->dame_repuestos_valemercaderia($num_vale);
+
+        return view(
+            'fragm.busqueda_vale_mercaderia',
+            [
+                'vale'                => $vale,
+                'detallesPendientes'  => collect($respuesta['pendientes']),
+                'detallesProcesados'  => collect($respuesta['historial']),
+            ]
+        );
+
+    } catch (\Exception $e) {
+
+        return $e->getMessage();
+
     }
+}
 
     public function cargar_pedido($id_pedido){
         $num_abono = $id_pedido;
         try {
-            $abono = abono::where('num_abono',$num_abono)->first();
+            $abono = abono::where('id',$num_abono)->first();
             $abono->fecha_emision = Carbon::parse($abono->fecha_emision)->format('d-m-Y');
-            $abono_detalle = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.descripcion','repuestos.id as idrep')
+            $abono_detalle = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.descripcion','repuestos.id as idrep','repuestos.precio_venta','proveedores.empresa_nombre_corto','repuestos.cod_repuesto_proveedor')
                                             ->where('abono_detalle.id_abono',$abono->id)
                                             ->join('abono_estado','abono_estado.id','abono_detalle.estado')
                                             ->join('repuestos','abono_detalle.id_repuesto','repuestos.id')
+                                            ->join('proveedores','abono_detalle.id_proveedor','proveedores.id')
                                             ->get();
             // sacar la hora desde el campo created_at y agregarla al abono
             $porciones = explode(" ", $abono->created_at);
@@ -6826,7 +7668,11 @@ class ventas_controlador extends Controller
     public function borrar_carrito_cliente($cliente_id){
         $el_id_usuario=Auth::user()->id;
         $borrados=carrito_transferido::where('cliente_id',$cliente_id)->where('cajeros_id',$el_id_usuario)
-            ->delete();
+            ->get();
+        foreach($borrados as $b){
+            $b->estado = 0;
+            $b->save();
+        }
 
         return 'OK';
     }
@@ -7013,15 +7859,16 @@ class ventas_controlador extends Controller
 
     public function armar_kit(){
         $user = Auth::user();
+        $familias = familia::where('activo',1)->get();
         try {
             $permisos_detalles = permissions_detail::all();
             foreach($permisos_detalles as $permiso_detalle){
                 if($permiso_detalle->permission_id == 4 && $permiso_detalle->usuarios_id == Auth::user()->id && $permiso_detalle->path_ruta == '/ventas/armar-kit'){
-                        return view('ventas.armar_kit');
+                        return view('ventas.armar_kit',compact('familias'));
                     }
             }
         if($user->rol->nombrerol === "Administrador"){
-                $v = view('ventas.armar_kit')->render();
+                $v = view('ventas.armar_kit',compact('familias'))->render();
                 return $v;
             }else{
                 return redirect('/home');
@@ -7336,6 +8183,9 @@ class ventas_controlador extends Controller
 
     public function dame_formas_pago_modificar_pagos(){
         $formas = formapago::where('activo',1)->get();
+        if(Auth::user()->rol->nombrerol =="Cajer@"){
+            $formas = formapago::wherein('id',[1,4])->where('activo',1)->get();
+        }
         return json_encode($formas);
     }
 
@@ -7374,6 +8224,8 @@ class ventas_controlador extends Controller
         if($tipo_doc=='39') $tipo_doc="bo";
 
         try {
+            $this->validarDocumentoPago($tipo_doc, $id_doc);
+
             for ($i = 0; $i < count($r->id_forma_pago); $i++) {
                 $p = new pago;
                 $p->tipo_doc = $tipo_doc; //factura, boleta
@@ -7385,7 +8237,7 @@ class ventas_controlador extends Controller
                 $p->referencia = $r->referencia_forma_pago[$i];
                 $p->activo = 1;
                 $p->usuarios_id = Auth::user()->id;
-                $p->save();
+                $this->guardarPagoSeguro($p);
             }
             //cambiar el estado de delivery a 2 según el documento
             if($tipo_doc=="bo"){
@@ -7400,7 +8252,79 @@ class ventas_controlador extends Controller
             return $e->getMessage();
         }
 
+    }
 
+    public function guardar_pago(Request $r){
+        try {
+            $id_doc = $r->id_doc;
+            $tipo_doc = $r->tipo_doc;
+
+            if (is_numeric($tipo_doc)) {
+                if ($tipo_doc == '33') {
+                    $tipo_doc = 'fa';
+                } elseif ($tipo_doc == '39') {
+                    $tipo_doc = 'bo';
+                }
+            } else {
+                $tipo_doc = strtolower($tipo_doc);
+                if ($tipo_doc == 'factura') {
+                    $tipo_doc = 'fa';
+                } elseif ($tipo_doc == 'boleta') {
+                    $tipo_doc = 'bo';
+                }
+            }
+
+            $this->validarDocumentoPago($tipo_doc, $id_doc);
+
+            $formas_pago = $r->formas_pago;
+            if (!is_array($formas_pago) || count($formas_pago) == 0) {
+                return response()->json(['success' => false, 'message' => 'No hay formas de pago para guardar.']);
+            }
+
+            $id_cliente = null;
+            if ($tipo_doc == 'bo') {
+                $doc = boleta::find($id_doc);
+                if ($doc) {
+                    $id_cliente = $doc->id_cliente;
+                }
+            } elseif ($tipo_doc == 'fa') {
+                $doc = factura::find($id_doc);
+                if ($doc) {
+                    $id_cliente = $doc->id_cliente;
+                }
+            }
+
+            foreach ($formas_pago as $forma) {
+                $id_forma = isset($forma['id_forma']) ? $forma['id_forma'] : (isset($forma->id_forma) ? $forma->id_forma : null);
+                $monto = isset($forma['monto']) ? $forma['monto'] : (isset($forma->monto) ? $forma->monto : 0);
+                $referencia = isset($forma['referencia']) ? $forma['referencia'] : (isset($forma->referencia) ? $forma->referencia : 0);
+
+                if (!$id_forma) {
+                    continue;
+                }
+
+                $monto = str_replace(['.', ','], ['', '.'], trim($monto));
+                $monto = is_numeric($monto) ? $monto : 0;
+
+                $p = new pago;
+                $p->tipo_doc = $tipo_doc;
+                $p->referencia_pago = ($id_forma == 2 || $id_forma == 5) ? 2 : 1;
+                $p->id_doc = $id_doc;
+                $p->id_cliente = $id_cliente;
+                $p->id_forma_pago = $id_forma;
+                $p->monto = $monto;
+                $p->referencia = $referencia;
+                $p->fecha_pago = Carbon::today()->toDateString();
+                $p->activo = 1;
+                $p->usuarios_id = Auth::user()->id;
+
+                $this->guardarPagoSeguro($p);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
     }
 
     public function confirmar_edicion_oferta(Request $req){
@@ -7411,10 +8335,12 @@ class ventas_controlador extends Controller
             $id_oferta = $req->id_oferta;
             $desde = $req->desde;
             $hasta = $req->hasta;
+            $local = $req->local;
             $oferta = oferta_pagina_web::find($id_oferta);
             
             $oferta->desde = $desde;
             $oferta->hasta = $hasta;
+            $oferta->local = $local;
             if($fecha_hoy >= $desde && $fecha_hoy <= $hasta){
                 $oferta->activo = 1;
             }else{
@@ -7459,25 +8385,38 @@ class ventas_controlador extends Controller
         $oferta = false;
         $total=$car->dame_total();
         $carrito_transferido = $car_transferido->dame_todo_carrito();
+        $total_normal = 0;
       
         foreach ($carrito as $c) {
-            $id_familia = repuesto::where('codigo_interno',$c->codigo_interno)->value('id_familia');
-            //El idlocal 2 corresponde a solo ofertas del sitio web
-            $dcto_familia = descuento::where('id_familia',$id_familia)->where('id_local','<>',2)->first();
-            if(($c['oferta'] == 1 && $c['activo'] == 1)){
+            $id_familia = repuesto::where('codigo_interno', $c->codigo_interno)->value('id_familia');
+            
+            // Obtener la fecha actual
+            $hoy = Carbon::today()->format('Y-m-d');
+            
+            // Buscar el descuento con la condición de rango de fechas
+            $dcto_familia = descuento::where('id_familia', $id_familia)
+                ->where('id_local', '<>', 2)
+                ->whereDate('desde', '<=', $hoy)
+                ->whereDate('hasta', '>=', $hoy)
+                ->where('activo',1)
+                ->first();
+            
+            if (($c['oferta'] == 1 && $c['activo'] == 1)) {
                 $oferta = true;
                 $c->oferta = 1;
-            }elseif($dcto_familia){
+            } elseif ($dcto_familia) {
                 $oferta = true;
                 $c->oferta = 2;
-            }else{
+            } else {
                 $c->oferta = 0;
             }
+            
+            // Buscar el repuesto
+            $rep = repuesto::where('codigo_interno', $c->codigo_interno)->first();
+            $total_normal += $rep->precio_venta * $c->cantidad;
         }
 
-
-       
-        $v = view('fragm.ventas_carrito', compact('carrito', 'total','carrito_transferido','oferta'))->render();
+        $v = view('fragm.ventas_carrito', compact('carrito', 'total','carrito_transferido','oferta','total_normal'))->render();
         return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
@@ -7501,6 +8440,7 @@ class ventas_controlador extends Controller
             // }
             $total=0;
             $carrito_transferido = $car_transferido->dame_todo_carrito();
+            $total_normal = 0;
         
             foreach ($carrito as $c) {
                 $repuesto = repuesto::find($c['idrepuesto']);
@@ -7510,13 +8450,14 @@ class ventas_controlador extends Controller
                 
                 $total += $c['subtotal_item'];
                 $c['total_item'] = $total;
+                $total_normal += $subtotal;
             }
             //Guardamos los nuevos valores del carrito
             //$carrito->save();
 
           
             $oferta = false;
-            $v = view('fragm.ventas_carrito', compact('carrito', 'total','carrito_transferido','oferta'))->render();
+            $v = view('fragm.ventas_carrito', compact('carrito', 'total','carrito_transferido','oferta','total_normal'))->render();
             return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
@@ -7541,6 +8482,7 @@ class ventas_controlador extends Controller
             $total=0;
             $carrito = [];
             $carrito_transferido = $car_transferido->dame_todo_carrito_cliente($cliente_id);
+            $total_normal = 0;
        
             //Dejamos vacio el carrito transferido, ya que estará cargado
             //$carrito_transferido = [];
@@ -7554,6 +8496,8 @@ class ventas_controlador extends Controller
                 $total += $c['subtotal_item'];
                 $c['total_item'] = $total;
                 $c['oferta'] = 0;
+
+                $total_normal += $subtotal;
             }
             //Guardamos los nuevos valores del carrito
             //$carrito->save();
@@ -7561,7 +8505,7 @@ class ventas_controlador extends Controller
  
             $oferta = false;
            
-            $v = view('fragm.ventas_carrito_transferido', compact('carrito', 'total','carrito_transferido','oferta'))->render();
+            $v = view('fragm.ventas_carrito_transferido', compact('carrito', 'total','carrito_transferido','oferta','total_normal'))->render();
             return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
@@ -7580,27 +8524,41 @@ class ventas_controlador extends Controller
         $carrito_transferido = $car_transferido->dame_todo_carrito();
 
         $oferta = false;
+        $total_normal = 0;
 
         foreach ($carrito_transferido as $c) {
             $id_familia = repuesto::where('codigo_interno',$c->codigo_interno)->value('id_familia');
-            $dcto_familia = descuento::where('id_familia',$id_familia)->where('id_local',$c->id_local)->first();
-            if($c['oferta'] == 1 && $c['activo'] == 1){
+                // Obtener la fecha actual
+            $hoy = Carbon::today()->format('Y-m-d');
+            
+            // Buscar el descuento con la condición de rango de fechas
+            $dcto_familia = descuento::where('id_familia', $id_familia)
+                ->where('id_local', '<>', 2)
+                ->whereDate('desde', '<=', $hoy)
+                ->whereDate('hasta', '>=', $hoy)
+                ->where('activo',1)
+                ->first();
+            
+            if (($c['oferta'] == 1 && $c['activo'] == 1)) {
                 $oferta = true;
-            }elseif($dcto_familia){
+                $c->oferta = 1;
+            } elseif ($dcto_familia) {
                 $oferta = true;
                 $c->oferta = 2;
-            }else{
-
-                $oferta = 0;
+            } else {
+                $c->oferta = 0;
             }
             
+            // Buscar el repuesto
+            $rep = repuesto::where('codigo_interno', $c->codigo_interno)->first();
+            $total_normal += $rep->precio_venta * $c->cantidad;
         }
 
 
         return $oferta;
 
        
-        $v = view('fragm.ventas_carrito_transferido', compact('carrito_transferido','total','oferta'))->render();
+        $v = view('fragm.ventas_carrito_transferido', compact('carrito_transferido','total','oferta','total_normal'))->render();
          return $v;
         
     }
@@ -7613,11 +8571,19 @@ class ventas_controlador extends Controller
         $total = $car_transferido->dame_total_cliente($numero_carrito);
 
         $oferta = false;
-
+        $total_normal = 0;
 
         foreach ($carrito_transferido as $c) {
             $id_familia = repuesto::where('codigo_interno',$c->codigo_interno)->value('id_familia');
-            $dcto_familia = descuento::where('id_familia',$id_familia)->first();
+            $hoy = Carbon::today()->format('Y-m-d');
+            
+            // Buscar el descuento con la condición de rango de fechas
+            $dcto_familia = descuento::where('id_familia', $id_familia)
+                ->where('id_local', '<>', 2)
+                ->whereDate('desde', '<=', $hoy)
+                ->whereDate('hasta', '>=', $hoy)
+                ->where('activo',1)
+                ->first();
             if($c['oferta'] == 1 && $c['activo'] == 1){
                 $oferta = true;
             }elseif($dcto_familia){
@@ -7626,10 +8592,12 @@ class ventas_controlador extends Controller
             }else{
                 $c->oferta = 0;
             }
-            
+            // buscamos el repuesto
+            $rep = repuesto::where('codigo_interno',$c->codigo_interno)->first();
+            $total_normal += $rep->precio_venta * $c->cantidad;
         }
         
-        $v = view('fragm.ventas_carrito_transferido', compact('carrito_transferido','total','oferta'))->render();
+        $v = view('fragm.ventas_carrito_transferido', compact('carrito_transferido','total','oferta','total_normal'))->render();
          return $v;
     }
 
@@ -7774,6 +8742,14 @@ class ventas_controlador extends Controller
             if($cotizacion->count()>0){
                 foreach($cotizacion as $cot)
                 {
+                    // Obtener el precio actual del producto
+                    // $precio_actual = repuesto::where('id', $cot->id_repuestos)
+                    // ->value('precio_venta');
+                    // return 'el precio actual es '.$precio_actual.' y el precio de la cotizacion es '.$cot->precio_venta;
+                    // // Comparar el precio actual con el precio de la cotización
+                    // if ($precio_actual != $cot->precio_venta) {
+                    //     return 'El precio del repuesto con código interno '.repuesto::where('id', $cot->id_repuestos)->value('codigo_interno').' ha cambiado desde que se creó la cotización. Por favor, actualice la cotización antes de cargarla.';
+                    // }
                     $cc=new carrito_compra;
                     $cc->usuarios_id=$el_id_usuario;
                     $cc->item=$item;
@@ -8080,120 +9056,193 @@ where oems.codigo_oem='MS1173GP025'
         return view('pruebas.prueba_buscar',compact('registros','encontrados','no_encontrados'))->render();
     }
 
-    public function damedteporfechas($tipodte,$fechainicial,$fechafinal){
-        if($tipodte=='33'){
-            try {
-                $dtes=factura::select('facturas.fecha_emision','facturas.created_at',
-                                'facturas.num_factura',
-                                'facturas.total',
-                                'facturas.trackid',
-                                'facturas.estado_sii',
-                                'facturas.url_xml',
-                                'clientes.tipo_cliente',
-                                'clientes.rut',
-                                'clientes.razon_social',
-                                'clientes.nombres',
-                                'clientes.apellidos',
-                                'clientes.email',
-                                'users.name'
-                                )
-                        ->join('clientes','facturas.id_cliente','clientes.id')
-                        ->join('users','facturas.usuarios_id','users.id')
-                        ->where('facturas.fecha_emision','>=',$fechainicial)
-                        ->where('facturas.fecha_emision','<=',$fechafinal)
-                        ->where('facturas.activo',1)
-                        ->orderBy('facturas.id','DESC')
-                        ->get();
-           
-                $v=view('fragm.listado_dte_por_fechas',compact('dtes','tipodte'))->render();
-                return $v;
-            } catch (\Exception $e) {
-                return $e->getMessage();
-            }
-            
-        }
-        if($tipodte=='39'){
-            $dtes=boleta::select('boletas.fecha_emision','boletas.created_at',
-                                'boletas.num_boleta',
-                                'boletas.total',
-                                'boletas.trackid',
-                                'boletas.estado_sii',
-                                'boletas.url_xml',
-                                'clientes.tipo_cliente',
-                                'clientes.rut',
-                                'clientes.razon_social',
-                                'clientes.nombres',
-                                'clientes.apellidos',
-                                'clientes.email',
-                                'users.name'
-                                )
-                        ->join('clientes','boletas.id_cliente','clientes.id')
-                        ->join('users','boletas.usuarios_id','users.id')
-                        ->where('boletas.fecha_emision','>=',$fechainicial)
-                        ->where('boletas.fecha_emision','<=',$fechafinal)
-                        ->where('boletas.activo',1)
-                        ->orderBy('boletas.id','DESC')
-                        ->get();
-
-            $v=view('fragm.listado_dte_por_fechas',compact('dtes','tipodte'))->render();
-            return $v;
-        }
-        if($tipodte=='61'){
-            $dtes=nota_de_credito::select('notas_de_credito.fecha_emision','notas_de_credito.created_at',
-                                'notas_de_credito.num_nota_credito',
-                                'notas_de_credito.total',
-                                'notas_de_credito.trackid',
-                                'notas_de_credito.estado_sii',
-                                'notas_de_credito.url_xml',
-                                'clientes.tipo_cliente',
-                                'clientes.rut',
-                                'clientes.razon_social',
-                                'clientes.nombres',
-                                'clientes.apellidos',
-                                'clientes.email',
-                                'users.name'
-                                )
-                        ->join('clientes','notas_de_credito.id_cliente','clientes.id')
-                        ->join('users','notas_de_credito.usuarios_id','users.id')
-                        ->where('notas_de_credito.fecha_emision','>=',$fechainicial)
-                        ->where('notas_de_credito.fecha_emision','<=',$fechafinal)
-                        ->where('notas_de_credito.activo',1)
-                        ->orderBy('notas_de_credito.id','DESC')
-                        ->get();
-
-            $v=view('fragm.listado_dte_por_fechas',compact('dtes','tipodte'))->render();
-            return $v;
-        }
-        if($tipodte=='56'){
-
-        }
-        if($tipodte=='52'){
-            $dtes=guia_de_despacho::select('guias_de_despacho.fecha_emision','guias_de_despacho.created_at',
-                                'guias_de_despacho.num_guia_despacho',
-                                'guias_de_despacho.total',
-                                'guias_de_despacho.trackid',
-                                'guias_de_despacho.estado_sii',
-                                'guias_de_despacho.url_xml',
-                                'clientes.tipo_cliente',
-                                'clientes.rut',
-                                'clientes.razon_social',
-                                'clientes.nombres',
-                                'clientes.apellidos',
-                                'clientes.email',
-                                'users.name'
-                                )
-                        ->join('clientes','guias_de_despacho.id_cliente','clientes.id')
-                        ->join('users','guias_de_despacho.usuarios_id','users.id')
-                        ->where('guias_de_despacho.fecha_emision','>=',$fechainicial)
-                        ->where('guias_de_despacho.fecha_emision','<=',$fechafinal)
-                        ->where('guias_de_despacho.activo',1)
-                        ->orderBy('guias_de_despacho.id','DESC')
-                        ->get();
-
-            $v=view('fragm.listado_dte_por_fechas',compact('dtes','tipodte'))->render();
-            return $v;
-        }
+   public function damedteporfechas($tipodte, $fechainicial, $fechafinal)
+{
+    $esCajero = Auth::user()->rol->nombrerol == 'Cajer@';
+    $tienePermiso = permissions_detail::where('usuarios_id', Auth::user()->id)->where('path_ruta','/sii/ultimosestadodte')->first();
+    if($tienePermiso){
+        $permiso_modificar = true;
+    }else{
+        $permiso_modificar = false;
     }
+    try {
+
+        if ($tipodte == '33') {
+
+            $query = factura::select(
+                    'facturas.fecha_emision',
+                    'facturas.created_at',
+                    'facturas.num_factura',
+                    'facturas.total',
+                    'facturas.trackid',
+                    'facturas.estado_sii',
+                    'facturas.url_xml',
+                    'clientes.tipo_cliente',
+                    'clientes.rut',
+                    'clientes.razon_social',
+                    'clientes.nombres',
+                    'clientes.apellidos',
+                    'clientes.email',
+                    'users.name'
+                )
+                ->join('clientes', 'facturas.id_cliente', 'clientes.id')
+                ->join('users', 'facturas.usuarios_id', 'users.id')
+                ->where('facturas.fecha_emision', '>=', $fechainicial)
+                ->where('facturas.fecha_emision', '<=', $fechafinal)
+                ->where('facturas.activo', 1)
+                ->orderBy('facturas.id', 'DESC');
+
+            if ($esCajero || $permiso_modificar) {
+                $query->limit(5);
+            }
+
+            $dtes = $query->get();
+
+            return view('fragm.listado_dte_por_fechas', compact('dtes', 'tipodte'))->render();
+        }
+
+        if ($tipodte == '39') {
+
+            $query = boleta::select(
+                    'boletas.fecha_emision',
+                    'boletas.created_at',
+                    'boletas.num_boleta',
+                    'boletas.total',
+                    'boletas.trackid',
+                    'boletas.estado_sii',
+                    'boletas.url_xml',
+                    'clientes.tipo_cliente',
+                    'clientes.rut',
+                    'clientes.razon_social',
+                    'clientes.nombres',
+                    'clientes.apellidos',
+                    'clientes.email',
+                    'users.name'
+                )
+                ->join('clientes', 'boletas.id_cliente', 'clientes.id')
+                ->join('users', 'boletas.usuarios_id', 'users.id')
+                ->where('boletas.fecha_emision', '>=', $fechainicial)
+                ->where('boletas.fecha_emision', '<=', $fechafinal)
+                ->where('boletas.activo', 1)
+                ->orderBy('boletas.id', 'DESC');
+
+            if ($esCajero || $permiso_modificar) {
+                $query->limit(5);
+            }
+
+            $dtes = $query->get();
+
+            return view('fragm.listado_dte_por_fechas', compact('dtes', 'tipodte'))->render();
+        }
+
+        if ($tipodte == '61') {
+
+            $query = nota_de_credito::select(
+                    'notas_de_credito.fecha_emision',
+                    'notas_de_credito.created_at',
+                    'notas_de_credito.num_nota_credito',
+                    'notas_de_credito.total',
+                    'notas_de_credito.trackid',
+                    'notas_de_credito.estado_sii',
+                    'notas_de_credito.url_xml',
+                    'clientes.tipo_cliente',
+                    'clientes.rut',
+                    'clientes.razon_social',
+                    'clientes.nombres',
+                    'clientes.apellidos',
+                    'clientes.email',
+                    'users.name'
+                )
+                ->join('clientes', 'notas_de_credito.id_cliente', 'clientes.id')
+                ->join('users', 'notas_de_credito.usuarios_id', 'users.id')
+                ->where('notas_de_credito.fecha_emision', '>=', $fechainicial)
+                ->where('notas_de_credito.fecha_emision', '<=', $fechafinal)
+                ->where('notas_de_credito.activo', 1)
+                ->orderBy('notas_de_credito.id', 'DESC');
+
+            if ($esCajero || $permiso_modificar) {
+                $query->limit(5);
+            }
+
+            $dtes = $query->get();
+
+            return view('fragm.listado_dte_por_fechas', compact('dtes', 'tipodte'))->render();
+        }
+
+        if ($tipodte == '56') {
+
+            $query = nota_de_debito::select(
+                    'notas_de_debito.fecha_emision',
+                    'notas_de_debito.created_at',
+                    'notas_de_debito.num_nota_debito',
+                    'notas_de_debito.total',
+                    'notas_de_debito.trackid',
+                    'notas_de_debito.estado_sii',
+                    'notas_de_debito.url_xml',
+                    'clientes.tipo_cliente',
+                    'clientes.rut',
+                    'clientes.razon_social',
+                    'clientes.nombres',
+                    'clientes.apellidos',
+                    'clientes.email',
+                    'users.name'
+                )
+                ->join('clientes', 'notas_de_debito.id_cliente', 'clientes.id')
+                ->join('users', 'notas_de_debito.usuarios_id', 'users.id')
+                ->where('notas_de_debito.fecha_emision', '>=', $fechainicial)
+                ->where('notas_de_debito.fecha_emision', '<=', $fechafinal)
+                ->where('notas_de_debito.activo', 1)
+                ->orderBy('notas_de_debito.id', 'DESC');
+
+            if ($esCajero || $permiso_modificar) {
+                $query->limit(5);
+            }
+
+            $dtes = $query->get();
+
+            return view('fragm.listado_dte_por_fechas', compact('dtes', 'tipodte'))->render();
+        }
+
+        if ($tipodte == '52') {
+
+            $query = guia_de_despacho::select(
+                    'guias_de_despacho.fecha_emision',
+                    'guias_de_despacho.created_at',
+                    'guias_de_despacho.num_guia_despacho',
+                    'guias_de_despacho.total',
+                    'guias_de_despacho.trackid',
+                    'guias_de_despacho.estado_sii',
+                    'guias_de_despacho.url_xml',
+                    'clientes.tipo_cliente',
+                    'clientes.rut',
+                    'clientes.razon_social',
+                    'clientes.nombres',
+                    'clientes.apellidos',
+                    'clientes.email',
+                    'users.name'
+                )
+                ->join('clientes', 'guias_de_despacho.id_cliente', 'clientes.id')
+                ->join('users', 'guias_de_despacho.usuarios_id', 'users.id')
+                ->where('guias_de_despacho.fecha_emision', '>=', $fechainicial)
+                ->where('guias_de_despacho.fecha_emision', '<=', $fechafinal)
+                ->where('guias_de_despacho.activo', 1)
+                ->orderBy('guias_de_despacho.id', 'DESC');
+
+            if ($esCajero || $permiso_modificar) {
+                $query->limit(5);
+            }
+
+            $dtes = $query->get();
+
+            return view('fragm.listado_dte_por_fechas', compact('dtes', 'tipodte'))->render();
+        }
+
+        return 'Tipo DTE no válido';
+
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+}
 
     public function dameventasporfechas($tipodte,$fechainicial,$fechafinal){
 
@@ -8294,25 +9343,41 @@ where oems.codigo_oem='MS1173GP025'
         return 'OK';
     }
 
-    public function damedetalleboleta($tipodte,$id_boleta){
+    public function damedetalleboleta($tipodte,$id_boleta, $codigo_interno = null){
+      
         if($tipodte == 33){
             $boleta = factura::where('facturas.id',$id_boleta)->join('users','facturas.usuarios_id','users.id')->first();
             $boleta->fecha_emision = Carbon::parse($boleta->fecha_emision)->format("d-m-Y");
             $boleta_detalle = factura_detalle::where('facturas_detalle.id_factura',$id_boleta)
                                                 ->join('repuestos','facturas_detalle.id_repuestos','repuestos.id')
                                                 ->get();
-            $v = view('fragm.detalleboleta',compact('boleta_detalle','boleta','tipodte'))->render();
+
+            if(!is_null($codigo_interno)){
+                $repuesto = repuesto::where('codigo_interno',$codigo_interno)->first();
+            }else{
+                $repuesto = null;
+            }
+            
+            $v = view('fragm.detalleboleta',compact('boleta_detalle','boleta','tipodte','repuesto'))->render();
             return $v;
         }               
 
         if($tipodte == 39){
+       
             try {
                 $boleta = boleta::where('boletas.id',$id_boleta)->join('users','boletas.usuarios_id','users.id')->first();
+                
                 $boleta->fecha_emision = Carbon::parse($boleta->fecha_emision)->format("d-m-Y");
                 $boleta_detalle = boleta_detalle::where('boletas_detalle.id_boleta',$id_boleta)
                                                 ->join('repuestos','boletas_detalle.id_repuestos','repuestos.id')
                                                 ->get();
-                $v = view('fragm.detalleboleta',compact('boleta_detalle','boleta','tipodte'))->render();
+              
+                if(!is_null($codigo_interno)){
+                    $repuesto = repuesto::where('codigo_interno',$codigo_interno)->first();
+                }else{
+                    $repuesto = null;
+                }            
+                $v = view('fragm.detalleboleta',compact('boleta_detalle','boleta','tipodte','repuesto'))->render();
                 return $v;
             } catch (\Exception $e) {
                 return $e->getMessage();
@@ -8383,7 +9448,10 @@ where oems.codigo_oem='MS1173GP025'
 
     public function arqueo(){
         try {
-            $cajeros = user::where('id','181')->get();
+            $cajeros = user::where('role_id', 14) // 14 es el id del rol de cajero
+                            ->where('activo',1)
+                            ->orderBy('name','ASC')
+                            ->get();
             $user = Auth::user();
             $permisos_detalles = permissions_detail::all();
             foreach($permisos_detalles as $permiso_detalle){
@@ -9140,7 +10208,8 @@ where oems.codigo_oem='MS1173GP025'
         if(Auth::user()->rol->nombrerol == "Administrador"){
             return [$pedidos_terrestre, $pedidos_aereos,$fechaFormateadaTerrestre,$fechaFormateadaAereo];
         }else{
-            return [];
+            // return [];
+             return [$pedidos_terrestre, $pedidos_aereos,$fechaFormateadaTerrestre,$fechaFormateadaAereo];
         }
         
     } catch (\Exception $e) {
@@ -9153,11 +10222,13 @@ where oems.codigo_oem='MS1173GP025'
         $permisos = permissions_detail::all();
         $usuarios = User::where('activo',1)->where('role_id','<>',20)->where('id','<>',16)->get();
         $proveedores = proveedor::where('activo',1)->get();
+        $formas_pago = formapago::all();
         foreach ($permisos as $p) {
             if($p->usuarios_id == Auth::user()->id && $p->path_ruta == '/ventas/pedidos_nuevo'){
                 return view('ventas.pedidos_nuevo',[
                     'usuarios' => $usuarios,
-                    'proveedores' => $proveedores
+                    'proveedores' => $proveedores,
+                    'formas_pago' => $formas_pago
                 ]);
             }
         }
@@ -9165,31 +10236,38 @@ where oems.codigo_oem='MS1173GP025'
         if(Auth::user()->rol->nombrerol == "Administrador"){
             return view('ventas.pedidos_nuevo',[
                 'usuarios' => $usuarios,
-                'proveedores' => $proveedores
+                'proveedores' => $proveedores,
+                'formas_pago' => $formas_pago
             ]);
         }else return redirect('home');
         
     }
 
-    public function nuevo_abono(Request $req){
-        $existe = $this->existeabono($req);
-        
-        if($existe == "nuevo"){
+   public function nuevo_abono(Request $req)
+    {
+        try {
+            // Cada solicitud de pedido nuevo debe tener su propio abono.
             $abono = new abono;
-            // $abono->num_abono = $abono->id;
             $abono->usuarios_id = Auth::user()->id;
             $abono->nombre_cliente = $req->nombre;
             $abono->telefono = $req->telefono;
             $abono->email = $req->email;
             $abono->id_responsable = $req->responsable;
+            $abono->patente = $req->patente ?: null;
             $abono->save();
-            return $abono->id;
-        }else{
-            return 'no';
-        }
-        
-    }
 
+            return [
+                'id' => $abono->id,
+                'numero_abono' => $abono->num_abono
+            ];
+        } catch (\Exception $e) {
+            report($e);
+            return response()->json([
+                'error' => true,
+                'mensaje' => 'No se pudo crear el pedido.'
+            ], 500);
+        }
+    }
     public function nueva_consignacion(Request $req){
         // $existe = $this->existeconsignacion($req);
         
@@ -9256,20 +10334,22 @@ where oems.codigo_oem='MS1173GP025'
         
     }
 
-    public function existeabono($data){
-        $abonos = abono::all();
+    public function existeabono($data)
+    {
         try {
-            foreach($abonos as $abono){
-                if(strtolower($abono->nombre_cliente) == strtolower($data->nombre)){
-                    return "existe";
-                }
+
+            $abono = abono::whereRaw('LOWER(nombre_cliente) = ?', [strtolower($data->nombre)])
+                        ->first();
+
+            if ($abono) {
+                return $abono; // devuelve el modelo completo
             }
-    
-            return "nuevo";
+
+            return null;
+
         } catch (\Exception $e) {
             return $e->getMessage();
         }
-        
     }
 
 
@@ -9291,10 +10371,11 @@ where oems.codigo_oem='MS1173GP025'
             $pedido= abono_detalle::where('id_repuesto',$idrep)->delete();
             $repuesto = repuesto::where('id',$idrep)->delete();
              
-            $pedidos = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.id as idrep')
+            $pedidos = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.id as idrep','proveedores.empresa_nombre_corto','repuestos.descripcion')
                 ->where('abono_detalle.id_abono',$id_abono)
                 ->join('abono_estado','abono_estado.id','abono_detalle.estado')
                 ->join('repuestos','repuestos.id','abono_detalle.id_repuesto')
+                ->join('proveedores','proveedores.id','abono_detalle.id_proveedor')
                 ->get();
             //Si no existen pedidos se elimina el cliente para no cargar la BD
             if($pedidos->count() == 0){
@@ -9302,7 +10383,8 @@ where oems.codigo_oem='MS1173GP025'
             }
             return $pedidos;
         } catch (\Exception $e) {
-            return $e->getMessage();
+            report($e);
+            return response()->json(['mensaje' => 'No se pudo eliminar el pedido.'], 500);
         }
         
     }
@@ -9323,72 +10405,212 @@ where oems.codigo_oem='MS1173GP025'
 
     public function revisar_carrito(){
         $user_id = Auth::user()->id;
-        $carrito_transferido = carrito_transferido::where('cajeros_id',$user_id)->distinct()->groupBy('cliente_id')->get();
+        $carrito_transferido = carrito_transferido::where('cajeros_id',$user_id)->distinct()->where('estado',1)->groupBy('cliente_id')->get();
         return count($carrito_transferido);
     }
 
-    public function agregar_repuesto_valemercaderia(Request $req){
-        
+    public function agregar_repuesto_valemercaderia(Request $req)
+    {
+        \DB::beginTransaction();
+
         try {
-            $idrep = $req->idrep;
+            $req->validate([
+                'idrep'       => 'required|integer',
+                'num_boucher' => 'required',
+                'origen'      => 'required|integer|in:1,3,4',
+                'cantidad'    => 'required|integer|min:1',
+            ]);
+
+            $idrep = (int) $req->idrep;
             $num_boucher = $req->num_boucher;
-            $origen = $req->origen;
-            $cantidad = $req->cantidad;
+            $origen = (int) $req->origen;
+            $cantidad = (int) $req->cantidad;
 
-            $repuesto = repuesto::find($idrep);
-
-            if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
-                return 'error';
-            }elseif($origen == 3 && ($cantidad > $repuesto->stock_actual_dos)){
-                return 'error';
-            }elseif($origen == 4 && ($cantidad > $repuesto->stock_actual_tres)){
-                return 'error';
-            }
-
-
-            //Fecha ultima actualización del precio del repuesto
-            $firstDate = $repuesto->fecha_actualiza_precio;
-            $secondDate = date('d-m-Y H:i:s');
-
-            $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
-
-            $years  = floor($dateDifference / (365 * 60 * 60 * 24));
-            $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
-            $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
-
-            $minutos = floor(abs($dateDifference / 60));
-            $horas = floor($minutos / 60);
-            $dias = floor($horas / 24);
-
-            if($dias <= 60 ){
-                $vale = $vale = vale_mercaderia::select('vale_mercaderia.*','users.name')
-                ->join('users','vale_mercaderia.usuarios_id','users.id')
-                ->where('vale_mercaderia.numero_boucher',$num_boucher)
+            $vale = vale_mercaderia::where(
+                    'numero_boucher',
+                    $num_boucher
+                )
+                ->lockForUpdate()
                 ->first();
 
-                $detalle = new vale_mercaderia_detalle;
-                $detalle->vale_mercaderia_id = $vale->id;
-                $detalle->repuesto_id = $idrep;
-                $detalle->local_id = $origen;
-                $detalle->cantidad = $cantidad;
-                $detalle->activo = 1;
-                $detalle->usuario_id = Auth::user()->id;
+            if (!$vale) {
+                \DB::rollBack();
 
-                $detalle->save();
+                return response()->json([
+                    'estado'  => 'ERROR',
+                    'mensaje' => 'No se encontró el vale de mercadería.',
+                ], 404);
+            }
 
-                $detalles = $this->dame_repuestos_valemercaderia($num_boucher);
-                $v = view('fragm.busqueda_vale_mercaderia',compact('detalles','vale'))->render();
-                return $v;
-            }else{
+            if ((float) $vale->valor <= 0) {
+                \DB::rollBack();
+
+                return response()->json([
+                    'estado'  => 'ERROR',
+                    'mensaje' => 'El vale ya no tiene saldo disponible.',
+                ], 422);
+            }
+
+            $repuesto = repuesto::where('id', $idrep)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$repuesto) {
+                \DB::rollBack();
+
+                return response()->json([
+                    'estado'  => 'ERROR',
+                    'mensaje' => 'No se encontró el repuesto.',
+                ], 404);
+            }
+
+            /*
+            * Validar antigüedad del precio antes de descontar stock.
+            */
+            if (empty($repuesto->fecha_actualiza_precio)) {
+                \DB::rollBack();
+
                 return 'viejo';
             }
 
-           
-            
-        } catch (\Exception $e) {
-            return $e->getMessage();
+            $dias = Carbon::parse(
+                $repuesto->fecha_actualiza_precio
+            )->diffInDays(Carbon::now());
+
+            if ($dias > 60) {
+                \DB::rollBack();
+
+                return 'viejo';
+            }
+
+            /*
+            * Validar y descontar stock según origen.
+            */
+            if ($origen === 1) {
+                if ($cantidad > (int) $repuesto->stock_actual) {
+                    \DB::rollBack();
+
+                    return 'error';
+                }
+
+                $repuesto->stock_actual -= $cantidad;
+                $repuesto->fecha_actualizacion_stock = now();
+
+            } elseif ($origen === 3) {
+                if ($cantidad > (int) $repuesto->stock_actual_dos) {
+                    \DB::rollBack();
+
+                    return 'error';
+                }
+
+                $repuesto->stock_actual_dos -= $cantidad;
+                $repuesto->fecha_actualizacion_stock_dos = now();
+
+            } elseif ($origen === 4) {
+                if ($cantidad > (int) $repuesto->stock_actual_tres) {
+                    \DB::rollBack();
+
+                    return 'error';
+                }
+
+                $repuesto->stock_actual_tres -= $cantidad;
+                $repuesto->fecha_actualizacion_stock_tres = now();
+            }
+
+            //$repuesto->save();
+
+            /*
+            * El nuevo producto queda pendiente de procesar.
+            *
+            * activo = 0: pendiente
+            * activo = 1: procesado / historial
+            */
+            $detalle = new vale_mercaderia_detalle();
+            $detalle->vale_mercaderia_id = $vale->id;
+            $detalle->repuesto_id = $idrep;
+            $detalle->local_id = $origen;
+            $detalle->cantidad = $cantidad;
+            $detalle->activo = 0;
+            $detalle->usuario_id = Auth::id();
+            $detalle->save();
+
+            MovimientoValeHelper::registrarMovimiento(
+                $vale->id,
+                $idrep,
+                $cantidad,
+                'agregar',
+                $origen,
+                $num_boucher,
+                'Repuesto agregado al vale de mercadería'
+            );
+
+            $this->revisar_stock_minimo($idrep);
+
+            /*
+            * Confirmar primero todos los cambios.
+            */
+            \DB::commit();
+
+            /*
+            * La función auxiliar debe devolver un arreglo PHP:
+            *
+            * [
+            *     'pendientes' => Collection,
+            *     'historial'  => Collection
+            * ]
+            */
+            $respuesta = $this->dame_repuestos_valemercaderia(
+                $num_boucher
+            );
+
+            $detallesPendientes = $respuesta['pendientes'] ?? collect();
+            $detallesProcesados = $respuesta['historial'] ?? collect();
+
+            $vale = vale_mercaderia::select(
+                    'vale_mercaderia.*',
+                    'users.name'
+                )
+                ->leftJoin(
+                    'users',
+                    'vale_mercaderia.usuarios_id',
+                    '=',
+                    'users.id'
+                )
+                ->where(
+                    'vale_mercaderia.numero_boucher',
+                    $num_boucher
+                )
+                ->first();
+
+            return view(
+                'fragm.busqueda_vale_mercaderia',
+                compact(
+                    'vale',
+                    'detallesPendientes',
+                    'detallesProcesados'
+                )
+            )->render();
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \DB::rollBack();
+
+            throw $e;
+
+        } catch (\Throwable $e) {
+            \DB::rollBack();
+
+            \Log::error('Error al agregar repuesto al vale', [
+                'num_boucher' => $req->num_boucher ?? null,
+                'idrep'       => $req->idrep ?? null,
+                'mensaje'     => $e->getMessage(),
+                'linea'       => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'estado'  => 'ERROR',
+                'mensaje' => $e->getMessage(),
+            ], 500);
         }
-        
     }
 
     public function agregar_repuesto_valeconsignacion(Request $req){
@@ -9400,13 +10622,17 @@ where oems.codigo_oem='MS1173GP025'
 
             $repuesto = repuesto::find($idrep);
 
-            if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                        if ((int) $cantidad <= 0 || app(\App\Services\StockPorLocalService::class)->cantidad($repuesto->id, $origen) < (int) $cantidad) return 'error';
+                    } else {
+if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
                 return 'error';
             }elseif($origen == 3 && ($cantidad > $repuesto->stock_actual_dos)){
                 return 'error';
             }elseif($origen == 4 && ($cantidad > $repuesto->stock_actual_tres)){
                 return 'error';
             }
+                    }
 
             //Fecha ultima actualización del precio del repuesto
             $firstDate = $repuesto->fecha_actualiza_precio;
@@ -9440,6 +10666,9 @@ where oems.codigo_oem='MS1173GP025'
                 $cargar = false;
                 //Descontamos el stock del repuesto en consignacion
                 $repuesto = repuesto::find($idrep);
+                if (\App\Services\StockPorLocalService::habilitado()) {
+                    app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $origen, -(int) $cantidad, ['tipo' => 'CONSIGNACION']);
+                } else {
                 if($origen == 1){
                     $repuesto->stock_actual -= $cantidad;
                 }else if($origen == 3){
@@ -9449,6 +10678,7 @@ where oems.codigo_oem='MS1173GP025'
                 }
 
                 $repuesto->save();
+                }
                 $v = view('fragm.busqueda_vale_consignacion',compact('detalles','vale','cargar'))->render();
                 return $v;
             }else{
@@ -9474,34 +10704,144 @@ where oems.codigo_oem='MS1173GP025'
         
     }
 
-    public function eliminar_repuesto_valemercaderia($id,$num_boucher){
-       
-        try {
-            
-            $vale = vale_mercaderia::select('vale_mercaderia.*','users.name')
-                            ->join('users','vale_mercaderia.usuarios_id','users.id')
-                            ->where('vale_mercaderia.numero_boucher',$num_boucher)
-                            ->first();
-            $value = vale_mercaderia_detalle::find($id);
-            //Devolvemos el stock del repuesto en consignacion
-            //$repuesto = repuesto::find($value->id_repuestos);
-            // if($value->id_local == 1){
-            //     $repuesto->stock_actual += $cantidad;
-            // }else if($value->id_local == 3){
-            //     $repuesto->stock_actual_dos += $cantidad;
-            // }else{
-            //     $repuesto->stock_actual_tres += $cantidad;
-            // }
-            $value->delete();
+    public function eliminar_repuesto_valemercaderia($detalle_id, $numero_vale)
+{
+    \DB::beginTransaction();
 
-            $detalles = $this->dame_repuestos_valemercaderia($num_boucher);
-            $v = view('fragm.busqueda_vale_mercaderia',compact('detalles','vale'))->render();
-            return $v;
-        } catch (\Exception $e) {
-            return $e->getMessage();
+    try {
+        $detalle = vale_mercaderia_detalle::where('id', $detalle_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$detalle) {
+            \DB::rollBack();
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'No se encontró el producto asociado al vale.'
+            ], 404);
         }
-        
+
+        $vale = vale_mercaderia::where(
+                'numero_boucher',
+                $numero_vale
+            )
+            ->first();
+
+        if (!$vale || $detalle->vale_mercaderia_id != $vale->id) {
+            \DB::rollBack();
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'El producto no corresponde al vale indicado.'
+            ], 422);
+        }
+
+        $repuesto = repuesto::where('id', $detalle->repuesto_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$repuesto) {
+            \DB::rollBack();
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'No se encontró el repuesto.'
+            ], 404);
+        }
+
+        $cantidad = (int) $detalle->cantidad;
+        $origen = (int) $detalle->local_id;
+
+        /*
+         * Devolver stock según el local desde el cual
+         * fue descontado originalmente.
+         */
+        if ($origen === 1) {
+            $repuesto->stock_actual += $cantidad;
+            $repuesto->fecha_actualizacion_stock = now();
+
+        } elseif ($origen === 3) {
+            $repuesto->stock_actual_dos += $cantidad;
+            $repuesto->fecha_actualizacion_stock_dos = now();
+
+        } elseif ($origen === 4) {
+            $repuesto->stock_actual_tres += $cantidad;
+            $repuesto->fecha_actualizacion_stock_tres = now();
+
+        } else {
+            \DB::rollBack();
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'El origen de stock del detalle no es válido.'
+            ], 422);
+        }
+
+        // $repuesto->save();
+
+        // Registrar devolución de stock
+        MovimientoValeHelper::registrarMovimiento(
+            $vale->id,
+            $detalle->repuesto_id,
+            $cantidad,
+            'eliminar',
+            $origen,
+            $numero_vale,
+            'Repuesto eliminado del vale y stock devuelto al local'
+        );
+
+        // Puedes eliminar físicamente el detalle
+        $detalle->delete();
+
+        // O dejarlo inactivo en lugar de eliminar:
+        // $detalle->activo = 0;
+        // $detalle->save();
+
+        $this->revisar_stock_minimo($repuesto->id);
+
+        $detalles = $this->dame_repuestos_valemercaderia(
+            $numero_vale
+        );
+
+        $vale = vale_mercaderia::select(
+                'vale_mercaderia.*',
+                'users.name'
+            )
+            ->leftJoin(
+                'users',
+                'vale_mercaderia.usuarios_id',
+                '=',
+                'users.id'
+            )
+            ->where(
+                'vale_mercaderia.numero_boucher',
+                $numero_vale
+            )
+            ->first();
+
+        \DB::commit();
+
+        return view(
+            'fragm.busqueda_vale_mercaderia',
+            compact('detalles', 'vale')
+        )->render();
+
+    } catch (\Exception $e) {
+        \DB::rollBack();
+
+        \Log::error('Error al eliminar repuesto de vale', [
+            'detalle_id' => $detalle_id,
+            'numero_vale' => $numero_vale,
+            'mensaje' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'estado' => 'ERROR',
+            'mensaje' => 'No fue posible eliminar el producto: '.$e->getMessage()
+        ], 500);
     }
+}
 
     public function eliminar_repuesto_valeconsignacion($numero_boucher,$id_repuesto){
        try {
@@ -9513,6 +10853,9 @@ where oems.codigo_oem='MS1173GP025'
                                                 ->first();
         //Devolvemos el stock del repuesto a su ubicación original.
         $repuesto = repuesto::find($id_repuesto);
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $detalle->id_local, (int) $detalle->cantidad, ['tipo' => 'DEVOLUCION_CONSIGNACION']);
+        } else {
         if($detalle->id_local == 1){
             $repuesto->stock_actual += $detalle->cantidad;
         }else if($detalle->id_local == 3){
@@ -9522,6 +10865,7 @@ where oems.codigo_oem='MS1173GP025'
         }
         //Guardamos la ultima información del repuesto
         $repuesto->save();
+        }
         $detalle->delete();
         $detalles = $this->dame_repuestos_valeconsignacion($vale->id);
         $cargar = false;
@@ -9546,6 +10890,9 @@ where oems.codigo_oem='MS1173GP025'
             $detalle->devuelto = 1;
             //Buscamos el repuesto y le devolvemos la cantidad a su stock original
             $repuesto = repuesto::find($id_repuesto);
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $detalle->id_local, (int) $detalle->cantidad, ['tipo' => 'DEVOLUCION_CONSIGNACION']);
+            } else {
             if($detalle->id_local == 1){
                 $repuesto->stock_actual += $detalle->cantidad;
             }else if($detalle->id_local == 3){
@@ -9554,6 +10901,7 @@ where oems.codigo_oem='MS1173GP025'
                 $repuesto->stock_actual_tres += $detalle->cantidad;
             }
             $repuesto->save();
+            }
             $detalle->save();
             $detalles = $this->dame_repuestos_valeconsignacion($vale->id);
             if(count($detalles) == 0){
@@ -9584,20 +10932,91 @@ where oems.codigo_oem='MS1173GP025'
         
     }
 
-    public function dame_repuestos_valemercaderia($num_boucher){
+    public function dame_repuestos_valemercaderia($num_boucher)
+    {
         try {
-            $vale = vale_mercaderia::where('numero_boucher',$num_boucher)->first();
-            $repuestos = vale_mercaderia_detalle::select('vale_mercaderia_detalle.*','users.name','locales.local_nombre','repuestos.id as idrep','repuestos.precio_venta','repuestos.codigo_interno')
-                                            ->join('users','vale_mercaderia_detalle.usuario_id','users.id')
-                                            ->join('locales','vale_mercaderia_detalle.local_id','locales.id')
-                                            ->join('repuestos','vale_mercaderia_detalle.repuesto_id','repuestos.id')
-                                            ->where('vale_mercaderia_detalle.vale_mercaderia_id',$vale->id)
-                                            ->get();
-            return $repuestos;
-        } catch (\Exception $e) {
-            return $e->getMessage();
+            $vale = vale_mercaderia::where(
+                    'numero_boucher',
+                    $num_boucher
+                )
+                ->first();
+
+            if (!$vale) {
+                return [
+                    'estado'     => 0,
+                    'mensaje'    => 'No se encontró el vale de mercadería.',
+                    'pendientes' => collect(),
+                    'historial'  => collect(),
+                ];
+            }
+
+            $consultaBase = vale_mercaderia_detalle::select(
+                    'vale_mercaderia_detalle.*',
+                    'users.name',
+                    'locales.local_nombre',
+                    'repuestos.id as idrep',
+                    'repuestos.descripcion',
+                    'repuestos.precio_venta',
+                    'repuestos.codigo_interno'
+                )
+                ->join(
+                    'users',
+                    'vale_mercaderia_detalle.usuario_id',
+                    '=',
+                    'users.id'
+                )
+                ->join(
+                    'locales',
+                    'vale_mercaderia_detalle.local_id',
+                    '=',
+                    'locales.id'
+                )
+                ->join(
+                    'repuestos',
+                    'vale_mercaderia_detalle.repuesto_id',
+                    '=',
+                    'repuestos.id'
+                )
+                ->where(
+                    'vale_mercaderia_detalle.vale_mercaderia_id',
+                    $vale->id
+                );
+
+            $pendientes = (clone $consultaBase)
+                ->where('vale_mercaderia_detalle.activo', 0)
+                ->orderBy('vale_mercaderia_detalle.id', 'asc')
+                ->get();
+
+            $historial = (clone $consultaBase)
+                ->where('vale_mercaderia_detalle.activo', 1)
+                ->orderBy('vale_mercaderia_detalle.updated_at', 'desc')
+                ->get();
+
+            /*
+            * Se retorna un arreglo PHP normal.
+            * No usar response()->json() en esta función auxiliar.
+            */
+            return [
+                'estado'     => 1,
+                'mensaje'    => 'Detalles obtenidos correctamente.',
+                'pendientes' => $pendientes,
+                'historial'  => $historial,
+            ];
+
+        } catch (\Throwable $e) {
+            \Log::error('Error al obtener detalles del vale', [
+                'numero_boucher' => $num_boucher,
+                'mensaje'        => $e->getMessage(),
+                'linea'          => $e->getLine(),
+            ]);
+
+            return [
+                'estado'     => 0,
+                'mensaje'    => $e->getMessage(),
+                'pendientes' => collect(),
+                'historial'  => collect(),
+            ];
         }
-        
     }
 
     public function ventas_online(){
@@ -9614,6 +11033,118 @@ where oems.codigo_oem='MS1173GP025'
             return $e->getMessage();
         }
         
+    }
+
+
+    private function descontarStockCarritoGiftcard(Request $r)
+    {
+        // Giftcard no pasa por enviar_sii(), por lo tanto aquí se descuenta el stock
+        // usando los mismos datos del carrito: id_repuestos, id_local y cantidad.
+        if(!empty($r->vendedor_id)){
+            $carrito_transferido = new carrito_transferido();
+            $items = $carrito_transferido->dame_todo_carrito_cliente($r->cliente_id);
+        }else{
+            $carrito = new carrito_compra();
+            $items = $carrito->dame_todo_carrito();
+        }
+
+        if(!$items || count($items) == 0){
+            throw new \Exception('No hay productos en el carrito para descontar stock.');
+        }
+
+        foreach($items as $item){
+
+            $id_repuesto = $item->id_repuestos ?? ($item->idrepuesto ?? null);
+            $id_local = intval($item->id_local ?? 0);
+            $cantidad = intval($item->cantidad ?? 0);
+
+            if(empty($id_repuesto) || $cantidad <= 0){
+                throw new \Exception('Hay un producto del carrito sin repuesto o cantidad válida.');
+            }
+
+            $repuesto = repuesto::where('id', $id_repuesto)->lockForUpdate()->first();
+
+            if(!isset($repuesto)){
+                throw new \Exception('No se encontró el repuesto ID '.$id_repuesto.' para descontar stock.');
+            }
+
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $id_local, -$cantidad, ['tipo' => 'VENTA']);
+            } else {
+            $campo_stock = 'stock_actual';
+            $campo_fecha = 'fecha_actualizacion_stock';
+
+            if(intval($repuesto->local_id) == $id_local){
+                $campo_stock = 'stock_actual';
+                $campo_fecha = 'fecha_actualizacion_stock';
+            }elseif(intval($repuesto->local_id_dos) == $id_local){
+                $campo_stock = 'stock_actual_dos';
+                $campo_fecha = 'fecha_actualizacion_stock_dos';
+            }elseif(intval($repuesto->local_id_tres) == $id_local){
+                $campo_stock = 'stock_actual_tres';
+                $campo_fecha = 'fecha_actualizacion_stock_tres';
+            }
+
+            if(intval($repuesto->{$campo_stock}) < $cantidad){
+                throw new \Exception(
+                    'Stock insuficiente para '.$repuesto->descripcion.
+                    '. Disponible: '.intval($repuesto->{$campo_stock}).
+                    ', solicitado: '.$cantidad
+                );
+            }
+
+            $repuesto->{$campo_stock} = intval($repuesto->{$campo_stock}) - $cantidad;
+            $repuesto->{$campo_fecha} = Carbon::now()->format('Y-m-d H:i:s');
+            $repuesto->save();
+
+            }
+            $this->revisar_stock_minimo($repuesto->id);
+        }
+
+        return true;
+    }
+
+    private function procesarPagoGiftcard($numero_giftcard){
+        try {
+            $user = Auth::user();
+
+            // Buscar el vale_mercaderia (giftcard) bloqueado dentro de la transacción.
+            $giftcard = vale_mercaderia::where('numero_boucher', $numero_giftcard)->lockForUpdate()->first();
+
+            if(!isset($giftcard)){
+                return false;
+            }
+
+            // Obtener el total del carrito actual.
+            $car = new carrito_compra;
+            $total_venta = intval($car->dame_total());
+
+            if($total_venta <= 0){
+                return false;
+            }
+
+            // Se descuenta solo lo que corresponde usar de la giftcard:
+            // - Si la giftcard tiene más saldo que la venta, se descuenta el total de la venta.
+            // - Si la giftcard tiene menos saldo que la venta, se descuenta todo el saldo disponible.
+            $monto_usado_giftcard = min(intval($giftcard->valor), $total_venta);
+
+            if($monto_usado_giftcard <= 0){
+                return false;
+            }
+
+            $nuevoSaldo = intval($giftcard->valor) - $monto_usado_giftcard;
+
+            // Actualizar el saldo del giftcard.
+            $giftcard->valor = $nuevoSaldo;
+            $giftcard->save();
+
+            // Descripción informativa por si luego se registra movimiento.
+            $descripcion = "Uso de Giftcard #" . $numero_giftcard . " - Monto: $" . number_format($monto_usado_giftcard, 0, ',', '.') . " - Usuario: " . $user->name . " - Fecha: " . Carbon::now()->format('d-m-Y H:i:s');
+
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     public function dame_fecha_actual(){
@@ -9854,9 +11385,9 @@ where oems.codigo_oem='MS1173GP025'
             if($encontrados->count()>0){
                 $rep = repuesto::where('codigo_interno',$id)->first();
                 //Consultamos si la familia corresponde a un kit armado 442 = kit panchorepuestos
-                if ($value == 1 && $rep->id_familia !== 442){
-                    return ["error","No es un kit"];
-                }   
+                // if ($value == 1 && $rep->id_familia !== 442){
+                //     return ["error","No es un kit"];
+                // }   
                 $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$encontrados[0]->id)->first();
                 $detalle_kit = armado_kit_detalle::select('armado_kit_detalle.*','repuestos.codigo_interno','repuestos.descripcion','repuestos.precio_venta')
                                                     ->join('repuestos','armado_kit_detalle.id_repuesto','repuestos.id')
@@ -9989,6 +11520,9 @@ where oems.codigo_oem='MS1173GP025'
     public function seleccionar_kit($idrep, $local_id){
        
         $rep = repuesto::find($idrep);
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            return app(\App\Services\StockPorLocalService::class)->cantidad($idrep, $local_id) > 0 ? 'OK' : ['error', 'No hay stock en el local seleccionado'];
+        }
         if($local_id == 1 && $rep->stock_actual == 0){
             return ['error','no hay stock en bodega'];
         }
@@ -10049,7 +11583,19 @@ where oems.codigo_oem='MS1173GP025'
     }
 
     public function estadisticas_resumen($data){
+        try {
         list($fechaInicial,$fechaFinal, $horarioInicial, $horarioFinal)=explode("&",$data);
+
+        $bodegueros = carrito_transferido::selectRaw("users.name, count(carrito_transferido.id) as total")
+            ->join('users','carrito_transferido.id_bodeguero','users.id')
+            ->whereBetween('carrito_transferido.created_at', [$fechaInicial, $fechaFinal])
+            ->whereRaw("TIME(carrito_transferido.created_at) >= ?",[$horarioInicial])
+            ->whereRaw("TIME(carrito_transferido.created_at) <= ?",[$horarioFinal])
+            ->groupBy('users.name')
+            ->orderByDesc('total')
+            ->take(30)
+            ->get();
+          
         
             $rep_mas_vendidos_boleta = boleta_detalle::selectRaw("repuestos.descripcion,repuestos.codigo_interno, count(boletas_detalle.id_repuestos) as total")
                                                         ->where('boletas.fecha_emision','>=',$fechaInicial)
@@ -10116,7 +11662,7 @@ where oems.codigo_oem='MS1173GP025'
 
             // unir los resultados de $mejores_clientes_boleta y $mejores_clientes_factura
             $mejores_clientes = $mejores_clientes_boleta->union($mejores_clientes_factura)->sortByDesc('total')->take(30);
-            try {
+          
                 $rep = boleta_detalle::selectRaw("marcarepuestos.marcarepuesto,count(repuestos.id_marca_repuesto) as total")
                                     ->where('boletas.fecha_emision','>=',$fechaInicial)
                                     ->where('boletas.fecha_emision','<=',$fechaFinal)
@@ -10197,6 +11743,17 @@ where oems.codigo_oem='MS1173GP025'
                         array_push($data_mmv,0);
 
 
+                        $labels_bodegueros = array();
+                        foreach ($bodegueros as $key => $value) {
+                            $labels_bodegueros[] = $value->name;
+                        }
+
+                        $data_bodegueros = array();
+                        foreach ($bodegueros as $key => $value) {
+                            $data_bodegueros[] = $value->total;
+                        }
+
+                        array_push($data_bodegueros,0);
 
                         // como saber la fecha que se vendio menos de la tabla pagos
                         $fecha_menos_vendido = pago::selectRaw('count(pagos.id) as total, pagos.fecha_pago as fecha')
@@ -10241,6 +11798,7 @@ where oems.codigo_oem='MS1173GP025'
                             'mejores_clientes' => $mejores_clientes,
                             'marcas_mas_vendidas' => $rep,
                             'dias_mas_vendidos' => $dias_mas_vendido,
+                            'bodegueros' => $bodegueros,
                             'labels' => json_encode($labels),
                             'data' => json_encode($data),
                             'labels_cb' => json_encode($labels_cb),
@@ -10249,6 +11807,8 @@ where oems.codigo_oem='MS1173GP025'
                             'data_mmv' => json_encode($data_mmv),
                             'labels_dias_mas_vendidos' => json_encode($labels_dias_mas_vendidos),
                             'data_dias_mas_vendidos' => json_encode($data_dias_mas_vendidos),
+                            'labels_bodegueros' => json_encode($labels_bodegueros),
+                            'data_bodegueros' => json_encode($data_bodegueros),
                         ])->render();
 
                             return $v;
@@ -10436,10 +11996,9 @@ where oems.codigo_oem='MS1173GP025'
             if($meta) $meta->inicio = 0;
             // buscar todas las metas de todos los meses
             $metas = metas::all();
-            if($metas->count() >0){
+            if ($metas->count() > 0) {
                 foreach ($metas as $meta_) {
-                    $mes = date('F', mktime(0, 0, 0, $meta_->mes, 10)); // F es para el nombre completo del mes
-                    $meta_->mes = $mes;
+                    $meta_->mes = Carbon::create()->month($meta_->mes)->locale('es')->translatedFormat('F');
                 }
             }
 

@@ -14,6 +14,7 @@ use App\cliente_cuenta;
 use App\correlativo;
 use App\factura;
 use App\boleta;
+use App\nota_de_credito;
 use App\familia;
 use App\limite;
 use App\dia;
@@ -388,46 +389,143 @@ class clientes_controlador extends Controller
                                 ->orderBy('clientes_cuenta.created_at','DESC')
                                 ->get();
 
+        $notas_credito = nota_de_credito::select('*','total as total_nc')
+                                ->where('activo', 1)
+                                ->where('estado_sii', 'ACEPTADO')
+                                ->where('id_cliente', $idc)
+                                ->orderBy('fecha_emision', 'DESC')
+                                ->get();
+                               
+        $total_nc = 0;
         foreach($cuenta as $c){
             $c->fecha_operacion = Carbon::parse($c->fecha_operacion)->format("d-m-Y");
+            
+            // Separar el documento y el número de $c->referencia
+            $referenciaPartes = explode('N°', $c->referencia);
+            $tipoDocumento = trim($referenciaPartes[0]); // "Boleta"
+            if($tipoDocumento == "Boleta"){
+                $tipoDocumento = "bo";
+            }else if($tipoDocumento == "Factura"){
+                $tipoDocumento = "fa";
+            }
+            $numeroDocumento = isset($referenciaPartes[1]) ? trim($referenciaPartes[1]) : null; // "78139"
+            foreach($notas_credito as $nc){
+                $partes = explode("*", $nc->docum_referencia);
+                $tipo_doc = $partes[0];
+                $numero_doc = $partes[1];
+                if($tipo_doc == $tipoDocumento && $numero_doc == $numeroDocumento){
+                    $c->nota_credito = $nc;
+                    $total_nc += $nc->total;
+                }
+            }
         }
+
+        
         
         return $cuenta;
     }
 
     private function dame_cuenta_vista($idc){
-        $cliente = cliente_modelo::find($idc);
-        $cuenta=$this->dame_cuenta($idc);
-        if($cuenta->count()==0){
-            $total_pagos=0;
-            $total_deuda=0;
-            $diferencia=0;
-        }else{
-            $total_pagos=$cuenta->sum('pago');
-            $total_deuda=$cuenta->sum('deuda');;
-            $diferencia=$total_deuda-$total_pagos;
-        }
-        $facturas=factura::where('activo',1)
-                        ->where('estado_sii','ACEPTADO')
-                        ->where('id_cliente',$idc)
-                        ->orderBy('fecha_emision','DESC')
-                        ->get();
-        $facturas_suma=factura::where('activo',1)
-                        ->where('estado_sii','ACEPTADO')
-                        ->where('id_cliente',$idc)
-                        ->sum('total');
+        try {
+            $cliente = cliente_modelo::find($idc);
+            
+            $cuenta=$this->dame_cuenta($idc);
+            
+            if($cuenta->count()==0){
+                $total_pagos=0;
+                $total_deuda=0;
+                $total_nc = 0;
+                $diferencia=0;
+            }else{
+                $total_pagos=$cuenta->sum('pago');
+                $total_deuda=$cuenta->sum('deuda');;
+                $total_nc = $cuenta->sum('nota_credito.total_nc');
+                $diferencia=$total_deuda-$total_pagos-$total_nc;
+            }
+            $facturas=factura::where('activo',1)
+                            ->where('estado_sii','ACEPTADO')
+                            ->where('id_cliente',$idc)
+                            ->orderBy('fecha_emision','DESC')
+                            ->get();
+            $facturas_suma=factura::where('activo',1)
+                            ->where('estado_sii','ACEPTADO')
+                            ->where('id_cliente',$idc)
+                            ->sum('total');
+    
+            $boletas=boleta::where('activo',1)
+                            ->where('estado_sii','ACEPTADO')
+                            ->where('id_cliente',$idc)
+                            ->orderBy('fecha_emision','DESC')
+                            ->get();
+            $boletas_suma=boleta::where('activo',1)
+                            ->where('estado_sii','ACEPTADO')
+                            ->where('id_cliente',$idc)
+                            ->sum('total');
+    
+            $notas_credito = nota_de_credito::where('activo',1)
+                                            ->where('estado_sii','ACEPTADO')
+                                            ->where('id_cliente',$idc)
+                                            ->orderBy('fecha_emision','DESC')
+                                            ->get();
 
-        $boletas=boleta::where('activo',1)
-                        ->where('estado_sii','ACEPTADO')
-                        ->where('id_cliente',$idc)
-                        ->orderBy('fecha_emision','DESC')
-                        ->get();
-        $boletas_suma=boleta::where('activo',1)
-                        ->where('estado_sii','ACEPTADO')
-                        ->where('id_cliente',$idc)
-                        ->sum('total');
-        $v=view('fragm.clientes_cuenta',compact('cuenta','total_pagos','total_deuda','diferencia','facturas','facturas_suma','boletas','boletas_suma','cliente'))->render();
-        return $v;
+            foreach($notas_credito as $nc){
+                $partes = explode("*", $nc->docum_referencia);
+                $tipo_doc = $partes[0];
+                $numero_doc = $partes[1];
+
+                if($tipo_doc == 'fa'){
+                    $doc = factura::where('id_cliente',$idc)
+                                    ->where('num_factura',$numero_doc)
+                                    ->first();
+                    $tipo_documento = "factura";
+                }else if($tipo_doc == 'bo'){
+                    $doc = boleta::where('id_cliente',$idc)
+                                    ->where('num_boleta',$numero_doc)
+                                    ->first();
+                    $tipo_documento = "boleta";
+                }
+
+                $nc->doc = $doc;
+                $nc->num_doc = $numero_doc;
+                $nc->tipo_documento = $tipo_documento;
+            }
+
+            $notas_credito_suma = nota_de_credito::where('activo',1)
+                                            ->where('estado_sii','ACEPTADO')
+                                            ->where('id_cliente',$idc)
+                                            ->sum('total');
+                                
+            // recorremos las boletas y las notas de credito y si la nota de credito es de tipo_doc bo y el numero de docu es igual a la boleta, le asignamos la nota de credito a la boleta
+            foreach($boletas as $b){
+                foreach($notas_credito as $nc){
+                    $partes = explode("*", $nc->docum_referencia);
+                    $tipo_doc = $partes[0];
+                    $numero_doc = $partes[1];
+                    if($tipo_doc == 'bo' && $numero_doc == $b->num_boleta){
+                        $b->nota_credito = $nc;
+                    }
+                }
+            }
+
+            // recorremos las facturas y las notas de credito y si la nota de credito es de tipo_doc fa y el numero de docu es igual a la factura, le asignamos la nota de credito a la factura
+            foreach($facturas as $f){
+                foreach($notas_credito as $nc){
+                    $partes = explode("*", $nc->docum_referencia);
+                    $tipo_doc = $partes[0];
+                    $numero_doc = $partes[1];
+                    if($tipo_doc == 'fa' && $numero_doc == $f->num_factura){
+                        $f->nota_credito = $nc;
+                    }
+                }
+            }
+
+            $v=view('fragm.clientes_cuenta',compact('cuenta','total_pagos','total_deuda','total_nc','diferencia','facturas','facturas_suma','boletas','boletas_suma','notas_credito','notas_credito_suma','cliente'))->render();
+            return $v;
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
+
     }
 
     public function damecuenta($idc){
@@ -499,12 +597,23 @@ class clientes_controlador extends Controller
         return $this->dame_cuenta_vista($r->id_cliente);
     }
 
-    public function borrarcuenta($data){
-        list($id_cliente,$idop)=explode("*",$data);
-        $cc=cliente_cuenta::find($idop);
-        $cc->usuarios_id=Session::get("usuario_id");
-        $cc->activo=0;
-        $cc->save();
+    public function borrarcuenta($data) {
+       
+        list($id_cliente, $ids) = explode("*", $data);
+       
+        $idsArray = explode(',', $ids); // Convertir el string de IDs en un array
+     
+        foreach ($idsArray as $idop) {
+            $cc = cliente_cuenta::find($idop);
+       
+            if ($cc) {
+                $cc->usuarios_id = Session::get("usuario_id");
+                $cc->activo = 0;
+                $cc->save();
+            }
+        }
+
+        // Retornar la vista actualizada
         return $this->dame_cuenta_vista($id_cliente);
     }
 
@@ -792,6 +901,7 @@ class clientes_controlador extends Controller
 
     public function abonar(Request $r){
         try {
+          
             $repuesto=new repuesto;
             $fsd=familia::where('prefijo','FSD')->value('id');
             $repuesto->id_familia=$fsd;
@@ -808,10 +918,10 @@ class clientes_controlador extends Controller
             $repuesto->descripcion=strtoupper($r->descripcion);
             $repuesto->medidas="No definidas";
             
-            if(empty($r->codigo)){
+            if(empty($r->codigo_proveedor)){
                 $repuesto->cod_repuesto_proveedor="P".time();
             }else{
-                $repuesto->cod_repuesto_proveedor=$r->codigo;
+                $repuesto->cod_repuesto_proveedor=$r->codigo_proveedor;
             }
             
             $repuesto->version_vehiculo="---"; // $item->cod2_repuesto_proveedor;
@@ -836,6 +946,7 @@ class clientes_controlador extends Controller
             $repuesto->usuarios_id=Auth::user()->id;
             $repuesto->activo=1;
             $repuesto->local_id = 1;
+         
             $repuesto->save();
                     //Luego de guardar, actualizar el correlativo de la familia
                     $familia_datos->correlativo=$newval;
@@ -853,6 +964,7 @@ class clientes_controlador extends Controller
         $abono_detalle->cantidad = $r->cantidad;
         $abono_detalle->total = $r->total;
         $abono_detalle->precio_unitario = $r->precio;
+        
         $repuesto_buscado = repuesto::where('codigo_interno',$r->descripcion)
                             ->orWhere('descripcion','LIKE',"%{$r->descripcion}%")
                             ->get();
@@ -865,10 +977,11 @@ class clientes_controlador extends Controller
             
             $abono_detalle->save();
             $abono = abono::select('id')->where('id',$r->id_abono)->first();
-            $abonos = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.descripcion','repuestos.id as idrep')
+            $abonos = abono_detalle::select('abono_detalle.*','abono_estado.descripcion_estado','repuestos.descripcion','repuestos.id as idrep','proveedores.empresa_nombre_corto')
                 ->where('abono_detalle.id_abono',$r->id_abono)
                 ->join('abono_estado','abono_estado.id','abono_detalle.estado')
                 ->join('repuestos','repuestos.id','abono_detalle.id_repuesto')
+                ->join('proveedores','proveedores.id','abono_detalle.id_proveedor')
                 ->get();
             
             $data = ['OK',$abono->id, $abonos];
@@ -898,6 +1011,7 @@ class clientes_controlador extends Controller
             $abono->precio_lista = $r->precio_lista;
             $abono->abono = intval($r->abono);
             $abono->saldo_pendiente = intval($r->saldo_pendiente);
+            $abono->forma_pago = intval($r->forma_pago);
             
             try {
                 if($abono->por_cobrar === "si"){
@@ -947,9 +1061,10 @@ class clientes_controlador extends Controller
     public function dame_abonos(){
         $abonos = abono::select('abono.*','users.name as responsable')
                         ->join('users','users.id','abono.id_responsable')
+                        ->where('abono.activo',1)
                         ->distinct()
                         ->groupBy('abono.nombre_cliente')
-                        ->orderBy('abono.id')
+                        ->orderBy('abono.id','desc')
                         ->get();
         foreach($abonos as $a){
             $a->fecha_emision = Carbon::parse($a->fecha_emision)->format("d-m-Y");

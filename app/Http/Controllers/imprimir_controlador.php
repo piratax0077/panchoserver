@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use Debugbar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Session;
 use App\User;
 use App\abono;
@@ -21,6 +24,7 @@ use App\consignacion;
 use App\consignacion_detalle;
 use App\repuesto;
 use App\vale_mercaderia;
+use App\vale_mercaderia_detalle;
 use App\vale_consignacion;
 use App\vale_consignacion_detalle;
 use App\oferta_pagina_web;
@@ -323,7 +327,10 @@ class imprimir_controlador extends Controller
                 if($det_cotizacion->count()>0){
                     $id_cliente=$cab_cotizacion->id_cliente;
                     $cliente=cliente_modelo::where('id',$id_cliente)->first();
-                    $html_cotizacion=view($vista,compact('cab_cotizacion','det_cotizacion','cliente','oferta'))->render();
+                    $total_precio_normal = $det_cotizacion->sum(function ($item) {
+                        return $item->precio_venta * $item->cantidad;
+                    });
+                    $html_cotizacion=view($vista,compact('cab_cotizacion','det_cotizacion','cliente','oferta','total_precio_normal'))->render();
                     return $html_cotizacion;
                 }else{
                     return false;
@@ -469,48 +476,22 @@ class imprimir_controlador extends Controller
         return $html_vale;
     }
 
-    private function damehtml_vale_resultado($vista, $vale_mercaderia, $detalles_vale_mercaderia){
-        //Descontamos el stock de los repuestos solicitados
-        $total = 0;
-        $vm = $vale_mercaderia;
-        try {
-            foreach($detalles_vale_mercaderia as $d){
-                $total += $d['precio_venta'] * $d['cantidad'];
-                $repuesto = repuesto::where('codigo_interno',$d['codigo_interno'])->first();
-                if($repuesto->local_id == $d['local_id']) {
-                    $repuesto->stock_actual -= $d['cantidad'];
-                }elseif($repuesto->local_id_dos == $d['local_id']){
-                    $repuesto->stock_actual_dos -= $d['cantidad'];
-                }elseif($repuesto->local_id_tres == $d['local_id']){
-                    $repuesto->stock_actual_tres -= $d['cantidad'];
-                }
-                
-                 
-                 
-    
-                $repuesto->save();
-                
-            };
-            //Buscamos el vale de mercadería y le restamos el total al valor del vale 
-            $vale_mercaderia = vale_mercaderia::where('numero_boucher',$vale_mercaderia['numero_boucher'])->first();
-            //Si el valor del vale de mercadería es mayor al total se descuenta del valor del vale de mercadería
-            if($total < $vale_mercaderia->valor){
-                $vale_mercaderia->valor -= $total;
-            }else{
-                $vale_mercaderia->valor = 0;
-                $vale_mercaderia->activo = 0;
-            }
-            
-            $vale_mercaderia->save();
-
-            $html_vale_resultado = view($vista, compact('vm','detalles_vale_mercaderia'))->render();
-            return $html_vale_resultado;
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-        
-        
-    }
+    private function damehtml_vale_resultado(
+    $vista,
+    $vale,
+    $detalles,
+    $total,
+    $saldoAnterior,
+    $saldoRestante
+) {
+    return view($vista, [
+        'vm' => $vale,
+        'detalles_vale_mercaderia' => $detalles,
+        'total' => $total,
+        'saldo_anterior' => $saldoAnterior,
+        'saldo_restante' => $saldoRestante,
+    ])->render();
+}
 
     private function damehtml_pedido($vista, $id_abono){
         $abono = abono::find($id_abono);
@@ -523,6 +504,22 @@ class imprimir_controlador extends Controller
             $abono->email = 'sinemail@gmail.com';
         }
         // asignar el atributo hora a abono y se saque del created_at
+        $abono->hora = Carbon::parse($abono->created_at)->format("H:i:s");
+        $abono->fecha_emision = Carbon::parse($abono->fecha_emision)->format("d-m-Y");
+        $html_pedido = view($vista, compact('abono','abono_detalle'))->render();
+        return $html_pedido;
+    }
+
+    private function damehtml_pedido_admin($vista, $id_abono){
+        $abono = abono::find($id_abono);
+        $abono_detalle = abono_detalle::select('abono_detalle.*','repuestos.cod_repuesto_proveedor','proveedores.empresa_nombre_corto as nombre_proveedor','repuestos.descripcion')
+                                        ->where('abono_detalle.id_abono',$id_abono)
+                                        ->join('repuestos','abono_detalle.id_repuesto','repuestos.id')
+                                        ->leftjoin('proveedores','abono_detalle.id_proveedor','proveedores.id')
+                                        ->get();
+        if($abono->email == null){
+            $abono->email = 'sinemail@gmail.com';
+        }
         $abono->hora = Carbon::parse($abono->created_at)->format("H:i:s");
         $abono->fecha_emision = Carbon::parse($abono->fecha_emision)->format("d-m-Y");
         $html_pedido = view($vista, compact('abono','abono_detalle'))->render();
@@ -797,36 +794,472 @@ try {
         }
     }
 
-    public function imprimir_vale_resultado(Request $req){
-        $vale_mercaderia = $req->vale;
-        $detalles_vale_mercaderia = $req->detalles;
-        
+   public function imprimir_vale_resultado(Request $req)
+{
+    $validator = Validator::make(
+        $req->all(),
+        [
+            'numero_vale' => 'required|integer|min:1',
+        ],
+        [
+            'numero_vale.required' => 'Debe indicar el número del vale.',
+            'numero_vale.integer'  => 'El número del vale no es válido.',
+            'numero_vale.min'      => 'El número del vale no es válido.',
+        ]
+    );
 
-        $ruta=$this->dameParametrosImprimirValeResultado($vale_mercaderia);
-      
-        try {
-            $mpdf = $this->configurarPDF_vale();
-            
-            $mpdf->SetSubject($ruta['archivo']);
-           
-            $html=$this->damehtml_vale_resultado($ruta['vista'],$vale_mercaderia, $detalles_vale_mercaderia);
-            if($html===false){
-                $estado=['estado'=>'ERROR','mensaje'=>'No se pudo generar el PDF'];
-                return json_encode($estado);
-            }
-            $guardar_pdf=$ruta['donde'].$ruta['archivo'];
-            $guardar_pdf_public=$ruta['donde_public'].$ruta['archivo'];
-            $mpdf->WriteHTML($html);
-            $mpdf->Output($guardar_pdf,"F"); // OJO: OUTPUT  F: Guardar el PDF  D: Descargar el PDF    I:  InLine Browser
-            $mpdf->Output($guardar_pdf_public,"F");
-            $estado=['estado'=>'OK','mensaje'=>$ruta['pdf']];
-            return json_encode($estado);
-        } catch (\Exception $error) {
-            $e=$error->getMessage();
-            $estado=['estado'=>'ERROR_IMPRESION','mensaje'=>$e];
-            return json_encode($estado);
-        }
+    if ($validator->fails()) {
+        return response()->json([
+            'estado'  => 'ERROR',
+            'mensaje' => $validator->errors()->first(),
+        ], 422);
     }
+
+    DB::beginTransaction();
+
+    try {
+        /*
+         * 1. Bloquear el vale.
+         */
+        $vale = vale_mercaderia::where(
+                'numero_boucher',
+                $req->numero_vale
+            )
+            ->lockForUpdate()
+            ->first();
+
+        if (!$vale) {
+            throw new \Exception(
+                'No se encontró el vale de mercadería N° ' .
+                $req->numero_vale . '.'
+            );
+        }
+
+        if ((int) $vale->activo === 0) {
+            throw new \Exception(
+                'El vale ya fue procesado anteriormente.'
+            );
+        }
+
+        $saldoAnterior = round((float) $vale->valor, 0);
+
+        if ($saldoAnterior <= 0) {
+            throw new \Exception(
+                'El vale no tiene saldo disponible.'
+            );
+        }
+
+        /*
+         * 2. Bloquear los detalles pendientes.
+         */
+        $idsDetalles = vale_mercaderia_detalle::where(
+                'vale_mercaderia_id',
+                $vale->id
+            )
+            ->where('activo', 0)
+            ->lockForUpdate()
+            ->pluck('id');
+
+        if ($idsDetalles->isEmpty()) {
+            throw new \Exception(
+                'El vale no tiene productos pendientes para procesar.'
+            );
+        }
+
+        /*
+         * 3. Cargar todos los detalles.
+         *
+         * es_xpress debe existir en vale_mercaderia_detalle:
+         *
+         * 0 = repuesto físico
+         * 1 = Repuesto Express
+         */
+        $detalles = vale_mercaderia_detalle::select(
+                'vale_mercaderia_detalle.*',
+                'repuestos.codigo_interno',
+                'repuestos.descripcion',
+                'repuestos.precio_venta',
+                'locales.local_nombre'
+            )
+            ->join(
+                'repuestos',
+                'vale_mercaderia_detalle.repuesto_id',
+                '=',
+                'repuestos.id'
+            )
+            ->leftJoin(
+                'locales',
+                'vale_mercaderia_detalle.local_id',
+                '=',
+                'locales.id'
+            )
+            ->whereIn(
+                'vale_mercaderia_detalle.id',
+                $idsDetalles
+            )
+            ->get();
+
+        if ($detalles->isEmpty()) {
+            throw new \Exception(
+                'No fue posible obtener los productos asociados al vale.'
+            );
+        }
+
+        /*
+         * 4. Separar productos físicos y Express.
+         */
+        $detallesNormales = $detalles
+            ->filter(function ($detalle) {
+                return (int) $detalle->es_xpress === 0;
+            })
+            ->values();
+
+        $detallesXpress = $detalles
+            ->filter(function ($detalle) {
+                return (int) $detalle->es_xpress === 1;
+            })
+            ->values();
+
+        /*
+         * 5. Calcular el total completo del vale.
+         */
+        $total = $detalles->sum(function ($detalle) {
+            return round(
+                (float) $detalle->precio_venta *
+                (int) $detalle->cantidad,
+                0
+            );
+        });
+
+        $total = round((float) $total, 0);
+
+        if ($total <= 0) {
+            throw new \Exception(
+                'El total de los productos no es válido.'
+            );
+        }
+
+        /*
+         * 6. Calcular solamente el monto Express.
+         * Este monto será enviado posteriormente al flujo de ventas/SII.
+         */
+        $totalXpress = $detallesXpress->sum(
+            function ($detalle) {
+                return round(
+                    (float) $detalle->precio_venta *
+                    (int) $detalle->cantidad,
+                    0
+                );
+            }
+        );
+
+        $totalXpress = round((float) $totalXpress, 0);
+
+        /*
+         * 7. Calcular saldo del vale.
+         */
+        $exceso = max(0, $total - $saldoAnterior);
+        $nuevoSaldo = max(0, $saldoAnterior - $total);
+
+        /*
+         * Se permiten consumos parciales del vale.
+         *
+         * Si el total de los productos es menor al saldo disponible,
+         * el monto utilizado se descuenta y el vale permanece activo
+         * con el saldo restante para una próxima compra.
+         *
+         * Ejemplo:
+         * saldo anterior: $50.000
+         * total utilizado: $30.000
+         * nuevo saldo:     $20.000
+         */
+
+        /*
+         * 8. Descontar stock solamente de los repuestos físicos.
+         */
+        foreach ($detallesNormales as $detalle) {
+            $cantidad = (int) $detalle->cantidad;
+
+            if ($cantidad <= 0) {
+                throw new \Exception(
+                    'La cantidad del repuesto ' .
+                    $detalle->codigo_interno .
+                    ' no es válida.'
+                );
+            }
+
+            $repuestoStock = repuesto::where(
+                    'id',
+                    $detalle->repuesto_id
+                )
+                ->lockForUpdate()
+                ->first();
+
+            if (!$repuestoStock) {
+                throw new \Exception(
+                    'No se encontró el repuesto ID ' .
+                    $detalle->repuesto_id . '.'
+                );
+            }
+
+            $campoStock = null;
+            $campoFecha = null;
+            $localId = (int) $detalle->local_id;
+
+            if (
+                (int) $repuestoStock->local_id === $localId
+            ) {
+                $campoStock = 'stock_actual';
+                $campoFecha = 'fecha_actualizacion_stock';
+
+            } elseif (
+                (int) $repuestoStock->local_id_dos === $localId
+            ) {
+                $campoStock = 'stock_actual_dos';
+                $campoFecha = 'fecha_actualizacion_stock_dos';
+
+            } elseif (
+                (int) $repuestoStock->local_id_tres === $localId
+            ) {
+                $campoStock = 'stock_actual_tres';
+                $campoFecha = 'fecha_actualizacion_stock_tres';
+            }
+
+            if ($campoStock === null) {
+                throw new \Exception(
+                    'El local seleccionado no corresponde a una ' .
+                    'bodega configurada para ' .
+                    $repuestoStock->descripcion . '.'
+                );
+            }
+
+            $stockDisponible = (int) $repuestoStock->{$campoStock};
+
+            if ($stockDisponible < $cantidad) {
+                throw new \Exception(
+                    'Stock insuficiente para ' .
+                    $repuestoStock->descripcion .
+                    '. Disponible: ' .
+                    $stockDisponible .
+                    ', solicitado: ' .
+                    $cantidad . '.'
+                );
+            }
+
+            $repuestoStock->{$campoStock} =
+                $stockDisponible - $cantidad;
+
+            $repuestoStock->{$campoFecha} =
+                Carbon::now()->format('Y-m-d H:i:s');
+
+            $repuestoStock->save();
+        }
+
+        /*
+         * 9. Preparar PDF del comprobante interno del vale.
+         */
+        $ruta = $this->dameParametrosImprimirValeResultado(
+            $vale->toArray()
+        );
+
+        if (!is_array($ruta)) {
+            throw new \Exception(
+                'No fue posible obtener la configuración del PDF.'
+            );
+        }
+
+        foreach (
+            ['donde', 'donde_public', 'archivo', 'vista', 'pdf']
+            as $campo
+        ) {
+            if (empty($ruta[$campo])) {
+                throw new \Exception(
+                    'Falta el parámetro "' .
+                    $campo .
+                    '" en la configuración del PDF.'
+                );
+            }
+        }
+
+        if (!view()->exists($ruta['vista'])) {
+            throw new \Exception(
+                'No existe la vista del comprobante: ' .
+                $ruta['vista']
+            );
+        }
+
+        foreach (
+            [$ruta['donde'], $ruta['donde_public']]
+            as $directorio
+        ) {
+            if (!is_dir($directorio)) {
+                if (
+                    !mkdir($directorio, 0775, true) &&
+                    !is_dir($directorio)
+                ) {
+                    throw new \Exception(
+                        'No fue posible crear el directorio: ' .
+                        $directorio
+                    );
+                }
+            }
+
+            if (!is_writable($directorio)) {
+                throw new \Exception(
+                    'El directorio no tiene permisos de escritura: ' .
+                    $directorio
+                );
+            }
+        }
+
+        $valeImpresion = clone $vale;
+
+        $valeImpresion->saldo_anterior = $saldoAnterior;
+        $valeImpresion->total_entregado = $total;
+        $valeImpresion->saldo_restante = $nuevoSaldo;
+        $valeImpresion->total_xpress = $totalXpress;
+
+        $html = $this->damehtml_vale_resultado(
+            $ruta['vista'],
+            $valeImpresion,
+            $detalles,
+            $total,
+            $saldoAnterior,
+            $nuevoSaldo
+        );
+
+        if (trim((string) $html) === '') {
+            throw new \Exception(
+                'No se pudo generar el contenido del comprobante.'
+            );
+        }
+
+        $archivoPrincipal =
+            rtrim($ruta['donde'], '/\\') .
+            DIRECTORY_SEPARATOR .
+            $ruta['archivo'];
+
+        $archivoPublico =
+            rtrim($ruta['donde_public'], '/\\') .
+            DIRECTORY_SEPARATOR .
+            $ruta['archivo'];
+
+        $mpdf = $this->configurarPDF_vale();
+
+        $mpdf->SetSubject($ruta['archivo']);
+        $mpdf->WriteHTML($html);
+        $mpdf->Output($archivoPrincipal, 'F');
+
+        if (!file_exists($archivoPrincipal)) {
+            throw new \Exception(
+                'El PDF no fue generado en la ruta principal.'
+            );
+        }
+
+        if ($archivoPrincipal !== $archivoPublico) {
+            if (!copy($archivoPrincipal, $archivoPublico)) {
+                throw new \Exception(
+                    'No fue posible copiar el PDF a la ruta pública.'
+                );
+            }
+        }
+
+        /*
+         * 10. Cerrar el vale.
+         */
+        $vale->valor = $nuevoSaldo;
+        $vale->activo = $nuevoSaldo <= 0 ? 0 : 1;
+        $vale->save();
+
+        vale_mercaderia_detalle::whereIn(
+                'id',
+                $idsDetalles
+            )
+            ->update([
+                'activo'     => 1,
+                'updated_at' => now(),
+            ]);
+
+        /*
+         * Guardamos la información necesaria antes del commit.
+         */
+        $xpressParaVenta = $detallesXpress
+            ->map(function ($detalle) {
+                return [
+                    'id_repuesto' => (int) $detalle->repuesto_id,
+                    'codigo'      => $detalle->codigo_interno,
+                    'descripcion' => $detalle->descripcion,
+                    'cantidad'    => (int) $detalle->cantidad,
+                    'precio'      => round(
+                        (float) $detalle->precio_venta,
+                        0
+                    ),
+                    'subtotal'    => round(
+                        (float) $detalle->precio_venta *
+                        (int) $detalle->cantidad,
+                        0
+                    ),
+                    'local_id'    => (int) $detalle->local_id,
+                ];
+            })
+            ->values()
+            ->toArray();
+
+        DB::commit();
+
+        /*
+         * 11. Responder indicando si debe generarse DTE.
+         *
+         * Esta función todavía no envía directamente al SII.
+         * Entrega al frontend los Express para preparar el carrito
+         * y continuar con generar_xml() / enviar_sii().
+         */
+        return response()->json([
+            'estado'          => 'OK',
+            'mensaje'         => $ruta['pdf'],
+            'numero_vale'     => $vale->numero_boucher,
+            'total_utilizado' => $total,
+            'saldo_anterior'  => $saldoAnterior,
+            'saldo_restante'  => $nuevoSaldo,
+            'exceso'          => $exceso,
+            'vale_activo'     => $nuevoSaldo > 0,
+            'pago_parcial'    => $nuevoSaldo > 0,
+            'mensaje_saldo'   => $nuevoSaldo > 0
+                ? 'El vale permanece activo con un saldo de $' .
+                    number_format($nuevoSaldo, 0, ',', '.') . '.'
+                : 'El vale fue utilizado completamente.',
+
+            'requiere_dte_xpress' => $totalXpress > 0,
+            'total_xpress'        => $totalXpress,
+            'xpress'              => $xpressParaVenta,
+        ]);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+
+        Log::error(
+            'Error al procesar vale de mercadería',
+            [
+                'numero_vale' => $req->input('numero_vale'),
+                'mensaje'     => $e->getMessage(),
+                'archivo'     => $e->getFile(),
+                'linea'       => $e->getLine(),
+                'trace'       => $e->getTraceAsString(),
+            ]
+        );
+
+        return response()->json([
+            'estado'  => 'ERROR',
+            'mensaje' => $e->getMessage(),
+            'archivo' => config('app.debug')
+                ? $e->getFile()
+                : null,
+            'linea' => config('app.debug')
+                ? $e->getLine()
+                : null,
+        ], 422);
+    }
+}
 
     public function imprimir_codebar($id_repuesto){
         $ruta = $this->dameParametrosImprimirCodebar();
@@ -1307,6 +1740,23 @@ try {
         }
     }
 
+    public function dameParametrosImprimirPedidoAdmin($num_abono){
+        $base_pdf=base_path('storage/app/public/pdf')."/";
+        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        try {
+            $donde=$base_pdf."pedidos/";
+            $donde_public = $base_pdf_public."pedidos/";
+            $archivo="pedido_admin_".$num_abono.".pdf";
+            $vista="impresion.pedido_admin";
+            $pdf=asset('storage/pdf/pedidos')."/".$archivo;
+
+            $rpta=['donde'=>$donde,'donde_public' => $donde_public,'archivo'=>$archivo,'vista'=>$vista,'pdf'=>$pdf];
+            return $rpta;
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
     private function mike42($d)
     {
         try {
@@ -1420,16 +1870,21 @@ try {
     }
 
     public function imprimir_pedido_admin($id_pedido){
+        $abono = abono::find($id_pedido);
+        $ruta = $this->dameParametrosImprimirPedidoAdmin($abono->num_abono);
         try {
-            $pedido = abono::where('id',$id_pedido)->first();
-            $detalles = abono_detalle::select('abono_detalle.*','repuestos.descripcion','repuestos.codigo_interno')
-                                        ->join('repuestos','abono_detalle.id_repuesto','repuestos.id')
-                                        ->where('abono_detalle.id_abono',$id_pedido)
-                                        ->get();
-            return 'en construccion';
-            return $detalles;
-            $pdf = PDF::loadView('ventas.imprimir_pedido_admin',['pedido' => $pedido,'detalles' => $detalles]);
-            return $pdf->stream('pedido.pdf');
+            $mpdf = $this->configurarPDF_pedido();
+            $mpdf->SetSubject($ruta['archivo']);
+            $html = $this->damehtml_pedido_admin($ruta['vista'], $id_pedido);
+            if($html === false){
+                return 'Error: no se pudo generar el PDF';
+            }
+            $guardar_pdf = $ruta['donde'].$ruta['archivo'];
+            $guardar_pdf_public = $ruta['donde_public'].$ruta['archivo'];
+            $mpdf->WriteHTML($html);
+            $mpdf->Output($guardar_pdf, "F");
+            $mpdf->Output($guardar_pdf_public, "F");
+            return $ruta['pdf'];
         } catch (\Exception $e) {
             return $e->getMessage();
         }

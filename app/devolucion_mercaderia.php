@@ -17,6 +17,13 @@ class devolucion_mercaderia extends Model
         'repuesto_id',
         'cantidad',
         'activo',
-        'local_id'
+        'local_id',
+        'estado',
+        'procesado_por',
+        'procesado_at'
+    ];
+
+    protected $casts = [
+        'procesado_at' => 'datetime',
     ];
 }

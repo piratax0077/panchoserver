@@ -29,7 +29,7 @@
                 descripcion=descripcion.replace(/\//g,"_&_");
             }
 
-            var url = "/repuesto/buscarRepuestoInactivos/"+descripcion;
+            var url = "/repuesto/buscarRepuestoInactivos/"+encodeURIComponent(descripcion);
 
             // crear headers para peticion ajax post
             var headers = {
@@ -58,7 +58,14 @@
                     $('#resultado').html(resp);
                 },
                 error: function(error){
-                    console.log(error);
+                    Vue.swal.close();
+                    Vue.swal({
+                        title: 'Error',
+                        text: error.responseJSON && error.responseJSON.detalle
+                            ? error.responseJSON.detalle
+                            : 'No fue posible buscar los repuestos inactivos.',
+                        icon: 'error'
+                    });
                 }
             })
         }
@@ -114,7 +121,14 @@
                     
                 },
                 error: function(error){
-                    console.log(error);
+                    Vue.swal.close();
+                    Vue.swal({
+                        title: 'Error',
+                        text: error.responseJSON && error.responseJSON.detalle
+                            ? error.responseJSON.detalle
+                            : 'No fue posible buscar los repuestos inactivos.',
+                        icon: 'error'
+                    });
                 }
             })
         }

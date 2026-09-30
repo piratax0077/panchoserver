@@ -1,393 +1,912 @@
-<h5>TOTALES DE {{$nombre_mes}} DE {{$year}}</h5>
+<style>
+    .rendimiento-resumen .metric-card {
+        min-height: 118px;
+        background: #f8f9fa;
+        border: 1px solid #e7eaed;
+        border-left: 4px solid #6495ed;
+        border-radius: 4px;
+        padding: 13px;
+        margin-bottom: 14px;
+    }
+
+    .rendimiento-resumen .metric-card.exito {
+        border-left-color: #28a745;
+    }
+
+    .rendimiento-resumen .metric-card.advertencia {
+        border-left-color: #ffc107;
+    }
+
+    .rendimiento-resumen .metric-card.getnet {
+        border-left-color: #6f42c1;
+    }
+
+    .rendimiento-resumen .metric-card.nota {
+        border-left-color: #fd7e14;
+    }
+
+    .rendimiento-resumen .metric-label {
+        color: #6c757d;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .rendimiento-resumen .metric-value {
+        color: #212529;
+        font-size: 23px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .rendimiento-resumen .metric-detail {
+        color: #6c757d;
+        font-size: 12px;
+        margin-top: 7px;
+    }
+
+    .rendimiento-seccion {
+        background: #fff;
+        border: 1px solid #dfe3e8;
+        border-radius: 4px;
+        margin-bottom: 18px;
+    }
+
+    .rendimiento-seccion .seccion-titulo {
+        background: #f1f3f5;
+        border-bottom: 1px solid #dfe3e8;
+        padding: 11px 15px;
+        font-weight: 700;
+    }
+
+    .tabla-scroll {
+        max-height: 580px;
+        overflow: auto;
+    }
+
+    .tabla-rendimiento {
+        min-width: 900px;
+        margin-bottom: 0;
+    }
+
+    .tabla-rendimiento thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #bff7ea;
+        border-bottom: 2px solid #5bb9a6;
+        white-space: nowrap;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+
+    .tabla-rendimiento td {
+        vertical-align: middle;
+    }
+
+    .valor-positivo {
+        color: #218838;
+        font-weight: 700;
+    }
+
+    .valor-negativo {
+        color: #c82333;
+        font-weight: 700;
+    }
+
+    .fila-total td {
+        background: rgb(219, 219, 255);
+    }
+
+    .fila-rendimiento td {
+        background: #b9d3ff;
+    }
+
+    .fila-participacion td {
+        background: #dce9ff;
+    }
+
+    .letra-chica {
+        font-size: 12px;
+    }
+
+    .cabecera-resumen-mensual {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .cabecera-resumen-mensual .btn {
+        white-space: nowrap;
+    }
+
+    @media (max-width: 575.98px) {
+        .cabecera-resumen-mensual {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="rendimiento-resumen">
+    <div class="alert alert-info cabecera-resumen-mensual">
+        <div>
+            <strong>{{ $nombreMes }} {{ $anio }}</strong>
+
+            <span class="ml-2">
+                {{ \Carbon\Carbon::parse($fechaInicio)->format('d-m-Y') }}
+                al
+                {{ \Carbon\Carbon::parse($fechaTermino)->format('d-m-Y') }}
+            </span>
+        </div>
+
+        <button type="button"
+                id="btn_ver_resumen_mensual"
+                class="btn btn-sm btn-outline-secondary"
+                onclick="solicitar_clave_resumen_mensual()">
+            <i class="fa fa-key"></i>
+            Ver indicadores
+        </button>
+    </div>
+
+    <div id="bloque_resumen_mensual" style="display: none;">
+        <div class="row">
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-label">Ventas brutas (con IVA)</div>
+                <div class="metric-value">
+                    ${{ number_format($resumen['venta_bruta'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">Monto final vendido durante el mes.</div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-label">Ventas netas (sin IVA)</div>
+                <div class="metric-value">
+                    ${{ number_format($resumen['venta_neta'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">Base utilizada para calcular rentabilidad.</div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-label">Costo productos vendidos</div>
+                <div class="metric-value">
+                    ${{ number_format($resumen['costo_productos_vendidos'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">Costo histórico de los productos vendidos.</div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card exito">
+                <div class="metric-label">Utilidad bruta</div>
+                <div class="metric-value {{ $resumen['utilidad_bruta'] >= 0 ? 'valor-positivo' : 'valor-negativo' }}">
+                    ${{ number_format($resumen['utilidad_bruta'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">
+                    Margen {{ number_format($resumen['margen_bruto'], 2, ',', '.') }}%
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-label">Documentos</div>
+                <div class="metric-value">
+                    {{ number_format($resumen['cantidad_documentos'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">
+                    {{ $resumen['cantidad_facturas'] }} facturas /
+                    {{ $resumen['cantidad_boletas'] }} boletas
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card">
+                <div class="metric-label">Unidades vendidas</div>
+                <div class="metric-value">
+                    {{ number_format($resumen['cantidad_unidades'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">Suma de cantidades de los detalles.</div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card getnet">
+                <div class="metric-label">Cobros Getnet</div>
+                <div class="metric-value">
+                    ${{ number_format($resumenGetnet['total'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">
+                    {{ $resumenGetnet['operaciones'] }} operaciones ·
+                    {{ number_format($resumenGetnet['porcentaje_total'], 2, ',', '.') }}%
+                    del total cobrado
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="metric-card nota">
+                <div class="metric-label">Notas de crédito</div>
+                <div class="metric-value">
+                    {{ number_format($resumenNotasCredito['cantidad'], 0, ',', '.') }}
+                </div>
+                <div class="metric-detail">
+                    ${{ number_format($resumenNotasCredito['total'], 0, ',', '.') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if($resumen['cantidad_items_sin_costo'] > 0)
+        <div class="alert alert-warning">
+            Existen {{ $resumen['cantidad_items_sin_costo'] }} líneas por
+            ${{ number_format($resumen['venta_sin_costo'], 0, ',', '.') }}
+            sin costo histórico. No fueron incluidas en el margen.
+        </div>
+    @endif
+    </div>
+
     @php
-        $totales_forma=0;
-        $boletas_forma=0;
-        $facturas_forma=0;
-        $total=0;
-        $total_boletas=0;
-        $total_facturas=0;
-        $total_transbank=0;
-        $total_nc=0;
-        $total_rechazados=0;
-        $total_delivery_pendientes=0;
-        $total_delivery_pagado=0;
-        
+        $totalGeneral = 0;
+        $totalGetnet = 0;
+        $totalBoletas = 0;
+        $totalFacturas = 0;
+
+        $totalesUsuario = [];
+        $getnetUsuario = [];
+        $boletasUsuario = [];
+        $facturasUsuario = [];
+
+        foreach ($usuarios as $usuario) {
+            $totalesUsuario[$usuario->name] = 0;
+            $getnetUsuario[$usuario->name] = 0;
+            $boletasUsuario[$usuario->name] = 0;
+            $facturasUsuario[$usuario->name] = 0;
+        }
     @endphp
-@foreach($usuarios as $usuario)
-    @php
-        $totales_usuario[$usuario->name]=0;
-        $promedios_usuario[$usuario->name]=0;
-        $boletas_usuario[$usuario->name]=0;
-        $facturas_usuario[$usuario->name]=0;
-    @endphp
-@endforeach
 
-<table class="table table-sm table-hover table-bordered">
-    <thead>
-        <th>Forma</th>
-        @foreach($usuarios as $usuario)
-            <th scope="col" class="text-center letra-chica">{{$usuario->name}}</th>
-        @endforeach
-        <th class="text-center">Total</th>
-    </thead>
-    <tbody>
-        @foreach($formas_pago as $forma)
-        <tr>
-            <td class="letra-chica">{{$forma->formapago}}</td>
-            @php $totales_forma=0; @endphp
-            @foreach($usuarios as $usuario)
-                <td class="text-right letra-chica">
-                        @php
-                            $valor=$totales[$usuario->name][$forma->formapago];
-                            if($valor>0){
-                                echo number_format(intval($valor),0,',','.');
-                                $totales_forma+=intval($valor);
-                                $totales_usuario[$usuario->name]+=intval($valor);
-                            }
-                        @endphp
-                </td>
-            @endforeach
-                <td class="letra-chica text-right">@php echo $totales_forma>0?number_format($totales_forma,0,',','.'):"" @endphp</td>
-        </tr>
-        @endforeach
-        <tr>
-            <td>Delivery</td>
-            @foreach($usuarios as $usuario)
+    <div class="rendimiento-seccion">
+        <div class="seccion-titulo">
+            Totales por forma de pago y vendedor
+        </div>
 
-                <td class="letra-chica text-right">
-                    @php
-                        $totales_usuario[$usuario->name]+=$totales[$usuario->name]['delivery'];
-                        $total_delivery_pagado+=$totales[$usuario->name]['delivery'];
-                        echo $totales[$usuario->name]['delivery']>0?number_format($totales[$usuario->name]['delivery'],0,',','.'):"";
-                    @endphp
-                </td>
-            @endforeach
-            <td class="letra-chica text-right">
-                @php
-                  echo $total_delivery_pagado>0?number_format($total_delivery_pagado,0,',','.'):"";
-                @endphp
-
-            </td>
-        </tr>
-        <tr>
-            <td style="background-color: rgb(219, 219, 255)"><b>TOTAL</b></td>
-            @foreach($usuarios as $usuario)
-                <td class="text-right" style="background-color: rgb(219, 219, 255)">
-                    @php
-                        if($totales_usuario[$usuario->name]>0){
-                            echo number_format($totales_usuario[$usuario->name],0,',','.');
-                            $total+=$totales_usuario[$usuario->name];
-                        }
-                    @endphp
-                </td>
-            @endforeach
-            <td class="text-right">
-                @php
-                    if($notcred_total>0){
-                        echo number_format($total,0,',','.')."<br> - ".number_format($notcred_total,0,',','.')."<br><b>".number_format(($total-$notcred_total),0,',','.')."</b>";
-                        $total_fijo =$total-$notcred_total;
-                    }else{
-
-                        echo "<b>".number_format($total,0,',','.')."</b>";
-                        $total_fijo =$total;
-                    }
-                    
-                @endphp
-            </td>
-        </tr>
-        <tr>
-            <td style="background-color: #6395ec"><b>RENDIMIENTO</b></td>
-            @foreach($usuarios as $usuario)
-                <td class="text-right" style="background-color: #6395ec;">
-                    @php
-                        if($totales_usuario[$usuario->name]>0){
-                            $promedios_usuario[$usuario->name] = ($totales_usuario[$usuario->name]/$total_fijo)*100;
-                            echo (number_format($promedios_usuario[$usuario->name],2,',','.'));
-                            echo ' % ';
-                            $total+=$totales_usuario[$usuario->name];
-                        }
-                    @endphp
-                </td>
-            @endforeach
-        </tr>
-</tbody>
-</table>
-<canvas id="grafico"  height="80px"></canvas>
-@foreach($usuarios as $usuario)
-    @php
-        $totales_usuario[$usuario->name]=0;
-    @endphp
-@endforeach
-<br>
-<h5>TRANSBANK RESUMEN</h5>
-<table class="table table-sm table-hover table-bordered">
-    <thead>
-        <th>Transbank</th>
-        @foreach($usuarios as $usuario)
-            <th scope="col" class="text-center letra-chica">{{$usuario->name}}</th>
-        @endforeach
-        <th class="text-center">Total</th>
-    </thead>
-    <tbody>
-            @foreach($formas_pago as $forma)
-                @if($forma->id==2 || $forma->id==5) <!-- tarj crédito o tarj débito -->
+        <div class="tabla-scroll">
+            <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                <thead>
                     <tr>
-                        <td class="letra-chica">{{$forma->formapago}}</td>
-                        @php $totales_forma=0; $total=0;@endphp
+                        <th>Forma</th>
                         @foreach($usuarios as $usuario)
+                            <th class="text-center letra-chica">
+                                {{ $usuario->name }}
+                            </th>
+                        @endforeach
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach($formasPago as $forma)
+                        @php $totalForma = 0; @endphp
+                        <tr>
+                            <td class="letra-chica">
+                                {{ $forma->formapago }}
+                            </td>
+
+                            @foreach($usuarios as $usuario)
+                                @php
+                                    $valor = (float) (
+                                        $totales[$usuario->name][$forma->formapago]
+                                        ?? 0
+                                    );
+
+                                    $totalForma += $valor;
+                                    $totalesUsuario[$usuario->name] += $valor;
+                                @endphp
+
+                                <td class="text-right letra-chica">
+                                    {{ $valor > 0
+                                        ? number_format($valor, 0, ',', '.')
+                                        : '' }}
+                                </td>
+                            @endforeach
+
                             <td class="text-right letra-chica">
-                                    @php
-                                        $valor=$totales[$usuario->name][$forma->formapago];
-                                        if($valor>0){
-                                            echo number_format(intval($valor),0,',','.');
-                                            $totales_forma+=intval($valor);
-                                            $totales_usuario[$usuario->name]+=intval($valor);
-                                        }
-                                    @endphp
+                                {{ $totalForma > 0
+                                    ? number_format($totalForma, 0, ',', '.')
+                                    : '' }}
+                            </td>
+                        </tr>
+                    @endforeach
+
+                    <tr class="fila-total">
+                        <td><strong>TOTAL</strong></td>
+
+                        @foreach($usuarios as $usuario)
+                            @php
+                                $totalGeneral +=
+                                    $totalesUsuario[$usuario->name];
+                            @endphp
+
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $totalesUsuario[$usuario->name],
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </strong>
                             </td>
                         @endforeach
-                            <td class="letra-chica text-right">@php echo $totales_forma>0?number_format($totales_forma,0,',','.'):"" @endphp</td>
+
+                        <td class="text-right">
+                            <strong>
+                                {{ number_format($totalGeneral, 0, ',', '.') }}
+                            </strong>
+                        </td>
                     </tr>
-                @endif
-            @endforeach
-            <tr>
-                <td style="background-color: rgb(219, 219, 255)"><b>TOTAL</b></td>
-                @foreach($usuarios as $usuario)
-                    <td class="text-right" style="background-color: rgb(219, 219, 255)">
-                        @php
-                            if($totales_usuario[$usuario->name]>0){
-                                echo number_format($totales_usuario[$usuario->name],0,',','.');
-                                $total+=$totales_usuario[$usuario->name];
-                            }
-                        @endphp
-                    </td>
-                @endforeach
-                <td class="text-right">@php echo "<b>".number_format($total,0,',','.')."</b>" @endphp</td>
-            </tr>
-    </tbody>
-</table>
-@if($notcred->count()>0)
-    <br>
-    <h5>NOTAS DE CRÉDITO</h5>
-    <table class="table table-sm table-hover table-bordered">
-        <thead>
-            <th class="text-center" width="50px" scope="col">N°</th>
-            <th width="200px" scope="col">Referencia</th>
-            <th width="200px" scope="col">Motivo</th>
-            <th width="70px" scope="col">Total</th>
-            <th width="100px" scope="col">Pago</th>
-            <th width="100px" scope="col">Usuario</th>
-        </thead>
-        <tbody>
-                @foreach($notcred as $nc)
-                @php $total_nc+=$nc->total; @endphp
-                <tr>
-                    <td class="letra-chica text-center"><a href="javascript:imprimir_xml('{{$nc->url_xml}}')">{{$nc->num_nota_credito}}</a></td>
-                    <td class="letra-chica">
-                        <a href="javascript:detalle('bo','0','0')">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rendimiento-seccion">
+        <div class="seccion-titulo">
+            Rendimiento por vendedor
+        </div>
+
+        <div class="tabla-scroll">
+            <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                <thead>
+                    <tr>
+                        <th>Indicador</th>
+                        @foreach($usuarios as $usuario)
+                            <th class="text-center letra-chica">
+                                {{ $usuario->name }}
+                            </th>
+                        @endforeach
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @php
+                        $vendedoresPorId = $vendedores->keyBy('id_vendedor');
+
+                        $filasRendimiento = [
+                            'Venta bruta' => 'venta_bruta',
+                            'Venta neta' => 'venta_neta',
+                            'Costo productos vendidos' =>
+                                'costo_productos_vendidos',
+                            'Utilidad bruta' => 'utilidad_bruta',
+                            'Unidades vendidas' => 'cantidad_unidades',
+                            'Documentos' => 'cantidad_documentos',
+                        ];
+                    @endphp
+
+                    @foreach($filasRendimiento as $etiqueta => $campo)
+                        @php $totalFila = 0; @endphp
+                        <tr>
+                            <td>{{ $etiqueta }}</td>
+
+                            @foreach($usuarios as $usuario)
+                                @php
+                                    $datoVendedor = $vendedoresPorId->get(
+                                        $usuario->id
+                                    );
+
+                                    $valor = $datoVendedor
+                                        ? (float) $datoVendedor[$campo]
+                                        : 0;
+
+                                    $totalFila += $valor;
+                                @endphp
+
+                                <td class="text-right
+                                    {{ $campo === 'utilidad_bruta'
+                                        ? ($valor >= 0
+                                            ? 'valor-positivo'
+                                            : 'valor-negativo')
+                                        : '' }}">
+                                    @if(in_array(
+                                        $campo,
+                                        ['cantidad_unidades', 'cantidad_documentos']
+                                    ))
+                                        {{ number_format($valor, 0, ',', '.') }}
+                                    @else
+                                        ${{ number_format($valor, 0, ',', '.') }}
+                                    @endif
+                                </td>
+                            @endforeach
+
+                            <td class="text-right">
+                                <strong>
+                                    @if(in_array(
+                                        $campo,
+                                        ['cantidad_unidades', 'cantidad_documentos']
+                                    ))
+                                        {{ number_format($totalFila, 0, ',', '.') }}
+                                    @else
+                                        ${{ number_format($totalFila, 0, ',', '.') }}
+                                    @endif
+                                </strong>
+                            </td>
+                        </tr>
+                    @endforeach
+
+                    <tr class="fila-rendimiento">
+                        <td><strong>Margen bruto</strong></td>
+
+                        @foreach($usuarios as $usuario)
                             @php
-                                list($doc,$ref,$fec)=explode("*",$nc->docum_referencia);
-                                if($doc=='bo') $docu="Boleta";
-                                if($doc=='fa') $docu="Factura";
-                                echo "<a href=\"javascript:detalle('".$doc."','0','-".$ref."')\">". $docu." N° ".$ref."</a> del ".\Carbon\Carbon::parse($fec)->format("d-m-Y");
+                                $datoVendedor = $vendedoresPorId->get(
+                                    $usuario->id
+                                );
+
+                                $margen = $datoVendedor
+                                    ? (float) $datoVendedor['margen_bruto']
+                                    : 0;
                             @endphp
-                    </td>
-                    <td class="letra-chica">
-                        @php
-                            echo substr($nc->motivo_correccion,2);
-                        @endphp
-                    </td>
-                    <td class="letra-chica text-right">{{number_format(intval($nc->total),0,',','.')}}</td>
-                    <td class="letra-chica">{{$nc->url_pdf}}</td>
-                    <td class="letra-chica">{{trim($nc->usuario)}}</td>
-                </tr>
-                @endforeach
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td class="text-right" ><b>TOTAL:</b></td>
-                    <td class="text-right" style="background-color: rgb(219, 219, 255)">@php echo "<b>".number_format($total_nc,0,',','.')."</b>"@endphp</td>
-                    <td></td>
-                </tr>
-        </tbody>
-    </table>
-    <br>
-@endif
-@if($rechazados->count()>0)
-    <h5>RECIBIDOS NO ACEPTADOS</h5>
-    <table class="table table-sm table-hover table-bordered">
-        <thead>
-            <th>Docum</th>
-            <th class="text-center">N°</th>
-            <th>Resultado</th>
-            <th>Total</th>
-            <th>Pago</th>
-            <th>Usuario</th>
-        </thead>
-        <tbody>
-                @foreach($rechazados as $re)
-                @php $total_rechazados+=$re->total;@endphp
 
-                <tr>
+                            <td class="text-right
+                                {{ $margen >= 0
+                                    ? 'valor-positivo'
+                                    : 'valor-negativo' }}">
+                                <strong>
+                                    {{ number_format($margen, 2, ',', '.') }}%
+                                </strong>
+                            </td>
+                        @endforeach
 
-                    @if(substr($re->xml,0,2)=='39')
-                        <td>Boleta</td>
-                    @else
-                        <td>Factura</td>
-                    @endif
+                        <td class="text-right
+                            {{ $resumen['margen_bruto'] >= 0
+                                ? 'valor-positivo'
+                                : 'valor-negativo' }}">
+                            <strong>
+                                {{ number_format(
+                                    $resumen['margen_bruto'],
+                                    2,
+                                    ',',
+                                    '.'
+                                ) }}%
+                            </strong>
+                        </td>
+                    </tr>
 
-                    <td class="letra-chica text-center"><a href="javascript:imprimir_xml('{{$re->xml}}')">{{$re->num_doc}}</a></td>
-                    <td class="letra-chica">
-                        {{$re->estado_sii}}: {{$re->resultado}}
-                    </td>
-                    <td class="letra-chica text-right">{{number_format($re->total,0,',','.')}}</td>
-                    <td class="letra-chica">{{$re->url_pdf}}</td>
-                    <td class="letra-chica">{{$re->usuario}}</td>
-                </tr>
-                @endforeach
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td class="text-right" ><b>TOTAL:</b></td>
-                    <td class="text-right" style="background-color: rgb(219, 219, 255)">@php echo "<b>".number_format($total_rechazados,0,',','.')."</b>" @endphp</td>
-                    <td></td>
-                </tr>
-        </tbody>
-    </table>
-    <br>
-@endif
-<h5>BOLETAS</h5>
-<table class="table table-sm table-hover table-bordered">
-    <thead>
-        <th>Forma</th>
-        @foreach($usuarios as $usuario)
-            <th scope="col" class="text-center letra-chica">{{$usuario->name}}</th>
-        @endforeach
-        <th class="text-center">Total</th>
-    </thead>
-    <tbody>
-            @foreach($formas_pago as $forma)
-            <tr>
-                <td class="letra-chica">{{$forma->formapago}}</td>
-                @php $boletas_forma=0; @endphp
-                @foreach($usuarios as $usuario)
-                    <td class="text-right letra-chica">
-                        <a href="javascript:detalle('bo','{{$usuario->id}}','{{$forma->id}}')">
+                    <tr class="fila-participacion">
+                        <td><strong>Participación en ventas netas</strong></td>
+
+                        @foreach($usuarios as $usuario)
                             @php
-                                $valor=$boletas[$usuario->name][$forma->formapago];
-                                if($valor>0){
-                                    echo number_format(intval($valor),0,',','.');
-                                    $boletas_forma+=intval($valor);
-                                    $boletas_usuario[$usuario->name]+=intval($valor);
-                                }
-                            @endphp
-                        </a>
-                    </td>
-                @endforeach
-                <td class="letra-chica text-right">@php echo $boletas_forma>0?number_format($boletas_forma,0,',','.'):"" @endphp</td>
-            </tr>
-            @endforeach
-            <tr>
-                <td style="background-color: rgb(219, 219, 255)"><b>TOTAL</b></td>
-                @foreach($usuarios as $usuario)
-                    <td class="text-right" style="background-color: rgb(219, 219, 255)">
-                        @php
-                            if($boletas_usuario[$usuario->name]>0){
-                                echo number_format($boletas_usuario[$usuario->name],0,',','.');
-                                $total_boletas+=$boletas_usuario[$usuario->name];
-                            }
-                        @endphp
-                    </td>
-                @endforeach
-                <td class="text-right">@php echo "<b>".number_format($total_boletas,0,',','.')."</b>" @endphp</td>
-            </tr>
-    </tbody>
-</table>
+                                $datoVendedor = $vendedoresPorId->get(
+                                    $usuario->id
+                                );
 
-<h5>FACTURAS</h5>
-<table class="table table-sm table-hover table-bordered">
-    <thead>
-        <th>Forma</th>
-        @foreach($usuarios as $usuario)
-            <th scope="col" class="text-center letra-chica">{{$usuario->name}}</th>
-        @endforeach
-        <th class="text-center">Total</th>
-    </thead>
-    <tbody>
-            @foreach($formas_pago as $forma)
-            <tr>
-                <td class="letra-chica">{{$forma->formapago}}</td>
-                @php $facturas_forma=0; @endphp
-                @foreach($usuarios as $usuario)
-                    <td class="text-right">
-                        <a href="javascript:detalle('fa','{{$usuario->id}}','{{$forma->id}}')">
+                                $ventaNetaVendedor = $datoVendedor
+                                    ? (float) $datoVendedor['venta_neta']
+                                    : 0;
+
+                                $participacion = $resumen['venta_neta'] > 0
+                                    ? (
+                                        $ventaNetaVendedor
+                                        / $resumen['venta_neta']
+                                    ) * 100
+                                    : 0;
+                            @endphp
+
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $participacion,
+                                        2,
+                                        ',',
+                                        '.'
+                                    ) }}%
+                                </strong>
+                            </td>
+                        @endforeach
+
+                        <td class="text-right"><strong>100,00%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rendimiento-seccion">
+        <div class="seccion-titulo">
+            Getnet resumen
+        </div>
+
+        <div class="tabla-scroll">
+            <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                <thead>
+                    <tr>
+                        <th>Getnet</th>
+                        @foreach($usuarios as $usuario)
+                            <th class="text-center letra-chica">
+                                {{ $usuario->name }}
+                            </th>
+                        @endforeach
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach($formasPago as $forma)
+                        @if(in_array((int) $forma->id, [2, 5], true))
+                            @php $totalFormaGetnet = 0; @endphp
+                            <tr>
+                                <td>{{ $forma->formapago }}</td>
+
+                                @foreach($usuarios as $usuario)
+                                    @php
+                                        $valorGetnet = (float) (
+                                            $getnetPorUsuario[
+                                                $usuario->name
+                                            ][$forma->formapago]
+                                            ?? 0
+                                        );
+
+                                        $totalFormaGetnet += $valorGetnet;
+                                        $getnetUsuario[$usuario->name]
+                                            += $valorGetnet;
+                                    @endphp
+
+                                    <td class="text-right">
+                                        {{ $valorGetnet > 0
+                                            ? number_format(
+                                                $valorGetnet,
+                                                0,
+                                                ',',
+                                                '.'
+                                            )
+                                            : '' }}
+                                    </td>
+                                @endforeach
+
+                                <td class="text-right">
+                                    {{ $totalFormaGetnet > 0
+                                        ? number_format(
+                                            $totalFormaGetnet,
+                                            0,
+                                            ',',
+                                            '.'
+                                        )
+                                        : '' }}
+                                </td>
+                            </tr>
+                        @endif
+                    @endforeach
+
+                    <tr class="fila-total">
+                        <td><strong>TOTAL</strong></td>
+
+                        @foreach($usuarios as $usuario)
                             @php
-                                $valor=$facturas[$usuario->name][$forma->formapago];
-                                if($valor>0){
-                                    echo number_format(intval($valor),0,',','.');
-                                    $facturas_forma+=intval($valor);
-                                    $facturas_usuario[$usuario->name]+=intval($valor);
-                                }
+                                $totalGetnet +=
+                                    $getnetUsuario[$usuario->name];
                             @endphp
-                        </a>
-                    </td>
-                @endforeach
-                <td class="letra-chica text-right">@php echo $facturas_forma>0?number_format($facturas_forma,0,',','.'):"" @endphp</td>
-            </tr>
-            @endforeach
-            <tr>
-                <td style="background-color: rgb(219, 219, 255)"><b>TOTAL</b></td>
-                @foreach($usuarios as $usuario)
-                    <td class="text-right" style="background-color: rgb(219, 219, 255)">
-                        @php
-                            if($facturas_usuario[$usuario->name]>0){
-                                echo number_format($facturas_usuario[$usuario->name],0,',','.');
-                                $total_facturas+=$facturas_usuario[$usuario->name];
-                            }
-                        @endphp
-                    </td>
-                @endforeach
-                <td class="text-right">@php echo "<b>".number_format($total_facturas,0,',','.')."</b>" @endphp</td>
-            </tr>
-    </tbody>
-</table>
-<!--
-<input type="hidden" name="promedio_jorge" id="promedio_jorge" value="<?php //echo $promedios_usuario['Jorge Saavedra'] ?>">
 
-<input type="hidden" name="promedio_jose" id="promedio_jose" value="<?php //echo $promedios_usuario['José Troncoso'] ?>">
-<input type="hidden" name="promedio_mauro" id="promedio_mauro" value="<?php //echo $promedios_usuario['Mauricio Eguren'] ?>">
-<input type="hidden" name="promedio_mj" id="promedio_mj" value="<?php //echo $promedios_usuario['Maria Jose Rojas Valdes'] ?>">
-<input type="hidden" name="promedio_marveise" id="promedio_marveise" value="<?php //echo $promedios_usuario['Marveise Albarracin'] ?>">
-{{-- <input type="hidden" name="promedio_matias" id="promedio_matias" value="<?php //echo $promedios_usuario['Matias Alfaro'] ?>"> --}}
-<input type="hidden" name="promedio_celimar" id="promedio_celimar" value="<?php //echo $promedios_usuario['CELIMAR BURGOS'] ?>">
-<script>
-    var promedio_jorge = $('#promedio_jorge').val();
-    var promedio_mauro = $('#promedio_mauro').val();
-    var promedio_jose = $('#promedio_jose').val();
-    var promedio_mj = $('#promedio_mj').val();
-    var promedio_marveise = $('#promedio_marveise').val();
-    // var promedio_matias = $('#promedio_matias').val();
-    var promedio_celimar = $('#promedio_celimar').val();
-    var mi_primer_grafico ={
-        type:"bar",
-        data:{
-          datasets:[{
-              label:'Promedio de ventas mensuales',
-            data:[promedio_celimar,promedio_jorge,promedio_jose,promedio_mj,promedio_marveise,promedio_mauro],
-            backgroundColor: [
-              "#04B404","#FFBF00",  "#FF0000",  "#04B4AE","#eee","aqua"
-             ],
-          }],
-          labels: [
-            "Celimar Burgos","Jorge Saavedra", "José Troncoso", "Maria Jose Rojas","Marveise Albarracin","Mauricio Eguren"
-             ]
-        },
-        options:{
-          responsive: true,
-        }
-      }
-      var primer_grafico = document.getElementById('grafico').getContext('2d');
-      window.pie = new Chart(primer_grafico,mi_primer_grafico);
-</script>
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $getnetUsuario[$usuario->name],
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </strong>
+                            </td>
+                        @endforeach
 
--->
+                        <td class="text-right">
+                            <strong>
+                                {{ number_format($totalGetnet, 0, ',', '.') }}
+                            </strong>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if($notasCredito->count() > 0)
+        <div class="rendimiento-seccion">
+            <div class="seccion-titulo">
+                Notas de crédito
+            </div>
+
+            <div class="tabla-scroll">
+                <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                    <thead>
+                        <tr>
+                            <th class="text-center">N°</th>
+                            <th>Fecha</th>
+                            <th>Referencia</th>
+                            <th>Motivo</th>
+                            <th class="text-right">Total</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach($notasCredito as $nota)
+                            @php
+                                $partesReferencia = explode(
+                                    '*',
+                                    (string) $nota->docum_referencia
+                                );
+
+                                $tipoReferencia =
+                                    $partesReferencia[0] ?? '';
+
+                                $numeroReferencia =
+                                    $partesReferencia[1] ?? '';
+
+                                $nombreDocumento =
+                                    $tipoReferencia === 'fa'
+                                        ? 'Factura'
+                                        : (
+                                            $tipoReferencia === 'bo'
+                                                ? 'Boleta'
+                                                : strtoupper(
+                                                    $tipoReferencia
+                                                )
+                                        );
+                            @endphp
+
+                            <tr>
+                                <td class="text-center">
+                                    {{ $nota->num_nota_credito }}
+                                </td>
+                                <td>
+                                    {{ \Carbon\Carbon::parse(
+                                        $nota->fecha_emision
+                                    )->format('d-m-Y') }}
+                                </td>
+                                <td>
+                                    {{ $nombreDocumento }}
+                                    @if($numeroReferencia !== '')
+                                        N° {{ $numeroReferencia }}
+                                    @endif
+                                </td>
+                                <td>
+                                    {{ $nota->motivo_correccion }}
+                                </td>
+                                <td class="text-right">
+                                    {{ number_format(
+                                        $nota->total,
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </td>
+                                <td>
+                                    {{ $nota->usuario ?: 'NO DETERMINADO' }}
+                                </td>
+                            </tr>
+                        @endforeach
+
+                        <tr class="fila-total">
+                            <td colspan="4" class="text-right">
+                                <strong>TOTAL:</strong>
+                            </td>
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $resumenNotasCredito['total'],
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </strong>
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
+    <div class="rendimiento-seccion">
+        <div class="seccion-titulo">
+            Boletas por forma de pago
+        </div>
+
+        <div class="tabla-scroll">
+            <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                <thead>
+                    <tr>
+                        <th>Forma</th>
+                        @foreach($usuarios as $usuario)
+                            <th class="text-center letra-chica">
+                                {{ $usuario->name }}
+                            </th>
+                        @endforeach
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach($formasPago as $forma)
+                        @php $totalFormaBoleta = 0; @endphp
+                        <tr>
+                            <td>{{ $forma->formapago }}</td>
+
+                            @foreach($usuarios as $usuario)
+                                @php
+                                    $valorBoleta = (float) (
+                                        $boletasPago[
+                                            $usuario->name
+                                        ][$forma->formapago]
+                                        ?? 0
+                                    );
+
+                                    $totalFormaBoleta += $valorBoleta;
+                                    $boletasUsuario[$usuario->name]
+                                        += $valorBoleta;
+                                @endphp
+
+                                <td class="text-right">
+                                    {{ $valorBoleta > 0
+                                        ? number_format(
+                                            $valorBoleta,
+                                            0,
+                                            ',',
+                                            '.'
+                                        )
+                                        : '' }}
+                                </td>
+                            @endforeach
+
+                            <td class="text-right">
+                                {{ $totalFormaBoleta > 0
+                                    ? number_format(
+                                        $totalFormaBoleta,
+                                        0,
+                                        ',',
+                                        '.'
+                                    )
+                                    : '' }}
+                            </td>
+                        </tr>
+                    @endforeach
+
+                    <tr class="fila-total">
+                        <td><strong>TOTAL</strong></td>
+
+                        @foreach($usuarios as $usuario)
+                            @php
+                                $totalBoletas +=
+                                    $boletasUsuario[$usuario->name];
+                            @endphp
+
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $boletasUsuario[$usuario->name],
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </strong>
+                            </td>
+                        @endforeach
+
+                        <td class="text-right">
+                            <strong>
+                                {{ number_format($totalBoletas, 0, ',', '.') }}
+                            </strong>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rendimiento-seccion">
+        <div class="seccion-titulo">
+            Facturas por forma de pago
+        </div>
+
+        <div class="tabla-scroll">
+            <table class="table table-sm table-hover table-bordered tabla-rendimiento">
+                <thead>
+                    <tr>
+                        <th>Forma</th>
+                        @foreach($usuarios as $usuario)
+                            <th class="text-center letra-chica">
+                                {{ $usuario->name }}
+                            </th>
+                        @endforeach
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach($formasPago as $forma)
+                        @php $totalFormaFactura = 0; @endphp
+                        <tr>
+                            <td>{{ $forma->formapago }}</td>
+
+                            @foreach($usuarios as $usuario)
+                                @php
+                                    $valorFactura = (float) (
+                                        $facturasPago[
+                                            $usuario->name
+                                        ][$forma->formapago]
+                                        ?? 0
+                                    );
+
+                                    $totalFormaFactura += $valorFactura;
+                                    $facturasUsuario[$usuario->name]
+                                        += $valorFactura;
+                                @endphp
+
+                                <td class="text-right">
+                                    {{ $valorFactura > 0
+                                        ? number_format(
+                                            $valorFactura,
+                                            0,
+                                            ',',
+                                            '.'
+                                        )
+                                        : '' }}
+                                </td>
+                            @endforeach
+
+                            <td class="text-right">
+                                {{ $totalFormaFactura > 0
+                                    ? number_format(
+                                        $totalFormaFactura,
+                                        0,
+                                        ',',
+                                        '.'
+                                    )
+                                    : '' }}
+                            </td>
+                        </tr>
+                    @endforeach
+
+                    <tr class="fila-total">
+                        <td><strong>TOTAL</strong></td>
+
+                        @foreach($usuarios as $usuario)
+                            @php
+                                $totalFacturas +=
+                                    $facturasUsuario[$usuario->name];
+                            @endphp
+
+                            <td class="text-right">
+                                <strong>
+                                    {{ number_format(
+                                        $facturasUsuario[$usuario->name],
+                                        0,
+                                        ',',
+                                        '.'
+                                    ) }}
+                                </strong>
+                            </td>
+                        @endforeach
+
+                        <td class="text-right">
+                            <strong>
+                                {{ number_format($totalFacturas, 0, ',', '.') }}
+                            </strong>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

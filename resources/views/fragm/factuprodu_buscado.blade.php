@@ -30,7 +30,7 @@
 		  <td>$ {{number_format($repuesto->precio_compra)}}</td> <!-- Debería ser precio unitario (PU) en compras_det -->
 		  <td>$ {{number_format($repuesto->precio_venta)}}</td>
 		  
-		  <td>{{Carbon\Carbon::createFromFormat('Y-m-d', $repuesto->fecha_ultima)->format('d-m-Y');}}</td>
+		  <td>@if(isset($repuesto->fecha_ultima)){{Carbon\Carbon::createFromFormat('Y-m-d', $repuesto->fecha_ultima)->format('d-m-Y');}}@endif</td>
 		  <td>{{$repuesto->name}}</td>
 			<td> 
 			<button class="btn btn-warning btn-sm" onclick="elegir_repuesto({{$repuesto}})">Elegir</button>

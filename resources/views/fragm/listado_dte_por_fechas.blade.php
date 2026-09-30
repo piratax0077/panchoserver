@@ -31,6 +31,9 @@
                         if($tipodte=='52'){
                             $num_doc=$dte->num_guia_despacho;
                         }
+                        if($tipodte == '56'){
+                            $num_doc=$dte->num_nota_debito;
+                        }
                         if($tipodte=='61'){
                             $num_doc=$dte->num_nota_credito;
                         }

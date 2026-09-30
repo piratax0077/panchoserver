@@ -104,6 +104,28 @@
       <canvas id="grafico" height="140px;"></canvas>
     </div>
   
+    <div class="col-md-6 mb-4 tabla-scroll-y-400">
+        <p class="text-center font-weight-bold">Bodegueros</p>
+          <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre completo</th>
+                  <th scope="col">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                  @foreach($bodegueros as $c)
+                  <tr>
+                      <td>{{$c->name}}</td>
+                      <td>{{$c->total}}</td>
+                  </tr>
+                  @endforeach
+              </tbody>
+            </table>
+    </div>
+    <div class="col-md-6">
+        <canvas id="grafico8" height="140px;"></canvas>
+    </div>
 </div>
 
 <script>
@@ -121,6 +143,9 @@
 
   var labels7 = {!! $labels_dias_mas_vendidos !!};
   var data7 = {!! $data_dias_mas_vendidos !!};
+
+  var labels8 = {!! $labels_bodegueros !!};
+  var data8 = {!! $data_bodegueros !!};
 
 
   var mi_primer_grafico =
@@ -221,6 +246,32 @@
     }
     var septimo_grafico = document.getElementById('grafico7').getContext('2d');
     window.pie = new Chart(septimo_grafico,mi_septimo_grafico);
+
+    /* -------------------------------------------------------------------------------------------------------- */
+    // var mi_octavo_grafico ={
+    //   type:"bar",
+    //   data:{
+    //     datasets:[{
+    //       label:'Bodegueros',
+    //       data:data8,
+    //       backgroundColor: [
+    //         "#04B404","#FFBF00",  "#FF0000",  "#04B4AE","#eee","aqua","pink","brown",'#000',"orange"
+    //        ],
+    //     }],
+    //     labels: labels8
+    //   },
+    //   options:{
+    //     responsive: true,
+    //     scales: {
+    //                 y: {
+    //                     beginAtZero: true // Iniciar el eje Y en 0,
+    //                 }
+    //             }
+    //   }
+    // }
+    // var octavo_grafico = document.getElementById('grafico8').getContext('2d');
+    // window.pie = new Chart(octavo_grafico,mi_octavo_grafico);
+    
 
     
 </script>

@@ -51,6 +51,7 @@ class carrito_compra extends Model
     {
         // OLD $todo_el_carrito=carrito_compra::where('usuarios_id', $c->usuarios_id)->get();
         try {
+            $hoy = date('Y-m-d');
             $todo_el_carrito=carrito_compra::select('carrito_compras.*',
                                     'repuestos.codigo_interno',
                                     'repuestos.descripcion',
@@ -58,6 +59,7 @@ class carrito_compra extends Model
                                     'repuestos.id as idrepuesto',
                                     'repuestos.id_familia',
                                     'repuestos.cod_repuesto_proveedor',
+                                    'repuestos.precio_venta',
                                     'locales.local_nombre',
                                     'ofertas_pagina_web.activo',
                                     'marcarepuestos.marcarepuesto')
@@ -76,6 +78,11 @@ class carrito_compra extends Model
         
     }
 
+    public function dame_total_sin_iva(){
+        $total = carrito_compra::where('usuarios_id', Auth::user()->id)->sum('total_item');
+        $total_mas_iva=$total + ($total * Session::get('PARAM_IVA'));
+        return $total_mas_iva;
+    }
 
 
 }

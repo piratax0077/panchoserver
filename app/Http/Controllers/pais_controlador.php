@@ -47,7 +47,8 @@ class pais_controlador extends Controller
         if($user->rol->nombrerol == "Bodeguer@" || $user->rol->nombrerol == "Administrador" || $user->rol->nombrerol == "bodega-venta" || $user->rol->nombrerol == "jefe de bodega" || $user->rol->nombrerol == "estándar"){
             return $this->damepaises()->toJson();
         }else{
-            $this->validaSesion();
+            // $this->validaSesion();
+            return $this->damepaises()->toJson();
         }
         
     }

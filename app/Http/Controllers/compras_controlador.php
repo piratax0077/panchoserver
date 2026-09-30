@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\compras_cab;
 use App\compras_det;
+use App\Services\CostosCompra;
 use App\repuesto;
 use App\proveedor;
 use App\local;
@@ -14,10 +15,12 @@ use App\marcavehiculo;
 use App\modelovehiculo;
 use App\pagos_factura_compra;
 use App\permissions_detail;
+use App\User;
 use Carbon\Carbon; // para tratamiento de fechas
 use Session;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class compras_controlador extends Controller
 {
@@ -55,14 +58,22 @@ class compras_controlador extends Controller
                 $value = 0;
             }
 
+            $usuarios = User::where('activo',1)->where('role_id','<>',20)->where('id','<>',16)->get();
             
-            $v=view('fragm.compras_listar_factura',compact('cabecera','items','suma_flete','pagos_factura','value'))->render();
+            $v=view('fragm.compras_listar_factura',compact('cabecera','items','suma_flete','pagos_factura','value','usuarios'))->render();
             return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
         }
         
 
+    }
+
+    public function guardar_responsable_compra(Request $request){
+        $cabecera = compras_cab::find($request->id_cabecera);
+        $cabecera->id_responsable = $request->id_responsable;
+        $cabecera->save();
+        return "ok";
     }
 
     public function dame_facturas_por_proveedor($idproveedor)
@@ -550,58 +561,130 @@ class compras_controlador extends Controller
     }
 
     public function listar_factura_numero($num_factura){
-
-try {
-        $factura = compras_cab::where('compras_cab.factura_numero',$num_factura)
-                                    ->first();
-        $cabecera =  $factura;
-     
-        $items=compras_det::select('compras_det.cantidad','repuestos.cod_repuesto_proveedor','repuestos.descripcion','compras_det.pu','compras_det.costos as flete','compras_det.subtotal','compras_det.precio_sugerido')
-            ->where('compras_det.id_factura_cab',intval($cabecera->id))
-            ->join('repuestos','compras_det.id_repuestos','repuestos.id')
-            ->get();
-
-        $suma_flete=0;
-        foreach($items as $item){
-            $suma_flete+=$item->cantidad*$item->flete;
-        }
-
-        $v=view('fragm.compras_listar_factura',compact('cabecera','items','suma_flete'))->render();
-        return $v;
-        
-} catch (\Exception $e) {
-    return $e->getMessage();
-}
-        
-    }
-
-    public function pagar_factura(Request $req){
-        $idfactura = $req->idfactura;
         try {
-            $factura = compras_cab::where('compras_cab.id',$idfactura)
-                                    ->first();
-            $factura->pagada = 1;
+                $factura = compras_cab::where('compras_cab.factura_numero',$num_factura)
+                                            ->first();
+                $cabecera =  $factura;
+            
+                $items=compras_det::select('compras_det.cantidad','repuestos.cod_repuesto_proveedor','repuestos.descripcion','compras_det.pu','compras_det.costos as flete','compras_det.subtotal','compras_det.precio_sugerido')
+                    ->where('compras_det.id_factura_cab',intval($cabecera->id))
+                    ->join('repuestos','compras_det.id_repuestos','repuestos.id')
+                    ->get();
 
-            $factura->save();
+                $suma_flete=0;
+                foreach($items as $item){
+                    $suma_flete+=$item->cantidad*$item->flete;
+                }
 
-            for ($i = 0; $i < count($req->forma_pago); $i++) {
-                $p = new pagos_factura_compra;
-                $p->id_factura = $idfactura;
-                $p->forma_pago = $req->forma_pago[$i];
-                $p->fecha_pago = Carbon::today()->toDateString(); //Solo la fecha de hoy
-                $p->monto = $req->monto[$i];
-                $p->referencia = $req->referencia[$i];
-                $p->activo = 1;
-                $p->usuario_id = Auth::user()->id;
-        
-                $p->save();
-            }
-
-    
+                $v=view('fragm.compras_listar_factura',compact('cabecera','items','suma_flete'))->render();
+                return $v;
+                
         } catch (\Exception $e) {
             return $e->getMessage();
         }
-        return ['OK',$idfactura];
+    }
+
+    public function pagar_factura(Request $req)
+    {
+        $validator = \Validator::make($req->all(), [
+            'idfactura' => 'required|integer',
+            'forma_pago' => 'required|array|min:1',
+            'forma_pago.*' => 'required|integer',
+            'monto' => 'required|array|min:1',
+            'monto.*' => 'required|numeric|min:1',
+            'referencia' => 'required|array|min:1',
+            'referencia.*' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'Revise los datos ingresados para el pago.',
+                'errores' => $validator->errors(),
+            ], 422);
+        }
+
+        if (count($req->forma_pago) !== count($req->monto) ||
+            count($req->forma_pago) !== count($req->referencia)) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'Los datos de las formas de pago no coinciden.',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $factura = compras_cab::where('id', $req->idfactura)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((int) $factura->pagada === 1) {
+                DB::rollBack();
+
+                return response()->json([
+                    'estado' => 'ERROR',
+                    'mensaje' => 'Esta factura ya se encuentra pagada.',
+                ], 422);
+            }
+
+            $totalPagado = 0;
+            foreach ($req->monto as $monto) {
+                $totalPagado += (float) $monto;
+            }
+
+            $totalFactura = (float) $factura->factura_total;
+
+            // Se mantiene la tolerancia histórica de $2 usada en el frontend.
+            if (abs($totalPagado - $totalFactura) > 2) {
+                DB::rollBack();
+
+                return response()->json([
+                    'estado' => 'ERROR',
+                    'mensaje' => 'El total pagado no coincide con el total de la factura.',
+                    'total_factura' => $totalFactura,
+                    'total_pagado' => $totalPagado,
+                ], 422);
+            }
+
+            foreach ($req->forma_pago as $i => $formaPago) {
+                $pago = new pagos_factura_compra;
+                $pago->id_factura = $factura->id;
+                $pago->forma_pago = $formaPago;
+                $pago->fecha_pago = Carbon::today()->toDateString();
+                $pago->monto = (float) $req->monto[$i];
+                $pago->referencia = trim($req->referencia[$i]);
+                $pago->activo = 1;
+                $pago->usuario_id = Auth::user()->id;
+                $pago->save();
+            }
+
+            // La factura se marca pagada sólo cuando todos los pagos quedaron guardados.
+            $factura->pagada = 1;
+            $factura->save();
+
+            DB::commit();
+
+            return response()->json([
+                'estado' => 'OK',
+                'id_factura' => $factura->id,
+                'mensaje' => 'Factura pagada correctamente.',
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            \Log::error('Error pagando factura de compra', [
+                'factura' => $req->idfactura,
+                'usuario' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'No fue posible registrar el pago de la factura.',
+            ], 500);
+        }
     }
 
     public function dame_item_factura($id_repuesto, $id_factura){
@@ -612,8 +695,6 @@ try {
                                         ->where('compras_cab.id',$id_factura)
                                         ->first();
 
-            $fecha_formateada = Carbon::createFromFormat('Y-m-d', $compras_cab->factura_fecha)->format('d-m-Y');
-            $compras_cab->factura_fecha = $fecha_formateada;
             $repuesto = compras_det::select('repuestos.descripcion','repuestos.id', 'compras_det.id_factura_cab','compras_det.cantidad','compras_cab.factura_numero','compras_det.pu','compras_det.precio_sugerido','familias.porcentaje')
                     ->join('repuestos','compras_det.id_repuestos','repuestos.id')
                     ->join('compras_cab','compras_det.id_factura_cab','compras_cab.id')
@@ -643,12 +724,11 @@ try {
             $item = compras_det::where('id_repuestos',$repuesto_id)->where('id_factura_cab', $compras_cab->id)->first();
             
             $item->cantidad = intval($cantidad);
-            $item->pu = intval($pu);
-            $item->subtotal = intval($cantidad) * intval($pu);
-            if($flete < 0){
-                $item->costos = 0;
-            }else{
-                $item->costos = $flete;
+            $item->pu = (float) $pu;
+            $item->subtotal = intval($cantidad) * (float) $pu;
+            // Guardar sin pulsar Calcular conserva el flete asignado en la importacion.
+            if ($flete !== null && $flete !== '') {
+                $item->costos = CostosCompra::fleteUnitario(max(0, (float) $flete));
             }
            
             $item->precio_sugerido = $ps;

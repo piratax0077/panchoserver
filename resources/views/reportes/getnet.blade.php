@@ -100,14 +100,27 @@
     grid-column:1/7;
     grid-row:3/4;
     display:grid;
-    grid-template-columns: 50% 50%;
-    grid-auto-flow: column;
+    grid-template-columns:minmax(280px, 30%) minmax(0, 70%);
+    gap:18px;
+    align-items:start;
 }
 #resumen{
     grid-column:1/2;
+    overflow-x:auto;
 }
 #detalle{
     grid-column:2/3;
+    min-width:0;
+    overflow-x:auto;
+}
+@media (max-width: 1199px){
+    #cuerpo{
+        grid-template-columns:1fr;
+        grid-auto-flow:row;
+    }
+    #resumen, #detalle{
+        grid-column:1/2;
+    }
 }
 .transbank{
     color:grey;

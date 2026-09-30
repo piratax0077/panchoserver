@@ -192,27 +192,17 @@ Route::get('familiascondescuento','familiacontrolador@dame_familias_con_descuent
 //PROVEEDOR
 
 Route::middleware(['auth'])->prefix('proveedor')->group(function ()
-
 {
-
     Route::resource('/','proveedorcontrolador'); //RESTFULL
-
     Route::get('/{id}/eliminar','proveedorcontrolador@destroy');
-
+    Route::post('editar','proveedorcontrolador@edit');
     Route::get('/dametransportistas','proveedorcontrolador@dame_transportistas');
-
     Route::get('/dameproveedores','proveedorcontrolador@dame_proveedores');
-
     Route::get('/dameproveedores_array','proveedorcontrolador@dame_proveedores_array');
-
     Route::get('{idrepuesto}/guardarproveedor/{idproveedor}','proveedorcontrolador@guardar_proveedor');
-
     Route::get('/dame_stock_minimo_proveedor/{idproveedor}','proveedorcontrolador@dame_stock_minimo_proveedor');
-
     Route::get('/dame_stock_minimo_familia/{idfamilia}','proveedorcontrolador@dame_stock_minimo_familia');
-
     Route::get('/dame_stock_minimo_estado/{estado}/{mes}/{anio}','proveedorcontrolador@dame_stock_minimo_estado');
-
 });
 
 
@@ -266,10 +256,7 @@ Route::middleware(['auth'])->prefix('medidas')->group(function ()
 
 
 Route::get('paisJSON','pais_controlador@dame_paises');
-
 Route::get('medidasJSON/{id}','familiaMedidas_controlador@dame_medidas');
-
-
 
 //Para repuestos debemos crear propias rutas y métodos ya que utiliza 3 blades
 
@@ -287,6 +274,8 @@ Route::get('medidasJSON/{id}','familiaMedidas_controlador@dame_medidas');
 
 Route::middleware(['auth'])->prefix('repuesto')->group(function ()
 {
+    // Guardar familia desde armado de kit
+    Route::post('/guardar_familia_kit', 'repuestocontrolador@guardar_familia_kit')->name('guardar_familia_kit');
     Route::get('/','repuestocontrolador@index');
     Route::get('/xpress','repuestocontrolador@xpress');
     Route::get('/inactivos','repuestocontrolador@inactivos');
@@ -294,7 +283,7 @@ Route::middleware(['auth'])->prefix('repuesto')->group(function ()
     Route::get('/buscarRepuestoExpress/{dato}','repuestocontrolador@buscarRepuestoExpress');
     Route::get('/buscarRepuestoInactivos/{dato}','repuestocontrolador@buscarRepuestoInactivos'); //Eliminar
     Route::get('{id}/eliminar','repuestocontrolador@destroy'); //Eliminar
-    Route::get('/eliminar/{id}','repuestocontrolador@eliminar_repuesto'); //Eliminar desde la vista Modificar_repuesto
+    Route::delete('/eliminar/{id}','repuestocontrolador@eliminar_repuesto'); // Desactivar desde Modificar repuesto
     Route::get('/modificar','repuestocontrolador@edit');
     Route::get('/modificar/{id_repuesto}','repuestocontrolador@editar');
     Route::get('create','repuestocontrolador@create'); //ingresar datos
@@ -310,6 +299,7 @@ Route::middleware(['auth'])->prefix('repuesto')->group(function ()
     Route::get('/clonar_oems/{codigo_origen}/{codigo_destino}','repuestocontrolador@clonar_oems');
     Route::get('/clonar_aplicaciones/{codigo_origen}/{codigo_destino}','repuestocontrolador@clonar_aplicaciones');
     Route::get('/clonar_fabricantes/{codigo_origen}/{codigo_destino}','repuestocontrolador@clonar_fabricantes');
+    Route::get('/clonar_rv/{codigo_origen}/{codigo_destino}','repuestocontrolador@clonar_rv');
     // Fin ruta de clonaciones
     Route::get('/deshacer_similares/{id}','repuestocontrolador@deshacer_similares');
     Route::get('/deshacer_fabricantes/{id}','repuestocontrolador@deshacer_fabricantes');
@@ -352,9 +342,12 @@ Route::middleware(['auth'])->prefix('repuesto')->group(function ()
     Route::get('/stockrepuesto',[repuestocontrolador::class,'damestock_vista']);
     Route::post('/damestockrepuesto','repuestocontrolador@damestockrepuesto');
     Route::post('/guardarstock','repuestocontrolador@guardarstock');
+    Route::get('/{id}/historial-stock','repuestocontrolador@historial_stock');
+    Route::post('{id}/cambiar-estado','repuestocontrolador@cambiar_estado');
     Route::get('/actualizarstock/{id}','repuestocontrolador@actualizar_stock');
     Route::post('/modificarubicacion','repuestocontrolador@modificar_ubicacion');
     Route::get('/ingresados_vendidos',[repuestocontrolador::class,'ingresados_vendidos_vista']);
+    Route::post('/ingresados-vendidos/datos',[repuestocontrolador::class,'ingresados_vendidos_datos']);
     Route::get('/repuestos_por_familia/{idfamilia}',[repuestocontrolador::class,'repuestos_por_familia']);
     Route::get('/busqueda_rapida/{medidas}/{idfamilia}','repuestocontrolador@busqueda_rapida');
     Route::get('/damerv/{idrep}','repuestocontrolador@damerv');
@@ -365,21 +358,33 @@ Route::middleware(['auth'])->prefix('repuesto')->group(function ()
     Route::get('/actualizados','repuestocontrolador@actualizados')->name('repuestos.actualizados');
     Route::get('/descargar-repuestos', 'repuestocontrolador@descargarExcel')->name('repuestos.descargar');
     Route::get('/descargar-repuestos-familia/{id}', 'repuestocontrolador@descargarRepuestosFamiliaExcel');
+    Route::get('/descargar-repuestos-sin-ubi', 'repuestocontrolador@descargarRepuestosSinUbi');
+    Route::get('/descargar-repuestos-stock-minimo', 'repuestocontrolador@descargarRepuestosStockMinimo');
     Route::get('/guardar_nuevo_stock_minimo/{id}/{nuevo_stock_minimo}/{estado}', 'repuestocontrolador@guardar_nuevo_stock_minimo');
+    Route::get('/guardar_nuevo_stock_minimo_critico/{id}/{nuevo_stock_minimo}/{estado}', 'repuestocontrolador@guardar_nuevo_stock_minimo_critico');
     /*Rutas para clonaciones oems, aplicaciones y fabricantes */
     Route::get('/listar-oems','repuestocontrolador@listar_oems');
     Route::get('/clonaciones','repuestocontrolador@clonaciones');
+    Route::get('/clonaciones_rv','repuestocontrolador@clonaciones_rv');
+    Route::delete('/clonaciones/aplicaciones/{id}','repuestocontrolador@eliminar_clonacion_aplicaciones');
+    Route::delete('/clonaciones/fabricantes/{id}','repuestocontrolador@eliminar_clonacion_fabricantes');
+    Route::delete('/clonaciones/oems/{id}','repuestocontrolador@deshacer_clonacion_oems');
     /* FIN RUTAS CLONACIONES */
     Route::get('/deshacer_clonacion_oems/{id}','repuestocontrolador@deshacer_clonacion_oems');
+    Route::get('/deshacer_clonacion_rv/{id}','repuestocontrolador@deshacer_clonacion_rv');
+    Route::get('{codigo_interno}/dame_rv_clonar','repuestocontrolador@dame_rv_clonar');
     Route::get('/historial_clonaciones_oems','repuestocontrolador@dame_historial_clonaciones_oems');
     Route::get('/revisar_stock_minimo','repuestocontrolador@revisar_stock_minimo');
     Route::get('/revisar_stock_proveedor','repuestocontrolador@revisar_stock_proveedor');
+    Route::get('/revisar_stock_critico','repuestocontrolador@revisar_stock_critico');
     Route::get('/dame_stock_minimo_fecha','repuestocontrolador@dame_stock_minimo_fecha');
     Route::get('/damemp/{id}','repuestocontrolador@dameMotorPartida');
     Route::get('/borrarmotor/{id}','repuestocontrolador@borrarmotor');
     Route::get('/detalle_pedido/{idrep}','repuestocontrolador@detalle_pedido');
     Route::get('/guardar_detalle_pedido/{idrep}/{idproveedor}/{cantidad}/{cod_rep_prov}','repuestocontrolador@guardar_detalle_pedido');
-});
+    Route::get('/buscar-stock-minimo/{dato}', 'ventas_controlador@buscar_repuestos_stock_minimo');
+    Route::get('buscar-select2','repuestocontrolador@buscar_repuestos_select2')->name('repuesto.buscar-select2');
+    });
 
 Route::middleware(['auth'])->prefix('similar')->group(function ()
 {
@@ -411,15 +416,29 @@ Route::middleware(['auth'])->prefix('compras')->group(function ()
     Route::post('/actualizar_item_factura','compras_controlador@actualizar_item_factura');
     Route::post('/eliminar_repuesto_factura','compras_controlador@eliminar_repuesto_factura');
     Route::get('/{id}/damefacturacab','compras_controlador@damefacturacab');
+    Route::post('/guardar_responsable_compra','compras_controlador@guardar_responsable_compra')->name('guardar_responsable_compra');
 });
 
-
+// Rutas para reportes de movimientos de vales de mercadería
+Route::middleware(['auth'])->group(function () {
+    
+    Route::prefix('movimientos')->group(function () {
+        Route::get('/', 'MovimientoValeController@index')->name('movimientos.index');
+        Route::get('/repuesto/{repuesto_id}', 'MovimientoValeController@historicoRepuesto')->name('movimientos.historico_repuesto');
+        Route::get('/vale/{vale_id}', 'MovimientoValeController@historicoVale')->name('movimientos.historico_vale');
+        Route::get('/reportes/repuestos-sacados', 'MovimientoValeController@repuestosMasSacados')->name('movimientos.repuestos_sacados');
+        Route::get('/reportes/por-local', 'MovimientoValeController@movimientosPorLocal')->name('movimientos.por_local');
+        Route::get('/dashboard', 'MovimientoValeController@dashboard')->name('movimientos.dashboard');
+        Route::get('/exportar', 'MovimientoValeController@exportar')->name('movimientos.exportar');
+    });
+});
 
 //FACTU PRODU
 
 Route::middleware(['auth'])->prefix('factuprodu')->group(function ()
 {
     Route::get('/crear','factuprodu_controlador@crear');
+    Route::get('/crear_importacion','factuprodu_controlador@crear_importacion');
     Route::get('/{id}/utilidad','factuprodu_controlador@dameporcentaje');
     Route::get('/{id}/medidas','factuprodu_controlador@damemedidas');
     Route::post('/guardaritem','factuprodu_controlador@guardaritem');
@@ -438,9 +457,12 @@ Route::middleware(['auth'])->prefix('factuprodu')->group(function ()
     Route::get('/damecompras/{idrep}','factuprodu_controlador@dame_compras');
     Route::get('/damefactura/{num}','factuprodu_controlador@dame_factura');
     Route::post('/import-excel', 'factuprodu_controlador@import');
+    Route::post('/importar_excel_stock_minimo', 'factuprodu_controlador@importar_excel_stock_minimo');
+    Route::post('/importar-productos', 'factuprodu_controlador@importarProductos')->name('factuprodu.importar_productos');
     Route::get('/{idrv}/borrarrv/{idrep}','factuprodu_controlador@borrarrv');
     Route::post('/eliminar_medida_familia','factuprodu_controlador@eliminar_medida_familia');
     Route::post('/guardar_edicion_medida','factuprodu_controlador@guardar_edicion_medida');
+    Route::post('/confirmar-importacion-xml','factuprodu_controlador@confirmarImportacionXml')->name('factuprodu.confirmar_importacion_xml');
 });
 
 
@@ -550,6 +572,7 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::post('/enviarsii','ventas_controlador@enviar_sii');
     Route::get('/verestado/{trackid}','ventas_controlador@revisar_mail_estado');
     Route::post('/agregar_pago','ventas_controlador@agregar_pago');
+    Route::post('/guardar_pago','ventas_controlador@guardar_pago');
     Route::post('/actualizar_pago','ventas_controlador@actualizar_pago');
     Route::get('/cargar_pago/{id_pago}','ventas_controlador@cargar_pago');
     Route::post('/guardarventa','ventas_controlador@guardar_venta');
@@ -593,12 +616,13 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::get('/damecotizaciones/{id_cliente}','ventas_controlador@dame_cotizaciones');
     Route::get('/damecotizacionesmes/{mes}','ventas_controlador@dame_cotizaciones_mes');
     Route::get('/cargarcotizacion/{num_cotizacion}','ventas_controlador@cargar_cotizacion');
+    
 
     Route::get('/cargarcotizacion_bodega/{num_cotizacion}','ventas_controlador@cargar_cotizacion_bodega');
     Route::get('/cargarconsignacion/{num_consignacion}','ventas_controlador@cargar_consignacion');
     Route::get('/damedteporfechas/{tipodte}/{fechainicial}/{fechafinal}','ventas_controlador@damedteporfechas');
     Route::get('/dameventasporfechas/{tipo_dte}/{fechainicial}/{fechafinal}','ventas_controlador@dameventasporfechas');
-    Route::get('/damedetalleboleta/{tipo_dte}/{id_boleta}','ventas_controlador@damedetalleboleta');
+    Route::get('/damedetalleboleta/{tipo_dte}/{id_boleta}/{codigo_interno?}','ventas_controlador@damedetalleboleta');
     Route::get('/damedetalleboleta_num_doc/{tipo_dte}/{num_doc}','ventas_controlador@damedetalleboleta_num_doc');
     Route::get('/limpiarsesion','ventas_controlador@limpiar_sesion');
     Route::get('/setxmlimprimir','ventas_controlador@set_xml_imprimir');
@@ -624,6 +648,9 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::get('/imprimir_pedido/{id_pedido}','imprimir_controlador@imprimir_pedido');
     Route::get('/dame_abono/{id}','ventas_controlador@dame_abono');
     Route::get('/dame_consignacion/{id}','ventas_controlador@dame_consignacion');
+    Route::get('/dame_giftcard/{codigo}','ventas_controlador@dame_giftcard');
+    Route::get('/dame_saldo_giftcard/{codigo}','ventas_controlador@dameSaldoGiftcard');
+    Route::get('/agregar_carrito_desde_giftcard/{codigo}','ventas_controlador@agregarCarritoDesdeGiftcard');
     Route::get('/detalle_ventas','ventas_controlador@detalle_ventas_vista');
     Route::post('/agregar_repuesto_valemercaderia','ventas_controlador@agregar_repuesto_valemercaderia');
     Route::post('/agregar_repuesto_valeconsignacion','ventas_controlador@agregar_repuesto_valeconsignacion');
@@ -663,6 +690,8 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::get('/imprimir_pedido_admin/{id_pedido}','imprimir_controlador@imprimir_pedido_admin');
     Route::get('/metas','ventas_controlador@metas');
     Route::get('/dame_porcentaje_ventas','ventas_controlador@dame_porcentaje_ventas');
+
+    Route::get('/totem','ventas_controlador@totem');
 });
 
 Route::post('guardar_meta','ventas_controlador@guardar_meta')->name('guardar_meta');
@@ -753,8 +782,8 @@ Route::middleware(['auth'])->prefix('guiadespacho')->group(function ()
     Route::get('/detalle_nc_nueva/{numero_nc}','guia_despacho_controlador@dame_nc_nueva');
     Route::get('/detalle_doc_nuevo/{numero_doc}/{tipo_doc}','guia_despacho_controlador@dame_doc_nuevo');
     Route::post('/devolucion','guia_despacho_controlador@devolucion');
-    Route::get('/cerrar_devolucion/{num_nc}','guia_despacho_controlador@cerrar_devolucion');
-    Route::get('/cerrar_devolucion_/{num_doc}/{tipo_doc}','guia_despacho_controlador@cerrar_devolucion_');
+    Route::post('/cerrar_devolucion/{num_nc}','guia_despacho_controlador@cerrar_devolucion');
+    Route::post('/cerrar_devolucion_/{num_doc}/{tipo_doc}','guia_despacho_controlador@cerrar_devolucion_');
     Route::get('/dame_devoluciones/{num_nc}','guia_despacho_controlador@dame_devoluciones');
     Route::post('/opciones_devolucion','guia_despacho_controlador@opcion_devolucion');
     Route::get('/historial_devolucion/{numero_nc}','guia_despacho_controlador@historial_nc');
@@ -979,7 +1008,9 @@ Route::middleware(['auth'])->prefix('reportes')->group(function ()
     Route::get('/transbank_dia/{fecha}','reportes_controlador@transbank_dia');
     Route::get('/getnet','reportes_controlador@getnet');
     Route::get('/getnet_mes/{data}','reportes_controlador@getnet_mes');
+    Route::get('/transferencias_mes/{data}','reportes_controlador@transferencias_mes');
     Route::get('/getnet_dia/{fecha}','reportes_controlador@getnet_dia');
+    Route::get('/transferencias_dia/{fecha}','reportes_controlador@transferencias_dia');
     Route::get('/detalle_documentosgenerados/{data}','reportes_controlador@detalle_documentosgenerados');
     Route::get('/totales/{fecha}','reportes_controlador@reporte_pagos');
     Route::get('/totales_mensuales/{fecha}','reportes_controlador@reporte_pagos_mensuales');
@@ -992,6 +1023,8 @@ Route::middleware(['auth'])->prefix('reportes')->group(function ()
     Route::get('/bajo_stock_home','reportes_controlador@bajo_stock_home');
     Route::get('/bajo_stock','reportes_controlador@bajo_stock_html');
     Route::get('/rep_sin_prov','reportes_controlador@rep_sin_prov');
+    Route::get('/stock_critico','reportes_controlador@stock_critico');
+    Route::get('/stock_pendiente','reportes_controlador@stock_pendiente');
     Route::get('/ventas_online_detalle/{fecha}','reportes_controlador@ventas_online_detalle');
     Route::get('/ventas_online_dia/{fecha}','reportes_controlador@ventas_online_dia');
     Route::get('/detalle_carrito_virtual/{numero_carrito}','reportes_controlador@detalle_carrito_virtual');
@@ -1000,6 +1033,10 @@ Route::middleware(['auth'])->prefix('reportes')->group(function ()
     Route::get('/conexiones/{fecha}','reportes_controlador@conexiones');
     Route::get('/repuestos_actualizados','repuestocontrolador@descargarExcel');
     Route::get('/buscar_periodo_stock_minimo/{mes}/{anio}','reportes_controlador@buscar_periodo_stock_minimo');
+    Route::get('/transferencias','reportes_controlador@transferencias');
+    Route::post('/editar_operacion_pago_getnet','reportes_controlador@editar_operacion_pago_getnet');
+    Route::post('informe-rentabilidad/consultar','reportes_controlador@consultarInformeRentabilidad')->name('reportes.informe-rentabilidad.consultar');
+    Route::get('informe-rentabilidad','reportes_controlador@informeRentabilidad')->name('reportes.informe-rentabilidad');
 });
 
 
@@ -1071,7 +1108,10 @@ Route::get('/solicitudes','inventario_controlador@pedidos_a_bodega_vista')->midd
 
 route::post('/procesar_solicitud','inventario_controlador@procesar_solicitud')->middleware('auth');
 Route::get('/dame_solicitudes','inventario_controlador@dame_solicitudes')->middleware('auth');
+Route::get('/dame_ventas_totem','inventario_controlador@dame_ventas_totem')->middleware('auth');
+Route::get('/dame_venta_totem/{id}','inventario_controlador@dame_venta_totem')->middleware('auth');
 Route::get('/eliminar_solicitud/{id}','inventario_controlador@eliminar_solicitud')->middleware('auth');
+Route::get('/aceptar_totem/{id}','inventario_controlador@aceptar_totem')->middleware('auth');
 
 Route::get('/bienvenida',function(){
 
@@ -1150,6 +1190,7 @@ Route::post('/solicitud_traspaso',[imprimir_controlador::class, 'solicitud_trasp
 
 Route::get('/revisar_carrito','ventas_controlador@revisar_carrito');
 Route::get('/revisar_solicitud','inventario_controlador@revisar_solicitud');
+Route::get('/revisar_totem','inventario_controlador@revisar_totem');
 
 //Enviar correos
 
@@ -1160,7 +1201,8 @@ Route::post('/enviarcorreo','correos_controlador@enviar_correo')->middleware('au
 
 Route::get('/dame_tipo_documentos','tipo_documentos_controlador@dame_tipos')->middleware('auth');
 
-
+// resetear contador de dias de cambio de precio de repuestos
+Route::get('/resetear-dias-precio-repuestos','repuestocontrolador@resetearDiasPrecioRepuestos')->middleware('auth');
 
 //rutas errores
 
@@ -1198,3 +1240,16 @@ Route::get('/generate-pdf','pdf_controlador@generatePdf');
 
 
 Auth::routes(); //no borrar y siempre al final
+
+
+// Gestión dinámica de existencias: autenticación y permisos en el controlador.
+Route::prefix('inventario/ubicaciones')->group(function () {
+    Route::get('catalogo', 'StockUbicacionesController@catalogo');
+    Route::get('buscar', 'StockUbicacionesController@buscar');
+    Route::post('locales', 'StockUbicacionesController@guardarLocal');
+    Route::put('locales/{id}', 'StockUbicacionesController@guardarLocal')->where('id', '[0-9]+');
+    Route::post('repuestos/{repuesto}/asociar', 'StockUbicacionesController@asociar');
+    Route::post('repuestos/{repuesto}/ajustar', 'StockUbicacionesController@ajustar');
+    Route::post('repuestos/{repuesto}/trasladar', 'StockUbicacionesController@trasladar');
+    Route::get('repuestos/{repuesto}/historial', 'StockUbicacionesController@historial');
+});

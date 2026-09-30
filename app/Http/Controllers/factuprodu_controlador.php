@@ -11,6 +11,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\compras_cab;
 use App\compras_det;
+use App\Services\CostosCompra;
 use App\repuesto;
 use App\repuestofoto;
 use Carbon\Carbon; // para tratamiento de fechas
@@ -33,7 +34,7 @@ use App\factura;
 use App\regulador_voltaje;
 use App\permissions_detail;
 use App\misClases\factu_produ; //Custom class
-
+use App\importaciones_excel;
 
 
 use Session;
@@ -45,6 +46,7 @@ use Debugbar;
 
 
 use App\Imports\OemsImport;
+use App\Imports\RepuestosPedidosStockMinimoImport;
 
 
 
@@ -510,32 +512,13 @@ class factuprodu_controlador extends Controller
         return ['total_repuestos_factura' => $total_repuestos_factura, 'total_repuestos_ot' => $total_repuestos_ot];
     }
 
-
-
-
-
-
-
     public function dameporcentaje($id_familia)
-
     {
-
         $f = familia::find($id_familia);
-
-
-
         $porcentaje = $f->porcentaje;
-
-
 
         return $porcentaje;
     }
-
-
-
-
-
-
 
     public function crear()
     {
@@ -565,15 +548,33 @@ class factuprodu_controlador extends Controller
         
     }
 
+    public function crear_importacion()
+    {
+        $proveedores = $this->dameproveedores();
+        $locales = $this->damelocales();
+        //$familias=$this->damefamilias();
+        $marcas = $this->damemarcas();
+        //$modelos=$this->damemodelos();
+        //$marcarepuestos=$this->damemarcarepuestos();
+        //$paises=$this->damepaises();
 
+        $id_repuesto = 0; //Esto lo pongo temporalmente porque las fotos necesitan un ID.
+        //$fotos=$this->damefotosrepuesto($id_repuesto);
+        //$similares=$this->damesimilares($id_repuesto);
+        //return view('inventario.factu_produ',compact('proveedores','locales','marcas','fotos','similares'));
 
+        $permisos = permissions_detail::all();
+        foreach ($permisos as $p) {
+            if($p->usuarios_id == Auth::user()->id && $p->path_ruta == '/factuprodu/crear'){
+                return view('inventario.factu_produ_importacion', compact('proveedores', 'locales', 'marcas'));
+            }
+        }
 
-
-
-
-
-
-
+        if(Auth::user()->rol->nombrerol == "Administrador"){
+            return view('inventario.factu_produ_importacion', compact('proveedores', 'locales', 'marcas'));
+        }else return redirect('home');
+        
+    }
 
     public function buscarepuesto($cod, $idprov)
     {
@@ -624,7 +625,7 @@ class factuprodu_controlador extends Controller
                 
             }
 
-            
+      
             $v = view('fragm.factuprodu_buscado', compact('repuestos'))->render();
             return $v;
             /*
@@ -633,6 +634,7 @@ class factuprodu_controlador extends Controller
             return $v;
 */
         } catch (\Exception $error) {
+       
             $debug = $error;
             $v = view('errors.debug_ajax', compact('debug'))->render();
             return $v;
@@ -771,8 +773,10 @@ class factuprodu_controlador extends Controller
     public function verificacodprov($crp, $idprov, $idfac)
     {
         $idrep = repuesto::where('cod_repuesto_proveedor', trim(strtoupper($crp)))
-            ->where('id_proveedor', $idprov)
-            ->value('id');
+                ->where('id_proveedor', $idprov)
+                ->orderBy('id', 'desc')
+                ->value('id');
+
         // return $idrep;
         if (!is_null($idrep)) {
             //Verificar en el detalle de la compra
@@ -798,11 +802,23 @@ class factuprodu_controlador extends Controller
 
     public function guardaritem(Request $request)
     {
-      
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            return \DB::transaction(function () use ($request) {
+                return $this->guardaritemInterno($request);
+            }, 3);
+        }
+        return $this->guardaritemInterno($request);
+    }
+
+    private function guardaritemInterno(Request $request)
+    {
+     
         //Guardar repuesto en el catálogo.
         $resp = "xuxa*no guardó";
         if ($request->nuevo == "SI") {
+     
             $id_rep = $this->guardar_repuesto($request);
+            
             $r = repuesto::find($id_rep);
             $codigo_interno = $r->codigo_interno;
             $resp = "1*" . $codigo_interno . "*" . $id_rep;
@@ -823,11 +839,14 @@ class factuprodu_controlador extends Controller
             } else {
                 $resp = "3*" . $r->codigo_interno;
             }
-            
+
 
             $r->fecha_reposicion = Carbon::today()->toDateString();
             $r->fecha_actualizacion_stock = Carbon::today()->toDateString();
             $r->usuarios_id = Auth::user()->id;
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                app(\App\Services\StockPorLocalService::class)->mover($r->id, (int) $request->idLocal, (int) $request->cantidad, ['tipo' => 'COMPRA']);
+            } else {
             //Si la ubicacion es 1 significa que es bodega y se guarda en la primera ubicacion
             if($request->idLocal == 1){
                 $r->local_id = $request->idLocal;
@@ -849,14 +868,17 @@ class factuprodu_controlador extends Controller
                 $r->ubicacion_tres = 'CM - p1 - 0 - b0 - p0';
                 $r->stock_actual_tres += $request->cantidad;
             }
+            }
             $r->stock_minimo = $request->stockmin;
             $r->stock_maximo = $request->stockmax;
+            $r->estado = null;
             $r->save();
         }
 
         //Guardar Factura y actualiza saldo
         $this->guardar_factura($id_rep, $request); //kiki
-
+        $vc = new ventas_controlador;
+        $vc->revisar_stock_minimo($id_rep);
         return $resp;
     }
     
@@ -880,6 +902,7 @@ class factuprodu_controlador extends Controller
             $repuesto->pu_neto = intval(round($item->preciosug / (1 + 0.19), 0));
             $repuesto->stock_minimo = $item->stockmin;
             $repuesto->stock_maximo = $item->stockmax;
+            if (!\App\Services\StockPorLocalService::habilitado()) {
             //Si viene del bodega se guarda en la primera ubicación.
             if($item->idLocal == 1){
                 $repuesto->local_id = $item->idLocal;
@@ -895,6 +918,7 @@ class factuprodu_controlador extends Controller
                 $repuesto->ubicacion_tres = 'CM - p1 - 0 - b0 - p0';
             }
             
+            }
             $repuesto->codigo_barras = $item->codbar;
             
             $familia_datos = familia::find($item->idFamilia);
@@ -907,7 +931,11 @@ class factuprodu_controlador extends Controller
             $repuesto->activo = 1;
             $repuesto->fecha_reposicion = Carbon::today()->toDateString();
             $repuesto->fecha_actualizacion_stock = Carbon::today()->toDateString();
+            $repuesto->estado = null;
             $repuesto->save();
+            if (\App\Services\StockPorLocalService::habilitado()) {
+                app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, (int) $item->idLocal, (int) $item->cantidad, ['tipo' => 'COMPRA']);
+            }
             //Luego de guardar, actualizar el correlativo de la familia
             $familia_datos->correlativo = $newval;
             $familia_datos->save();
@@ -918,12 +946,443 @@ class factuprodu_controlador extends Controller
 
             return $repuesto->id;
         } catch (\Exception $error) {
+            if (\App\Services\StockPorLocalService::habilitado()) throw $error;
             $debug = $error;
+            return $error;
             $v = view('errors.debug_ajax', compact('debug'))->render();
 
             return $v;
         }
     }
+
+    public function importar_excel_stock_minimo(Request $request){
+        try {
+            $nombre_archivo = $request->file('archivo_excel')->getClientOriginalName();
+            $id_proveedor = $request->proveedor_id ?? null;
+            $import = new RepuestosPedidosStockMinimoImport;
+
+            Excel::import($import, $request->file('archivo_excel'));
+
+            // Obtener errores
+            $errores = [];
+
+            foreach ($import->failures() as $failure) {
+                $errores[] = [
+                    'fila' => $failure->row(),
+                    'columna' => $failure->attribute(),
+                    'errores' => $failure->errors(),
+                    'valor' => $failure->values()[$failure->attribute()] ?? null
+                ];
+            }
+
+            // Si hay errores, registrar importación como ERROR
+            if (count($errores) > 0) {
+                importaciones_excel::create([
+                    'nombre_archivo' => $nombre_archivo,
+                    'tipo_importacion' => 'stock_minimo',
+                    'total_filas' => 0,
+                    'filas_procesadas' => 0,
+                    'total_errores' => count($errores),
+                    'estado' => 'ERROR',
+                    'errores_json' => $errores,
+                    'usuarios_id' => Auth::user()->id,
+                    'id_proveedor' => $id_proveedor
+                ]);
+
+                return [
+                    'estado' => 'ERROR',
+                    'mensaje' => 'Se encontraron errores en el archivo importado.',
+                    'errores' => $errores
+                ];
+            }
+
+            $datos = $import->getRows();
+            $datosFiltrados = collect($datos)
+            ->filter(function ($item) {
+                return strtoupper(trim($item['estado'])) === 'OK';
+            })
+            ->values()
+            ->toArray();
+
+            $filas_procesadas = 0;
+            foreach($datosFiltrados as $dato){
+                $rep = repuesto::where('cod_repuesto_proveedor', $dato['codigo_interno'])
+                    ->first();
+                if($rep){
+                    $rep->estado = "Cargado en carro";
+                    $rep->save();
+                    $filas_procesadas++;
+                }
+            }
+
+            // Registrar importación exitosa
+            importaciones_excel::create([
+                'nombre_archivo' => $nombre_archivo,
+                'tipo_importacion' => 'stock_minimo',
+                'total_filas' => count($datos),
+                'filas_procesadas' => $filas_procesadas,
+                'total_errores' => 0,
+                'estado' => 'OK',
+                'errores_json' => null,
+                'usuarios_id' => Auth::user()->id,
+                'id_proveedor' => $id_proveedor
+            ]);
+
+            return ['estado' => 'OK', 'datos' => $datosFiltrados];
+        } catch (\Exception $e) {
+            $id_proveedor = $request->id_proveedor ?? null;
+            
+            // Registrar importación como error
+            importaciones_excel::create([
+                'nombre_archivo' => isset($nombre_archivo) ? $nombre_archivo : 'desconocido',
+                'tipo_importacion' => 'stock_minimo',
+                'total_filas' => 0,
+                'filas_procesadas' => 0,
+                'total_errores' => 1,
+                'estado' => 'ERROR',
+                'errores_json' => ['error_general' => $e->getMessage()],
+                'usuarios_id' => Auth::user()->id,
+                'id_proveedor' => $id_proveedor
+            ]);
+
+            return ['estado' => 'ERROR', 'mensaje' => $e->getMessage()];
+        }
+    }
+
+
+
+    /**
+     * Normaliza códigos para comparación.
+     */
+    private function normalizarCodigoRepuestoProveedor($codigo)
+    {
+        return trim(strtoupper((string) $codigo));
+    }
+
+    /**
+     * Divide códigos guardados en cod_repuesto_proveedor cuando vienen varios en un mismo campo.
+     * Soporta separadores comunes: coma, punto y coma, slash, pipe y salto de línea.
+     */
+    private function separarCodigosRepuestoProveedor($codigos)
+    {
+        $codigos = $this->normalizarCodigoRepuestoProveedor($codigos);
+
+        if ($codigos === '') {
+            return [];
+        }
+
+        $partes = preg_split('/[,\;\/\|\r\n]+/', $codigos);
+
+        return collect($partes)
+            ->map(function ($codigo) {
+                return $this->normalizarCodigoRepuestoProveedor($codigo);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    /**
+     * Busca el repuesto exacto dentro de cod_repuesto_proveedor,
+     * incluso si el registro tiene varios códigos en el mismo campo.
+     */
+    private function buscarRepuestoExistentePorCodigo($repuestos, $codigoXml)
+    {
+        $codigoXml = $this->normalizarCodigoRepuestoProveedor($codigoXml);
+
+        if ($codigoXml === '') {
+            return null;
+        }
+
+        return $repuestos->first(function ($repuesto) use ($codigoXml) {
+            if ((int) $repuesto->activo !== 1) {
+                return false;
+            }
+            $codigosBd = $this->separarCodigosRepuestoProveedor($repuesto->cod_repuesto_proveedor);
+            return in_array($codigoXml, $codigosBd);
+        });
+    }
+
+
+    public function importarProductos(Request $request)
+    {
+        $request->validate([
+            'archivo'      => 'required|file|max:10240',
+            'tipo_archivo' => 'required|in:excel,xml',
+        ]);
+
+        $extension = strtolower($request->file('archivo')->getClientOriginalExtension());
+
+        if ($request->tipo_archivo === 'xml' && $extension !== 'xml') {
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => 'El archivo debe tener extensión .xml',
+            ], 422);
+        }
+        try {
+
+            if ($request->tipo_archivo === 'xml') {
+                $datosXml = $this->leerDatosDesdeXml($request->file('archivo'));
+                $productos = $datosXml['productos'];
+                $cabeceraXml = $datosXml['cabecera'];
+            } else {
+                $productos = $this->leerProductosDesdeExcel($request->file('archivo'));
+                $cabeceraXml = null;
+            }
+
+            $codigos = collect($productos)
+                ->pluck('codigo')
+                ->filter()
+                ->map(function ($codigo) {
+                    return $this->normalizarCodigoRepuestoProveedor($codigo);
+                })
+                ->unique()
+                ->values();
+
+            if ($codigos->count() == 0) {
+                return response()->json([
+                    'estado' => 'ERROR',
+                    'mensaje' => 'No se encontraron códigos válidos en el archivo.',
+                ], 422);
+            }
+
+            /**
+             * No usamos whereIn porque algunos repuestos tienen más de un código
+             * guardado en cod_repuesto_proveedor, por ejemplo:
+             * "ABC123 / DEF456" o "ABC123;DEF456".
+             *
+             * Primero hacemos una búsqueda amplia con LIKE para traer candidatos.
+             * Luego validamos en PHP que el código del XML exista exactamente
+             * dentro de la lista de códigos del repuesto.
+             */
+            $repuestosExistentes = repuesto::where('id_familia', '<>', 312)
+                ->where('activo', 1)
+                ->where(function ($q) use ($codigos) {
+                    foreach ($codigos as $codigo) {
+                        $codigo = $this->normalizarCodigoRepuestoProveedor($codigo);
+
+                        if ($codigo !== '') {
+                            $q->orWhere('cod_repuesto_proveedor', 'LIKE', '%' . $codigo . '%');
+                        }
+                    }
+                })
+                ->get();
+
+            $existentes = [];
+            $nuevos = [];
+
+            foreach ($productos as $producto) {
+                $codigo = trim(strtoupper($producto['codigo'] ?? ''));
+
+                if ($codigo === '') continue;
+
+                $repuesto = $this->buscarRepuestoExistentePorCodigo($repuestosExistentes, $codigo);
+
+                if ($repuesto) {
+
+                    $existentes[] = [
+                        'codigo'      => $codigo,
+                        'nombre_xml'  => $producto['nombre'] ?? '',
+                        'cantidad'    => $producto['cantidad'] ?? 0,
+                        'precio'      => $producto['precio'] ?? 0,
+                        'monto'       => $producto['monto'] ?? 0,
+                        'id_repuesto' => $repuesto->id,
+                        'nombre_bd'   => $repuesto->descripcion ?? $repuesto->nombre ?? '',
+                    ];
+                } else {
+                    $nuevos[] = [
+                        'codigo'     => $codigo,
+                        'nombre_xml' => $producto['nombre'] ?? '',
+                        'cantidad'   => $producto['cantidad'] ?? 0,
+                        'precio'     => $producto['precio'] ?? 0,
+                        'monto'      => $producto['monto'] ?? 0,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'estado' => 'OK',
+                'mensaje' => 'Archivo leído correctamente',
+
+                'cabecera' => $cabeceraXml,
+
+                'id_proveedor' => $cabeceraXml['proveedor_id'] ?? null,
+                'proveedor_nombre' => $cabeceraXml['proveedor_nombre'] ?? null,
+                'proveedor_encontrado' => $cabeceraXml['proveedor_encontrado'] ?? false,
+
+                'numero_factura' => $cabeceraXml['folio'] ?? null,
+                'fecha_factura' => $cabeceraXml['fecha_emision'] ?? null,
+                'fecha_vencimiento' => $cabeceraXml['fecha_vencimiento'] ?? null,
+
+                'total_neto' => $cabeceraXml['neto'] ?? 0,
+                'total_iva' => $cabeceraXml['iva'] ?? 0,
+                'total_factura' => $cabeceraXml['total'] ?? 0,
+
+                'total_productos' => count($productos),
+                'cantidad_existentes' => count($existentes),
+                'cantidad_nuevos' => count($nuevos),
+                'existentes' => $existentes,
+                'nuevos' => $nuevos,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile(),
+            ], 500);
+        }
+    }
+
+    private function leerDatosDesdeXml($archivo)
+    {
+        libxml_use_internal_errors(true);
+
+        $contenido = file_get_contents($archivo->getRealPath());
+
+        if ($contenido === false || trim($contenido) === '') {
+            throw new \Exception('No se pudo leer el contenido del archivo XML');
+        }
+
+        $contenido = preg_replace('/^\xEF\xBB\xBF/', '', $contenido);
+
+        if (function_exists('mb_convert_encoding')) {
+            $contenido = mb_convert_encoding($contenido, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+            $contenido = preg_replace('/<\?xml([^>]+)encoding=["\'][^"\']+["\']([^>]*)\?>/i', '<?xml$1encoding="UTF-8"$2?>', $contenido);
+        }
+
+        $xml = simplexml_load_string($contenido);
+
+        if (!$xml) {
+            $errores = libxml_get_errors();
+            libxml_clear_errors();
+
+            $mensajeErrores = [];
+            foreach ($errores as $error) {
+                $mensajeErrores[] = trim($error->message) . ' línea ' . $error->line;
+            }
+
+            throw new \Exception('No se pudo leer el archivo XML: ' . implode(' | ', $mensajeErrores));
+        }
+
+        $xml->registerXPathNamespace('sii', 'http://www.sii.cl/SiiDte');
+
+        $encabezados = $xml->xpath('//sii:Encabezado');
+        $encabezado = ($encabezados && count($encabezados) > 0) ? $encabezados[0] : null;
+
+        if (!$encabezado) {
+            throw new \Exception('El XML no contiene encabezado');
+        }
+
+        $rutEmisor = trim((string) $encabezado->Emisor->RUTEmisor);
+        $folio = trim((string) $encabezado->IdDoc->Folio);
+        $fechaEmision = trim((string) $encabezado->IdDoc->FchEmis);
+        $fechaVencimiento = trim((string) $encabezado->IdDoc->FchVenc);
+
+        $neto = (int) $encabezado->Totales->MntNeto;
+        $iva = (int) $encabezado->Totales->IVA;
+        $total = (int) $encabezado->Totales->MntTotal;
+
+        $rutLimpio = $this->limpiarRut($rutEmisor);
+
+        $proveedor = proveedor::whereRaw("
+            REPLACE(REPLACE(REPLACE(UPPER(empresa_codigo), '.', ''), '-', ''), ' ', '') = ?
+        ", [$rutLimpio])->first();
+
+        $facturaExiste = false;
+        $facturaExistenteId = null;
+        $facturaExistenteMensaje = null;
+
+        if ($proveedor && $folio !== '') {
+            $facturaExistente = compras_cab::where('factura_id_proveedor', $proveedor->id)
+                ->where('factura_numero', $folio)
+                ->where('activo', 1)
+                ->first();
+
+            if ($facturaExistente) {
+                $facturaExiste = true;
+                $facturaExistenteId = $facturaExistente->id;
+                $facturaExistenteMensaje = 'La factura '.$folio.' ya existe para el proveedor '.$proveedor->empresa_nombre.'.';
+            }
+        }
+
+        $detalles = $xml->xpath('//sii:Detalle');
+
+        if (!$detalles || count($detalles) == 0) {
+            throw new \Exception('El XML no contiene productos en el detalle');
+        }
+
+        $productos = [];
+
+        foreach ($detalles as $detalle) {
+            $codigo = '';
+
+            if (isset($detalle->CdgItem->VlrCodigo)) {
+                $codigo = trim((string) $detalle->CdgItem->VlrCodigo);
+            }
+
+            if ($codigo === '') {
+                continue;
+            }
+
+            $productos[] = [
+                'linea'       => (int) $detalle->NroLinDet,
+                'codigo'      => $codigo,
+                'nombre'      => trim((string) $detalle->NmbItem),
+                'descripcion' => trim((string) $detalle->DscItem),
+                'cantidad'    => (float) $detalle->QtyItem,
+                'precio'      => (float) $detalle->PrcItem,
+                'monto'       => (float) $detalle->MontoItem,
+            ];
+        }
+
+        if (count($productos) == 0) {
+            throw new \Exception('No se encontraron productos con código en el XML');
+        }
+
+        if (!empty($cabeceraXml['factura_existe'])) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'codigo' => 'FACTURA_DUPLICADA',
+                'mensaje' => $cabeceraXml['factura_existente_mensaje']
+                    ?? 'Esta factura ya fue importada anteriormente.',
+                'id_factura_existente' => $cabeceraXml['factura_existente_id'] ?? null,
+                'numero_factura' => $cabeceraXml['folio'] ?? null,
+                'proveedor_nombre' => $cabeceraXml['proveedor_nombre'] ?? null,
+            ], 422);
+        }
+
+        return [
+            'cabecera' => [
+                'rut_emisor' => $rutEmisor,
+                'rut_emisor_limpio' => $rutLimpio,
+
+                'proveedor_encontrado' => $proveedor ? true : false,
+                'proveedor_id' => $proveedor ? $proveedor->id : null,
+                'proveedor_nombre' => $proveedor ? $proveedor->empresa_nombre : null,
+                'proveedor_codigo' => $proveedor ? $proveedor->empresa_codigo : null,
+
+                'factura_existe' => $facturaExiste,
+                'factura_existente_id' => $facturaExistenteId,
+                'factura_existente_mensaje' => $facturaExistenteMensaje,
+
+                'folio' => $folio,
+                'fecha_emision' => $fechaEmision,
+                'fecha_vencimiento' => $fechaVencimiento,
+                'neto' => $neto,
+                'iva' => $iva,
+                'total' => $total,
+            ],
+            'productos' => $productos,
+        ];
+    }
+
+private function limpiarRut($rut)
+{
+    return strtoupper(str_replace(['.', '-', ' '], '', trim($rut)));
+}
 
     private function clonar_repuesto($idrep_clonado, $idrep)
     {
@@ -1258,6 +1717,22 @@ class factuprodu_controlador extends Controller
 
     public function dame_compras($idrep)
     {
+        $usuario = Auth::user();
+        $rol = $usuario->rol->nombrerol;
+        $esAdministrador = $rol === 'Administrador';
+        $esRolConResumen = in_array($rol, ['vendedor', 'bodega-venta'], true);
+        $permisoCompras = permissions_detail::where('usuarios_id', $usuario->id)
+            ->where('path_ruta', '/reportes/ultimas-compras')
+            ->exists();
+        $permisoModificar = permissions_detail::where('usuarios_id', $usuario->id)
+            ->where('path_ruta', '/repuesto/modificar-precio')
+            ->exists();
+
+        // Sin rol autorizado ni permiso explícito, no se expone el historial.
+        if (!$esAdministrador && !$esRolConResumen && !$permisoCompras && !$permisoModificar) {
+            return '';
+        }
+
         $compras = compras_det::select(
             'compras_cab.factura_fecha as fecha',
             'compras_cab.factura_numero as numero',
@@ -1265,17 +1740,31 @@ class factuprodu_controlador extends Controller
             'compras_det.precio_sugerido as precio_venta',
             'compras_det.costos as costos',
             'compras_det.cantidad as cantidad',
+            'compras_det.id as id_detalle',
             'users.name'
         )
             ->join('compras_cab', 'compras_det.id_factura_cab', 'compras_cab.id')
             ->leftjoin('users','compras_det.usuarios_id','users.id')
             ->where('compras_det.id_repuestos', $idrep)
-            ->orderBy('compras_cab.factura_numero', 'DESC')
+            ->orderByDesc('compras_cab.factura_fecha')
+            ->orderByDesc('compras_det.id')
             ->get();
 
-        $view = view('fragm.ventas_repuestos_comprados', compact('compras'))->render();
-        if(Auth::user()->rol->nombrerol == "Administrador") return $view;
-        
+        if ($permisoCompras && !$esAdministrador) {
+            // El permiso "Últimas compras" limita el detalle a los tres ingresos más recientes.
+            $compras = $compras->take(3);
+        } elseif (!$esAdministrador) {
+            // Los roles de resumen y quienes solo modifican precios conservan un único ingreso sin detalle.
+            $compras = $compras->take(1);
+        }
+
+        // Solo los administradores pueden ver usuario, factura, precios y flete.
+        $mostrarDetalleCompras = $esAdministrador;
+
+        return view(
+            'fragm.ventas_repuestos_comprados',
+            compact('compras', 'mostrarDetalleCompras', 'permisoCompras')
+        )->render();
     }
 
 
@@ -1296,14 +1785,14 @@ class factuprodu_controlador extends Controller
             return 'aceite';
         }
         
-        if($id == 423 ||  $id == 470){
+        if($id == 423 || $id == 424 ||  $id == 470){
             //Buscamos las familia de disco y buscamos la familia de prensa, cuyos id son 3 y 4 respectivamente.
             $medidas_disco = familia_medidas::where('id_familia', 3)->get();
             $medidas_prensa = familia_medidas::where('id_familia', 4)->get();
 
             return ['pd',$medidas_disco, $medidas_prensa];
         }else{
-            $medidas = familia_medidas::where('id_familia', $id)->orderBy('descripcion','asc')->get();
+            $medidas = familia_medidas::where('id_familia', $id)->get();
             return $medidas;
         }
 
@@ -1346,4 +1835,316 @@ class factuprodu_controlador extends Controller
             return $e;
         }
     }
+
+    public function confirmarImportacionXml(Request $request)
+    {
+        $request->validate([
+            'id_proveedor' => 'required|integer',
+            'numero_factura' => 'required',
+            'fecha_factura' => 'required|date',
+            'id_local_general' => 'required|integer',
+            'productos' => 'required|array',
+        ]);
+
+        \DB::beginTransaction();
+
+        try {
+            $existe = compras_cab::where('factura_id_proveedor', $request->id_proveedor)
+                ->where('factura_numero', $request->numero_factura)
+                ->where('activo', 1)
+                ->first();
+
+            if ($existe) {
+                \DB::rollBack();
+                return response()->json([
+                    'estado' => 'ERROR',
+                    'mensaje' => 'La factura ya existe para este proveedor.',
+                ], 422);
+            }
+
+            $cabecera = compras_cab::create([
+                'factura_id_proveedor' => $request->id_proveedor,
+                'factura_numero' => $request->numero_factura,
+                'factura_fecha' => $request->fecha_factura,
+                'factura_es_credito' => 0,
+                'factura_fecha_venc' => $request->fecha_vencimiento,
+                'factura_subtotal' => 0,
+                'factura_iva' => 0,
+                'factura_total' => 0,
+                'factura_observaciones' => 'Importación XML',
+                'factura_flete_pagado' => $request->factura_flete_pagado ?? 0,
+                'activo' => 1,
+                'usuarios_id' => Auth::user()->id,
+            ]);
+
+            $item = 1;
+            $guardados = 0;
+            $omitidos = 0;
+
+            foreach ($request->productos as $producto) {
+                if (($producto['estado'] ?? '') !== 'EXISTENTE' || empty($producto['id_repuesto'])) {
+                    $omitidos++;
+                    continue;
+                }
+
+                $idLocal = !empty($producto['id_local'])
+                    ? (int) $producto['id_local']
+                    : (int) $request->id_local_general;
+
+                if ($idLocal <= 0) {
+                    throw new \Exception('Debe seleccionar local de destino para todos los productos.');
+                }
+
+                $esCaja = !empty($producto['es_caja']) && ($producto['es_caja'] == 1 || $producto['es_caja'] === 'true');
+
+                $cantidadXml = (float) ($producto['cantidad_xml'] ?? 0);
+                $unidadesPorCaja = (float) ($producto['unidades_por_caja'] ?? 1);
+
+                if ($unidadesPorCaja <= 0) {
+                    $unidadesPorCaja = 1;
+                }
+
+                $cantidad = (float) ($producto['cantidad'] ?? 0);
+
+                if ($cantidad <= 0) {
+                    $omitidos++;
+                    continue;
+                }
+
+                $precioXml = (float) ($producto['precio_xml'] ?? 0);
+                $precioUnitario = (float) ($producto['precio_unitario'] ?? $producto['costo'] ?? 0);
+                $porcentajeDescuento = (float) ($producto['porcentaje_descuento'] ?? $request->porcentaje_descuento ?? 0);
+                $descuentoUnitario = (float) ($producto['descuento_unitario'] ?? 0);
+                $costo = (float) ($producto['costo'] ?? 0);
+
+                $costoConFlete = (float) ($producto['costo_con_flete'] ?? 0);
+                $precioVentaIva = (float) ($producto['precio_venta'] ?? 0);
+
+                // El XML ya asigna el transporte por unidad. Nunca guardar aqui el total
+                // de la fila: el listado vuelve a multiplicar costos por la cantidad.
+                $fleteUnitario = CostosCompra::fleteUnitario($producto['flete_unitario'] ?? null);
+
+                $detalleCostos = 'Flete XML'
+                    .' | Desc: '.$porcentajeDescuento.'%'
+                    .' | Es caja: '.($esCaja ? 'SI' : 'NO')
+                    .' | Cant XML: '.$cantidadXml
+                    .' | Unid/Caja: '.$unidadesPorCaja
+                    .' | Precio XML: '.$precioXml
+                    .' | Precio Unit: '.$precioUnitario
+                    .' | Costo+Flete: '.$costoConFlete
+                    .' | Local: '.$idLocal;
+
+                $repuesto = repuesto::where('id', $producto['id_repuesto'])
+                    ->where('activo', 1)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$repuesto) {
+                    throw new \Exception('El repuesto ID '.$producto['id_repuesto'].' no existe o esta inactivo. Vuelva a cargar el archivo y revise la asociacion.');
+                }
+
+                compras_det::create([
+                    'id_factura_cab' => $cabecera->id,
+                    'item' => $item,
+                    'id_repuestos' => $producto['id_repuesto'],
+                    'cantidad' => $cantidad,
+                    'pu' => $costo,
+                    'subtotal' => $cantidad * $costo,
+                    'costos' => $fleteUnitario,
+                    'costos_descripcion' => $detalleCostos,
+                    'precio_sugerido' => $precioVentaIva,
+                    'id_local' => $idLocal,
+                    'activo' => 1,
+                    'usuarios_id' => Auth::user()->id,
+                ]);
+
+
+                
+                if ($repuesto) {
+                    $repuesto->precio_compra = $costo;
+                    $repuesto->precio_venta = $precioVentaIva;
+                    $repuesto->pu_neto = round($precioVentaIva / 1.19);
+
+                    if (\App\Services\StockPorLocalService::habilitado()) {
+                        app(\App\Services\StockPorLocalService::class)->mover($repuesto->id, $idLocal, (int) $cantidad, ['tipo' => 'COMPRA', 'referencia_tipo' => 'compras_cab', 'referencia_id' => $cabecera->id]);
+                    } else {
+                    if ($idLocal == 1) {
+                        $repuesto->local_id = $idLocal;
+                        $repuesto->ubicacion = $repuesto->ubicacion ?: 'Bodega';
+                        $repuesto->stock_actual += $cantidad;
+                        $repuesto->fecha_actualizacion_stock = Carbon::today()->toDateString();
+                    } elseif ($idLocal == 3) {
+                        $repuesto->local_id_dos = $idLocal;
+                        $repuesto->ubicacion_dos = $repuesto->ubicacion_dos ?: 'Tienda - p1 - 0 - b0 - p0';
+                        $repuesto->stock_actual_dos += $cantidad;
+                        $repuesto->fecha_actualizacion_stock_dos = Carbon::today()->toDateString();
+                    } elseif ($idLocal == 4) {
+                        $repuesto->local_id_tres = $idLocal;
+                        $repuesto->ubicacion_tres = $repuesto->ubicacion_tres ?: 'CM - p1 - 0 - b0 - p0';
+                        $repuesto->stock_actual_tres += $cantidad;
+                        $repuesto->fecha_actualizacion_stock_tres = Carbon::today()->toDateString();
+                    } else {
+                        throw new \Exception('Local no configurado para stock: '.$idLocal);
+                    }
+
+                    }
+                    $repuesto->fecha_reposicion = Carbon::today()->toDateString();
+                    $repuesto->usuarios_id = Auth::user()->id;
+                    $repuesto->usuario_id_modifica = null;
+                    $repuesto->id_responsable = 0;
+                    $repuesto->id_responsable_dos = 0;
+                    $repuesto->id_responsable_tres = 0;
+
+                    $repuesto->save();
+
+                    $r = new repuestocontrolador();
+                    $r->actualiza_saldos('I', $repuesto->id, $idLocal, $cantidad);
+
+                    $vc = new ventas_controlador();
+                    $vc->revisar_stock_minimo($repuesto->id);
+                }
+
+                $guardados++;
+                $item++;
+            }
+
+            $subtotalGuardado = compras_det::where('id_factura_cab', $cabecera->id)
+                ->where('activo', 1)
+                ->sum('subtotal');
+
+            $ivaGuardado = round($subtotalGuardado * 0.19);
+            $totalGuardado = $subtotalGuardado + $ivaGuardado;
+
+            $cabecera->factura_subtotal = $subtotalGuardado;
+            $cabecera->factura_iva = $ivaGuardado;
+            $cabecera->factura_total = $totalGuardado;
+            $cabecera->save();
+
+            \DB::commit();
+
+            return response()->json([
+                'estado' => 'OK',
+                'mensaje' => 'Importación confirmada correctamente. Guardados: '.$guardados.'. Omitidos: '.$omitidos,
+                'id_compras_cab' => $cabecera->id,
+                'subtotal_guardado' => $subtotalGuardado,
+                'iva_guardado' => $ivaGuardado,
+                'total_guardado' => $totalGuardado,
+            ]);
+
+        } catch (\Exception $e) {
+            \DB::rollBack();
+
+            return response()->json([
+                'estado' => 'ERROR',
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+            ], 500);
+        }
+    }
+    // public function confirmarImportacionXml(Request $request)
+    // {
+    //     $request->validate([
+    //         'id_proveedor' => 'required|integer',
+    //         'numero_factura' => 'required',
+    //         'fecha_factura' => 'required|date',
+    //         'productos' => 'required|array',
+    //     ]);
+
+    //     try {
+    //         $productosProcesados = [];
+    //         $existentes = [];
+    //         $nuevos = [];
+
+    //         $totalCantidad = 0;
+    //         $totalCosto = 0;
+    //         $totalFlete = 0;
+    //         $totalCostoConFlete = 0;
+    //         $totalPrecioVenta = 0;
+
+    //         foreach ($request->productos as $producto) {
+    //             $cantidad = (float) ($producto['cantidad'] ?? 0);
+    //             $costo = (float) ($producto['costo'] ?? 0);
+    //             $fleteUnitario = (float) ($producto['flete_unitario'] ?? 0);
+    //             $fleteTotal = (float) ($producto['flete_total'] ?? 0);
+    //             $costoConFlete = (float) ($producto['costo_con_flete'] ?? 0);
+    //             $precioVenta = (float) ($producto['precio_venta'] ?? 0);
+
+    //             $subtotal = $cantidad * $costo;
+    //             $totalLineaConFlete = $cantidad * $costoConFlete;
+
+    //             $item = [
+    //                 'codigo' => $producto['codigo'] ?? '',
+    //                 'estado' => $producto['estado'] ?? '',
+    //                 'id_repuesto' => $producto['id_repuesto'] ?? null,
+    //                 'nombre' => $producto['nombre'] ?? '',
+    //                 'cantidad' => $cantidad,
+    //                 'costo' => $costo,
+    //                 'subtotal' => $subtotal,
+    //                 'flete_unitario' => $fleteUnitario,
+    //                 'flete_total' => $fleteTotal,
+    //                 'costo_con_flete' => $costoConFlete,
+    //                 'total_linea_con_flete' => $totalLineaConFlete,
+    //                 'precio_venta' => $precioVenta,
+    //                 'accion' => (($producto['estado'] ?? '') === 'EXISTENTE' && !empty($producto['id_repuesto']))
+    //                     ? 'Se podría guardar en compras_det y actualizar stock/precio'
+    //                     : 'Pendiente: debe crear o asociar repuesto',
+    //             ];
+
+    //             $productosProcesados[] = $item;
+
+    //             if ($item['estado'] === 'EXISTENTE' && !empty($item['id_repuesto'])) {
+    //                 $existentes[] = $item;
+    //             } else {
+    //                 $nuevos[] = $item;
+    //             }
+
+    //             $totalCantidad += $cantidad;
+    //             $totalCosto += $subtotal;
+    //             $totalFlete += $fleteTotal;
+    //             $totalCostoConFlete += $totalLineaConFlete;
+    //             $totalPrecioVenta += $precioVenta;
+    //         }
+
+    //         return response()->json([
+    //             'estado' => 'OK',
+    //             'modo' => 'SIMULACION',
+    //             'mensaje' => 'Simulación realizada correctamente. No se guardó información en la base de datos.',
+
+    //             'factura' => [
+    //                 'id_proveedor' => $request->id_proveedor,
+    //                 'numero_factura' => $request->numero_factura,
+    //                 'fecha_factura' => $request->fecha_factura,
+    //                 'fecha_vencimiento' => $request->fecha_vencimiento,
+    //                 'factura_subtotal' => $request->factura_subtotal ?? 0,
+    //                 'factura_iva' => $request->factura_iva ?? 0,
+    //                 'factura_total' => $request->factura_total ?? 0,
+    //                 'factura_productos' => $request->factura_productos ?? 0,
+    //                 'factura_flete' => $request->factura_flete ?? 0,
+    //                 'porcentaje_utilidad' => $request->porcentaje_utilidad ?? 0,
+    //             ],
+
+    //             'resumen' => [
+    //                 'total_productos' => count($productosProcesados),
+    //                 'cantidad_existentes' => count($existentes),
+    //                 'cantidad_nuevos' => count($nuevos),
+    //                 'total_unidades' => $totalCantidad,
+    //                 'total_costo' => round($totalCosto),
+    //                 'total_flete' => round($totalFlete),
+    //                 'total_costo_con_flete' => round($totalCostoConFlete),
+    //                 'total_precio_venta_sugerido' => round($totalPrecioVenta),
+    //             ],
+
+    //             'existentes' => $existentes,
+    //             'nuevos' => $nuevos,
+    //             'productos' => $productosProcesados,
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         return response()->json([
+    //             'estado' => 'ERROR',
+    //             'mensaje' => $e->getMessage(),
+    //             'linea' => $e->getLine(),
+    //         ], 500);
+    //     }
+    // }
 }

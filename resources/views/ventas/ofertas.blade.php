@@ -156,6 +156,7 @@ function espere(mensaje)
          `);
          $('#fecha_inicial_oferta').val(resp.desde);
          $('#fecha_final_oferta').val(resp.hasta);
+         $('#local_oferta_edit').val(resp.local);
         },
         error: function(error){
           console.log(error.responseText);
@@ -360,10 +361,36 @@ function espere(mensaje)
       let id_oferta = $('#id_oferta').val();
       let desde = $('#fecha_inicial_oferta').val();
       let hasta = $('#fecha_final_oferta').val();
+      let local = $('#local_oferta_edit').val();
+
+       if(desde === '' ){
+            Vue.swal({
+                icon:'error',
+                text:'Debe ingresar una fecha inicial'
+            });
+            return false;
+        }
+
+        if(hasta === '' ){
+            Vue.swal({
+                icon:'error',
+                text:'Debe ingresar una fecha final'
+            });
+            return false;
+        }
+
+        if(local === '' ){
+            Vue.swal({
+                icon:'error',
+                text:'Debe seleccionar un local'
+            });
+            return false;
+        }
       let url = '/ventas/confirmar_edicion_oferta';
       let params = {
         'desde': desde,
         'hasta': hasta,
+        'local': local,
         'id_oferta': id_oferta
       }
 
@@ -843,6 +870,18 @@ function espere(mensaje)
                 <input type="date" name="hasta" id="hasta" class="form-control">
               </div>
             </div>
+            <div class="row form-group">
+              <div class="col-sm-12">
+                <select name="local_oferta" id="local_oferta" class="form-control">
+                  <option value="1">Solo Local</option>
+                  <option value="2">Solo Web</option>
+                  <option value="4">Solo Totem</option>
+                  <option value="3">Local + Web</option>
+                  <option value="5">Local + Totem</option>
+                  <option value="6">Web + Tótem</option>
+                </select>
+              </div>
+            </div>
             <div class="d-flex justify-content-between">
               <button class="btn btn-danger btn-sm" id="btn_ofertar" onclick="ofertar_repuesto()" disabled>Ofertar </button>
               <button class="btn btn-sm btn-danger" onclick="ocultar_resultado()">Ocultar</button>
@@ -916,7 +955,19 @@ function espere(mensaje)
                 </div>
              </div> 
         </div>
-        
+        <h3 class="text-center my-3">Seleccione local</h3>
+        <div class="row">
+          <div class="col-sm-12">
+            <select name="local_oferta_edit" id="local_oferta_edit" class="form-control">
+              <option value="1">Solo Local</option>
+              <option value="2">Solo Web</option>
+              <option value="4">Solo Totem</option>
+              <option value="3">Local + Web</option>
+              <option value="5">Local + Totem</option>
+              <option value="6">Web + Tótem</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal">Cerrar</button>
@@ -980,11 +1031,15 @@ function espere(mensaje)
             </tr>
             <tr>
               <td>Local</td>
-              <td><select name="local" id="local" class="form-control">
-                <option value="1">Solo Local</option>
-                <option value="2">Solo Web</option>
-                <option value="3">Local + Web</option>
-              </select>
+              <td>
+                <select name="local" id="local" class="form-control">
+                  <option value="1">Solo Local</option>
+                  <option value="2">Solo Web</option>
+                  <option value="4">Solo Totem</option>
+                  <option value="3">Local + Web</option>
+                  <option value="5">Local + Totem</option>
+                  <option value="6">Web + Tótem</option>
+                </select>
             </td>
             </tr>
           </tbody>

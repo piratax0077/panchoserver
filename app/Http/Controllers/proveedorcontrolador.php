@@ -111,7 +111,7 @@ class proveedorcontrolador extends Controller
       
          foreach($rep as $r){
                     
-                    $stock = intval($r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres);
+                    $stock = intval(\App\Services\StockPorLocalService::total($r));
                     if($r->stock_minimo >= $stock) array_push($repuestos, $r);
 
                 }
@@ -134,7 +134,7 @@ class proveedorcontrolador extends Controller
             if($estado === '0'){
                 $reps = repuesto::select('repuestos.*','stock_minimo.fecha_emision')
                 ->where('repuestos.activo',1)
-                ->where('repuestos.estado',NULL)
+                ->where('repuestos.estado','')
                 ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
                 ->whereBetween('stock_minimo.fecha_emision',[$fecha_inicio,$fecha_fin])
                 ->join('stock_minimo','stock_minimo.id_repuesto','repuestos.id')
@@ -143,14 +143,10 @@ class proveedorcontrolador extends Controller
                 ->get();
                 $repuestos = [];
                 foreach($reps as $r){
-
                     // formateamos la fecha de emision
                     $r->fecha_emision = Carbon::parse($r->fecha_emision)->format('d-m-Y');
-                  
                     $repuesto = repuesto::find($r->id);
-                    
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
-                 
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
                        array_push($repuestos, $r);
@@ -173,7 +169,7 @@ class proveedorcontrolador extends Controller
                   
                     $repuesto = repuesto::find($r->id);
                     
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
                  
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
@@ -198,7 +194,7 @@ class proveedorcontrolador extends Controller
                   
                     $repuesto = repuesto::find($r->id);
                     
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
                  
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
@@ -206,14 +202,13 @@ class proveedorcontrolador extends Controller
                     } 
                 }
             }
-
             
             $b = [];
 
             foreach($repuestos as $r){
                 $r->id_repuesto = $r->id;
                 $r->fecha_emision = Carbon::parse($r->fecha_emision)->format('d-m-Y');
-                $stock_total = intval($r->stock_actual) + intval($r->stock_actual_dos) + intval($r->stock_actual_tres);
+                $stock_total = \App\Services\StockPorLocalService::total($r);
                  
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($r->stock_minimo >= $stock_total){
@@ -247,7 +242,7 @@ class proveedorcontrolador extends Controller
         
            foreach($rep as $r){
                       
-                      $stock = intval($r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres);
+                      $stock = intval(\App\Services\StockPorLocalService::total($r));
                       if($r->stock_minimo >= $stock) array_push($repuestos, $r);
   
                   }
@@ -382,9 +377,41 @@ class proveedorcontrolador extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function edit($id)
+    public function edit(Request $req)
     {
         //
+        try {
+            //code...
+            $id_proveedor = $req->id_proveedor;
+            $proveedor = proveedor::find($id_proveedor);
+            if($proveedor){
+                $proveedor->empresa_codigo = $req->empresa_codigo ? $req->empresa_codigo : $proveedor->empresa_codigo;
+                $proveedor->empresa_nombre = $req->empresa_nombre;
+                $proveedor->empresa_nombre_corto = $req->empresa_nombre_corto;
+                $proveedor->empresa_direccion = $req->empresa_direccion;
+                $proveedor->empresa_web = $req->empresa_web;
+                $proveedor->empresa_telefono = $req->empresa_telefono;
+                $proveedor->empresa_correo = $req->empresa_correo;
+                $proveedor->vendedor_nombres = $req->vendedor_nombres;
+                $proveedor->vendedor_correo = $req->vendedor_correo;
+                $proveedor->vendedor_telefono = $req->vendedor_telefono;
+    
+                $proveedor->es_transportista = ($req->empresa_transportista=="on") ? 1 : 0 ;
+              
+                $proveedor->save();
+ 
+                $proveedores=$this->dameproveedores();
+                
+                // return redirect back
+                return view('manten.proveedor',compact('proveedores'))->with('msgGuardado','Proveedor Actualizado.');
+            }else{
+                return view('manten.proveedor',compact('proveedores'))->with('msgGuardado','Proveedor no encontrado.');
+            }
+        } catch (\Exception $th) {
+            //throw $th;
+            return redirect()->route('proveedor.index')->with('msgGuardado','Error al actualizar el proveedor.');
+        }
+      
     }
 
     /**

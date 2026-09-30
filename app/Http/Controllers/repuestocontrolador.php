@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\File; //lo agregué
 use Carbon\Carbon; // para tratamiento de fechas
 use App\repuesto;
 use App\descuento;
+use App\clonacion_fabs;
+use App\clonacion_similares;
 use App\oferta_pagina_web;
 use App\saldo;
 use App\familia;
@@ -17,6 +19,7 @@ use App\boleta_detalle;
 use App\traspaso_mercaderia_detalle;
 use App\vale_mercaderia;
 use App\vale_mercaderia_detalle;
+use App\devolucion_mercaderia;
 use App\permissions_detail;
 use App\compras_det;
 use App\boleta;
@@ -35,14 +38,20 @@ use App\oem;
 use App\fabricante;
 use App\traspaso_mercaderia;
 use App\motorPartida;
+use App\nota_de_credito;
+use App\nota_de_credito_detalle;
 use App\clonacion_oems;
-use App\clonacion_fabs;
-use App\clonacion_similares;
+use App\clonacion_rv;
 use App\stock_minimo;
+use App\StockMovimiento;
 use App\detalle_pedido;
 use App\User;
+use App\Services\StockService;
 use App\Exports\Repuestos_actualizadosExport;
+use App\Exports\RepuestosStockMinimo;
 use Maatwebsite\Excel\Facades\Excel;
+use Mail;
+use App\Mail\RepuestosStockMinimoMail;
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -64,6 +73,20 @@ class repuestocontrolador extends Controller
     private $proveedores;
     private $similares;
 
+    // Guarda la familia de un repuesto desde el armado de kit
+    public function guardar_familia_kit(Request $request)
+    {
+        try {
+            $repuesto = repuesto::findOrFail($request->id_repuesto);
+            $familia = familia::findOrFail($request->id_familia);
+            $repuesto->id_familia = $familia->id;
+            $repuesto->save();
+            return response()->json(['estado' => 'OK', 'mensaje' => 'Familia actualizada']);
+        } catch (\Exception $e) {
+            return response()->json(['estado' => 'ERROR', 'mensaje' => $e->getMessage()], 500);
+        }
+    }
+
     public function dame_repuesto_x_cod_int($codint){
         $hay=repuesto::where('codigo_interno',$codint)->first();
         if(is_null($hay)){ //No hay
@@ -75,11 +98,12 @@ class repuestocontrolador extends Controller
         return json_encode($estado);
     }
 
-    public function dame_repuesto_clonar_oem($codint){
+     public function dame_repuesto_clonar_oem($codint){
         try {
             $repuesto = repuesto::where('codigo_interno',$codint)->first();
+          
             if($repuesto){
-                return $this->dame_repuesto_x_id_html_carrito($repuesto->id);
+                return [$this->dame_repuesto_x_id_html_carrito($repuesto->id), $repuesto->id];
             }else{
                 return 'error';
             }
@@ -109,6 +133,23 @@ class repuestocontrolador extends Controller
         }
     }
 
+    public function dame_aplicaciones_clonar($codigo_interno){
+        try {
+            //code...
+            $repuesto = repuesto::where('codigo_interno',$codigo_interno)->first();
+            if($repuesto){
+                $aplicaciones = $this->dame_similares($repuesto->id);
+                return $aplicaciones;
+            }else{
+                return 'error';
+            }
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
+        
+    }
+
     public function dame_repuesto_x_id_html_carrito($idrep){
         try {
             //code...
@@ -127,11 +168,12 @@ class repuestocontrolador extends Controller
                         ->where('id_repuestos',$idrep)
                         ->orderBy('codigo_oem')
                         ->get();
+            $aplicaciones = $this->damesimilares($idrep);
             if($fotos->count() > 0){
-                $v = view('fragm.repuesto_modificar_por_familia_carrito',['repuesto' => $repuesto[0],'fotos' => $fotos,'fabs' => $fabs,'oems' => $oems]);
+                $v = view('fragm.repuesto_modificar_por_familia_carrito',['repuesto' => $repuesto[0],'fotos' => $fotos,'fabs' => $fabs,'oems' => $oems,'aplicaciones' => $aplicaciones]);
                 return $v;
             }else{
-                $v = view('fragm.repuesto_modificar_por_familia_carrito',['repuesto' => $repuesto[0],'fabs' => $fabs,'oems' => $oems]);
+                $v = view('fragm.repuesto_modificar_por_familia_carrito',['repuesto' => $repuesto[0],'fabs' => $fabs,'oems' => $oems,'aplicaciones' => $aplicaciones]);
                 return $v;
             }
             
@@ -220,22 +262,118 @@ class repuestocontrolador extends Controller
     }
 
     public function guardar_nuevo_stock_minimo($id, $nuevo_stock_minimo,$estado){
-        
+
         try {
+    
             $repuesto = repuesto::find($id);
+    
             $repuesto->stock_minimo = $nuevo_stock_minimo;
+    
             if($estado == "Aprobado"){
                 $repuesto->estado = null;
             }else{
                 $repuesto->estado = $estado;
             }
-           
+    
+            $repuesto->id_modifica_estado = Auth::user()->id;
+            $repuesto->fecha_modificacion_estado = Carbon::now()->toDateTimeString();
             $repuesto->save();
-            return ['estado' => 'OK','mensaje' => 'Stock mínimo actualizado'];
+    
+    
+            $repuestos = repuesto::select(
+                    'repuestos.*',
+                    'familias.nombrefamilia',
+                    'marcarepuestos.marcarepuesto',
+                    'proveedores.empresa_nombre_corto'
+                )
+                ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+                ->join('familias','familias.id','repuestos.id_familia')
+                ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+                ->where('repuestos.estado','Sin stock en proveedor')
+                ->get();
+    
+    
+            $repuestos_sin_stock_proveedor = [];
+    
+            foreach($repuestos as $r){
+    
+                if(
+                    \App\Services\StockPorLocalService::total($r)
+                    < $r->stock_minimo
+                ){
+                    $repuestos_sin_stock_proveedor[] = $r;
+                }
+            }
+    
+    
+            // ✅ verificar si sigue en lista
+            $sigue = false;
+    
+            if(
+                $repuesto->estado == 'Sin stock en proveedor' &&
+                (\App\Services\StockPorLocalService::total($repuesto))
+                < $repuesto->stock_minimo
+            ){
+                $sigue = true;
+            }
+    
+    
+            $v = view(
+                'fragm.tabla_rep_sin_prov',
+                ['repuestos' => $repuestos_sin_stock_proveedor]
+            )->render();
+    
+    
+            return [
+                'estado' => 'OK',
+                'mensaje' => 'Stock mínimo actualizado',
+    
+                // vista blade
+                'v' => $v,
+    
+                // datos extra
+                'id' => $repuesto->id,
+                'nuevo_estado' => $repuesto->estado,
+                'stock_minimo' => $repuesto->stock_minimo,
+                'sigue' => $sigue,
+                'cantidad_repuestos' => count($repuestos_sin_stock_proveedor) 
+            ];
+    
         } catch (\Exception $e) {
-            return ['estado' => 'ERROR','mensaje' => $e->getMessage()];
+    
+            return [
+                'estado' => 'ERROR',
+                'mensaje' => $e->getMessage()
+            ];
+    
         }
-        
+    
+    }
+
+    public function cambiar_estado(Request $request, $id){
+        try {
+            $repuesto = repuesto::find($id);
+            $nuevo_estado = $request->input('estado');
+
+            if(!$repuesto){
+                return response()->json(['estado' => 'ERROR','mensaje' => 'Repuesto no encontrado'], 404);
+            }
+
+            if(empty($nuevo_estado)){
+                return response()->json(['estado' => 'ERROR','mensaje' => 'Estado vacío'], 400);
+            }
+
+            if($nuevo_estado == "Aprobado"){
+                $repuesto->estado = null;
+            }else{
+                $repuesto->estado = $nuevo_estado;
+            }
+
+            $repuesto->save();
+            return response()->json(['estado' => 'OK','mensaje' => 'Estado actualizado correctamente'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['estado' => 'ERROR','mensaje' => $e->getMessage()], 500);
+        }
     }
 
     private function damesimilares($id_repuesto)
@@ -345,46 +483,52 @@ class repuestocontrolador extends Controller
     }
     public function buscarRepuestoInactivos($dato){
         try {
-            $op = substr($dato, 0, 1);
-            $desc = substr(trim($dato), 1);
-            $de = array(" de ", " DE ", " dE ", " De ");
-            $descripcion = str_replace($de, " ", $desc);
-            $descripcion= str_replace("  "," ",$descripcion);
-            $descripcion=str_replace("_&_","/",$descripcion);
-            $descripcion_original=$descripcion;
-            $descripcion_sin_guiones= str_replace("-","",$descripcion);
-            $buscado_original=trim($descripcion_original);
-            $buscado_sin_guiones=$descripcion_sin_guiones;
-            $terminos=explode(" ",$descripcion);
-    
-            $quien_busca=Auth::user()->name;
+            // La vista antepone un carácter de opción (actualmente "0").
+            $busqueda = trim(substr($dato, 1));
+            $busqueda = str_replace('_&_', '/', $busqueda);
+            $busqueda = preg_replace('/\s+/', ' ', $busqueda);
 
-            // buscar los repuestos con id_familia = 312 y que la descripcion contenga el buscado original
-            $repuestos = repuesto::where('id_familia','<>',312)
-                                    ->where('descripcion','like','%'.$buscado_original.'%')
-                                    ->where('activo',0)
-                                    ->orderBy('id','desc')
-                                    ->get();
-            // si no encuentra repuestos con el buscado original, buscar con el buscado sin guiones
-            if(count($repuestos) == 0){
-                $repuestos = repuesto::where('id_familia','<>',312)
-                                    ->where('descripcion','like','%'.$buscado_sin_guiones.'%')
-                                    ->where('activo',0)
-                                    ->orderBy('id','desc')
-                                    ->get();
+            if($busqueda === ''){
+                return response()->json([
+                    'mensaje' => 'error',
+                    'detalle' => 'Debe ingresar un criterio de búsqueda.'
+                ], 422);
             }
 
-            $desde = 'i';
-            
-            $v = view('fragm.repuestos_xpress',compact('repuestos','quien_busca','desde'))->render();
-            return $v;
-        } catch (\Exception $e) {
-            //throw $th;
-            return $e->getMessage();
-        }
-        
-    }
+            $sinGuiones = str_replace('-', '', $busqueda);
+            $quien_busca = Auth::user()->name;
 
+            $repuestos = repuesto::where('activo', 0)
+                ->where(function($consulta) use ($busqueda, $sinGuiones){
+                    $consulta->where('codigo_interno', 'like', '%'.$busqueda.'%')
+                        ->orWhere('cod_repuesto_proveedor', 'like', '%'.$busqueda.'%')
+                        ->orWhere('descripcion', 'like', '%'.$busqueda.'%');
+
+                    if($sinGuiones !== $busqueda){
+                        $consulta->orWhereRaw("REPLACE(codigo_interno, '-', '') LIKE ?", ['%'.$sinGuiones.'%'])
+                            ->orWhereRaw("REPLACE(cod_repuesto_proveedor, '-', '') LIKE ?", ['%'.$sinGuiones.'%'])
+                            ->orWhereRaw("REPLACE(descripcion, '-', '') LIKE ?", ['%'.$sinGuiones.'%']);
+                    }
+                })
+                ->orderBy('id', 'desc')
+                ->limit(200)
+                ->get();
+
+            $desde = 'i';
+
+            return view('fragm.repuestos_xpress', compact(
+                'repuestos',
+                'quien_busca',
+                'desde'
+            ))->render();
+        } catch (\Exception $e) {
+            \Log::error('Error buscando repuestos inactivos: '.$e->getMessage());
+            return response()->json([
+                'mensaje' => 'error',
+                'detalle' => 'No fue posible buscar los repuestos inactivos.'
+            ], 500);
+        }
+    }
     public function activarRepuesto($codigo_interno){
         try {
             $repuesto = repuesto::where('codigo_interno',$codigo_interno)->first();
@@ -676,7 +820,6 @@ class repuestocontrolador extends Controller
             }
             
             $rep=repuesto::find($idrep);
-            $rep->precio_antiguo = $rep->precio_venta;
             $rep->precio_venta=$nuevo_precio;
             $rep->fecha_actualiza_precio = Carbon::today()->toDateString();
             $rep->save();
@@ -992,6 +1135,68 @@ public function similares(Request $request)
         
     }
 
+
+    /**
+     * Búsqueda AJAX para Select2 en el informe de rentabilidad.
+     * Permite buscar por código interno, código de proveedor o descripción.
+     */
+    public function buscar_repuestos_select2(Request $request)
+    {
+        try {
+            $termino = trim((string) $request->get('q', ''));
+
+            $query = repuesto::select(
+                    'repuestos.id',
+                    'repuestos.codigo_interno',
+                    'repuestos.cod_repuesto_proveedor',
+                    'repuestos.descripcion'
+                )
+                ->where('repuestos.activo', 1);
+
+            if ($termino !== '') {
+                $query->where(function ($q) use ($termino) {
+                    $q->where('repuestos.codigo_interno', 'LIKE', '%' . $termino . '%')
+                      ->orWhere('repuestos.cod_repuesto_proveedor', 'LIKE', '%' . $termino . '%')
+                      ->orWhere('repuestos.descripcion', 'LIKE', '%' . $termino . '%');
+                });
+            }
+
+            $repuestos = $query
+                ->orderBy('repuestos.codigo_interno')
+                ->limit(30)
+                ->get();
+
+            $resultados = $repuestos->map(function ($repuesto) {
+                $codigoProveedor = trim((string) $repuesto->cod_repuesto_proveedor);
+
+                $texto = trim(
+                    $repuesto->codigo_interno . ' - ' .
+                    $repuesto->descripcion .
+                    ($codigoProveedor !== ''
+                        ? ' | Cód. proveedor: ' . $codigoProveedor
+                        : '')
+                );
+
+                return [
+                    'id' => $repuesto->id,
+                    'text' => $texto,
+                    'codigo_interno' => $repuesto->codigo_interno,
+                    'descripcion' => $repuesto->descripcion,
+                    'codigo_proveedor' => $codigoProveedor,
+                ];
+            })->values();
+
+            return response()->json([
+                'results' => $resultados
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'results' => [],
+                'mensaje' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function dameTodoRepuestos(){
         $repuestos = repuesto::orderBy('id')->limit(90)->get();;
         return $repuestos;
@@ -1014,16 +1219,75 @@ public function similares(Request $request)
         return $v;
     }
 
-    public function repuestos_por_familia($idfamilia){
+     public function repuestos_por_familia($idfamilia){
         try {
-            $repuestos = repuesto::select('repuestos.codigo_interno','repuestos.descripcion','repuestos.medidas','repuestos.id','familias.nombrefamilia','marcarepuestos.marcarepuesto')
+            $repuestos = repuesto::select('repuestos.codigo_interno','repuestos.descripcion','repuestos.medidas','repuestos.id','familias.nombrefamilia','marcarepuestos.marcarepuesto','repuestos.stock_actual','repuestos.stock_actual_dos','repuestos.stock_actual_tres')
                                 ->where('repuestos.id_familia',$idfamilia)
                                 ->where('repuestos.activo',1)
                                 ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
                                 ->join('familias','repuestos.id_familia','familias.id')
                                 ->get();
-        $v=view('fragm.repuestos_por_familia',compact('repuestos'));
-        return $v;
+            
+            // Agregar campos calculados a cada repuesto ANTES de ordenar
+            foreach($repuestos as $repuesto) {
+                // Calcular stock disponible
+                $stock_actual = $repuesto->stock_actual ?? 0;
+                $stock_actual_dos = $repuesto->stock_actual_dos ?? 0;
+                $stock_actual_tres = $repuesto->stock_actual_tres ?? 0;
+                $repuesto->stock_disponible = \App\Services\StockPorLocalService::total($repuesto);
+                
+                // Ordenar las medidas del repuesto por valor numérico (mayor a menor)
+                if ($repuesto->medidas) {
+                    $porciones = preg_split('/[:,]/', $repuesto->medidas);
+                    
+                    // Ordenar las porciones por el valor numérico que contienen (de mayor a menor)
+                    usort($porciones, function($a, $b) {
+                        // Extraer números de cada porción
+                        preg_match_all('/\d+(?:[.,]\d+)?/', $a, $matches_a);
+                        preg_match_all('/\d+(?:[.,]\d+)?/', $b, $matches_b);
+                        
+                        // Obtener el valor máximo de cada porción
+                        $max_a = 0;
+                        if (!empty($matches_a[0])) {
+                            $numeros_a = array_map(function($num) {
+                                return (float) str_replace(',', '.', $num);
+                            }, $matches_a[0]);
+                            $max_a = max($numeros_a);
+                        }
+                        
+                        $max_b = 0;
+                        if (!empty($matches_b[0])) {
+                            $numeros_b = array_map(function($num) {
+                                return (float) str_replace(',', '.', $num);
+                            }, $matches_b[0]);
+                            $max_b = max($numeros_b);
+                        }
+                        
+                        // Ordenar de mayor a menor
+                        return $max_b <=> $max_a;
+                    });
+                    
+                    // Reconstruir el string de medidas ordenadas
+                    $repuesto->medidas = implode(',', $porciones);
+                }
+                
+                // Extraer el valor numérico máximo de las medidas
+                preg_match_all('/\d+(?:[.,]\d+)?/', $repuesto->medidas, $matches);
+                if (!empty($matches[0])) {
+                    $numeros = array_map(function($num) {
+                        return (float) str_replace(',', '.', $num);
+                    }, $matches[0]);
+                    $repuesto->valor_orden = max($numeros);
+                } else {
+                    $repuesto->valor_orden = 0;
+                }
+            }
+            
+            // Ordenar los repuestos por el valor numérico más grande (de menor a mayor)
+            $repuestos = $repuestos->sortBy('valor_orden')->values();
+
+            $v=view('fragm.repuestos_por_familia',compact('repuestos'))->render();
+            return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
         }
@@ -1351,7 +1615,7 @@ public function similares(Request $request)
      */
 
 
-    public function dame_datos_repuesto($id)
+     public function dame_datos_repuesto($id)
     {
 
 
@@ -1360,7 +1624,19 @@ public function similares(Request $request)
         //AJAX en repuestos.blade.php pueda recibirlo y
         //mostrarlo.
 
-        $estados = ['Pedido', 'Sin stock en proveedor', 'Rechazado', 'En curso','Aprobado','Inactivo'];
+        $estados = [
+            'Pedido a otro proveedor', 
+            'Sin stock en proveedor',
+            'Con Stock', 
+            'Rechazado', 
+            'En transito',
+            'Aprobado',
+            'Cargado en carro',
+            'Inactivo',
+            'Pedido',
+            'Pendiente',
+            'En bodega, desembalando'
+        ];
         $view=view('fragm.repuesto_datos',compact('repuesto','estados'))->render();
         return $view;
     }
@@ -1477,66 +1753,132 @@ public function similares(Request $request)
         
     }
 
-    public function dame_aplicaciones_clonar($codigo_interno){
-        try {
-            //code...
-            $repuesto = repuesto::where('codigo_interno',$codigo_interno)->first();
-            if($repuesto){
-                $aplicaciones = $this->dame_similares($repuesto->id);
-                return $aplicaciones;
-            }else{
-                return 'error';
-            }
-        } catch (\Exception $e) {
-            //throw $th;
-            return $e->getMessage();
-        }
-        
-    }
-
     public function clonar_oems($codigo_origen, $codigo_destino){
         try {
             $repuesto_origen = repuesto::where('codigo_interno',$codigo_origen)->first();
-        $repuesto_destino = repuesto::where('codigo_interno',$codigo_destino)->first();
+            $repuesto_destino = repuesto::where('codigo_interno',$codigo_destino)->first();
 
-        $existe = $this->revisar_clonacion($repuesto_origen->id,$repuesto_destino->id,1);
-       
-        if(!$existe){
-            if($repuesto_origen && $repuesto_destino){
-                $oems = oem::where('id_repuestos',$repuesto_origen->id)->get();
-                foreach($oems as $oem){
-                        // si el oem no existe lo creamos
-                        if(!oem::where('id_repuestos',$repuesto_destino->id)->where('codigo_oem',$oem->codigo_oem)->first()){
-                            $oem_nuevo = new oem();
-                            $oem_nuevo->id_repuestos = $repuesto_destino->id;
-                            $oem_nuevo->codigo_oem = $oem->codigo_oem;
-                            $oem_nuevo->save();
-                        }
+            if(!$repuesto_origen || !$repuesto_destino){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen o destino no existe.'], 404);
+            }
+
+            if($repuesto_origen->id === $repuesto_destino->id){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen y destino deben ser diferentes.'], 422);
+            }
+
+            $existe = $this->revisar_clonacion($repuesto_origen->id,$repuesto_destino->id,1);
+        
+            if(!$existe){
+                if($repuesto_origen && $repuesto_destino){
+                    $oems = oem::where('id_repuestos',$repuesto_origen->id)->get();
+                    foreach($oems as $oem){
+                            // si el oem no existe lo creamos
+                            if(!oem::where('id_repuestos',$repuesto_destino->id)->where('codigo_oem',$oem->codigo_oem)->first()){
+                                $oem_nuevo = new oem();
+                                $oem_nuevo->id_repuestos = $repuesto_destino->id;
+                                $oem_nuevo->codigo_oem = $oem->codigo_oem;
+                                $oem_nuevo->save();
+                            }
+                    }
+                    // guardamos la informacion de la cloncacion
+                    $clonacion = new clonacion_oems();
+                    $clonacion->id_repuesto_origen = $repuesto_origen->id;
+                    $clonacion->id_repuesto_destino = $repuesto_destino->id;
+                    $clonacion->fecha_emision = Carbon::today()->toDateString();
+                    $clonacion->save();
+                    return 'ok';
+                }else{
+                    return 'error';
                 }
-                // guardamos la informacion de la cloncacion
-                $clonacion = new clonacion_oems();
-                $clonacion->id_repuesto_origen = $repuesto_origen->id;
-                $clonacion->id_repuesto_destino = $repuesto_destino->id;
-                $clonacion->fecha_emision = Carbon::today()->toDateString();
-                $clonacion->save();
-                return 'ok';
+            
             }else{
                 return 'error';
             }
+            } catch (\Exception $e) {
+                return $e->getMessage();
+            }
         
-        }else{
-            return 'error';
         }
+
+    public function clonar_rv($codigo_origen, $codigo_destino){
+        try {
+            $repuesto_origen  = repuesto::where('codigo_interno', $codigo_origen)->first();
+            $repuesto_destino = repuesto::where('codigo_interno', $codigo_destino)->first();
+
+            $existe = $this->revisar_clonacion($repuesto_origen->id, $repuesto_destino->id, 4);
+
+            if (!$existe) {
+                if ($repuesto_origen && $repuesto_destino) {
+                    $reguladores = regulador_voltaje::where('id_repuesto', $repuesto_origen->id)->get();
+                    foreach ($reguladores as $rv) {
+                        if (!regulador_voltaje::where('id_repuesto', $repuesto_destino->id)
+                                ->where('rectificador', $rv->rectificador)
+                                ->where('alternador', $rv->alternador)
+                                ->first()) {
+                            $rv_nuevo = new regulador_voltaje();
+                            $rv_nuevo->id_repuesto  = $repuesto_destino->id;
+                            $rv_nuevo->rectificador = $rv->rectificador;
+                            $rv_nuevo->alternador   = $rv->alternador;
+                            $rv_nuevo->save();
+                        }
+                    }
+                    // guardamos la información de la clonación
+                    $clonacion = new clonacion_rv();
+                    $clonacion->id_repuesto_origen  = $repuesto_origen->id;
+                    $clonacion->id_repuesto_destino = $repuesto_destino->id;
+                    $clonacion->fecha_emision = Carbon::today()->toDateString();
+                    $clonacion->save();
+
+                    $rv_destino  = regulador_voltaje::where('id_repuesto', $repuesto_destino->id)->get();
+                    $clonaciones = $this->dame_clonaciones_rv();
+                    return ['mensaje' => 'ok', 'reguladores' => $rv_destino, 'clonaciones' => $clonaciones];
+                } else {
+                    return ['mensaje' => 'error'];
+                }
+            } else {
+                return ['mensaje' => 'error'];
+            }
         } catch (\Exception $e) {
             return $e->getMessage();
         }
-        
     }
 
-    public function clonar_fabricantes($cod_origen, $cod_destino){
+    public function resetearDiasPrecioRepuestos(){
+        try {
+            $id_familia_sin_definir = 312;
+            $repuestos = repuesto::select(
+                'repuestos.*',
+                'marcarepuestos.id as idmarca',
+                'marcarepuestos.marcarepuesto',
+                'proveedores.empresa_nombre_corto'
+            )
+            ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
+            ->where('repuestos.activo',1)
+            // ->where('repuestos.estado','')
+            ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+            ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+            ->get();
+         
+            foreach($repuestos as $repuesto){
+                $repuesto->fecha_actualiza_precio = Carbon::today()->toDateString();
+                $repuesto->save();
+            }
+            return 'ok';
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+     public function clonar_fabricantes($cod_origen, $cod_destino){
         try {
             $repuesto_origen = repuesto::where('codigo_interno',$cod_origen)->first();
             $repuesto_destino = repuesto::where('codigo_interno',$cod_destino)->first();
+            if(!$repuesto_origen || !$repuesto_destino){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen o destino no existe.'], 404);
+            }
+            if($repuesto_origen->id === $repuesto_destino->id){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen y destino deben ser diferentes.'], 422);
+            }
             $existe = $this->revisar_clonacion($repuesto_origen->id,$repuesto_destino->id,3);
             if(!$existe){
                 if($repuesto_origen && $repuesto_destino){
@@ -1570,10 +1912,124 @@ public function similares(Request $request)
         }
     }
 
+    public function descargarRepuestosStockMinimo(Request $request){
+        try {
+            $fecha_inicial = $request->get('fecha_inicial_excel', date('Y-m-d'));
+            $fecha_final = $request->get('fecha_final_excel', date('Y-m-d'));
+            $id_proveedor = $request->get('id_proveedor_excel', 0);
+
+            // Subconsulta: un solo registro de stock_minimo por repuesto (ultima fecha del rango)
+            $stockMinimoSub = stock_minimo::select(
+                    'id_repuesto',
+                    \DB::raw('MAX(fecha_emision) as fecha_emision')
+                )
+                ->whereBetween('fecha_emision', [
+                    $fecha_inicial.' 00:00:00',
+                    $fecha_final.' 23:59:59'
+                ])
+                ->groupBy('id_repuesto');
+
+            // Subconsulta: obtener una sola última compra por repuesto
+            $ultimaCompraSub = compras_det::select(
+                    'compras_det.id_repuestos',
+                    'compras_det.cantidad as cantidad_solicitada',
+                    'compras_cab.factura_numero as numero_pedido',
+                    'compras_cab.factura_fecha as fecha_compra',
+                    'compras_cab.factura_id_proveedor'
+                )
+                ->join('compras_cab', 'compras_det.id_factura_cab', '=', 'compras_cab.id')
+                ->whereRaw('compras_det.id = (
+                    SELECT cd2.id
+                    FROM compras_det cd2
+                    JOIN compras_cab cc2 ON cd2.id_factura_cab = cc2.id
+                    WHERE cd2.id_repuestos = compras_det.id_repuestos
+                    ORDER BY cc2.factura_fecha DESC, cd2.id DESC
+                    LIMIT 1
+                )');
+
+            // Construir query para obtener stock mínimo con datos de la última compra
+            $query = repuesto::select(
+                'proveedores.empresa_nombre_corto as proveedor',
+                'sm.fecha_emision',
+                'repuestos.codigo_interno',
+                'repuestos.cod_repuesto_proveedor as codigo_proveedor',
+                'repuestos.descripcion',
+                \DB::raw(\App\Services\StockPorLocalService::totalSql() . ' as stock_actual'),
+                'repuestos.precio_compra',
+                'uc.cantidad_solicitada',
+                'uc.numero_pedido',
+                'uc.fecha_compra'
+            )
+            ->joinSub($stockMinimoSub, 'sm', function($join){
+                $join->on('sm.id_repuesto', '=', 'repuestos.id');
+            })
+            ->leftJoinSub($ultimaCompraSub, 'uc', function($join){
+                $join->on('repuestos.id', '=', 'uc.id_repuestos');
+            })
+            ->leftJoin('proveedores', 'uc.factura_id_proveedor', '=', 'proveedores.id')
+            ->where('repuestos.activo', 1);
+
+            // Filtrar por proveedor si no es "Todos" (0)
+            if($id_proveedor != 0){
+                $query->where('uc.factura_id_proveedor', $id_proveedor);
+            }
+
+            $repuestos = $query->get();
+
+            // Obtener el proveedor para enviar el correo
+            $proveedor = null;
+            if($id_proveedor != 0){
+                $proveedor = proveedor::find($id_proveedor);
+            }
+
+            // Generar el archivo Excel en memoria
+            $nombreArchivo = 'repuestos_stock_minimo_'.date('Ymd_His').'.xlsx';
+            
+            // Generar contenido Excel en memoria usando storage temporal
+            $tempPath = storage_path('app/temp/');
+            if(!is_dir($tempPath)) mkdir($tempPath, 0755, true);
+            
+            $filePath = $tempPath.$nombreArchivo;
+            Excel::store(new RepuestosStockMinimo($repuestos), 'temp/'.$nombreArchivo);
+         
+            // Enviar correo al proveedor si existe
+            if($proveedor && $proveedor->vendedor_correo){
+                try {
+                    $excelContent = file_get_contents($filePath);
+
+                    $correos_cc = array_values(array_filter([
+                        'francisco.rojo.gallardo@gmail.com',
+                        'josefranciscott@gmail.com',
+                    ]));
+
+                    $mail = Mail::to($proveedor->vendedor_correo);
+                    if(!empty($correos_cc)){
+                        $mail->cc($correos_cc);
+                    }
+                    $mail->send(new RepuestosStockMinimoMail($excelContent, $nombreArchivo));
+                } catch (\Exception $e) {
+                    // Log del error pero continuar con la descarga
+                    \Log::error('Error al enviar email de stock mínimo: '.$e->getMessage());
+                }
+            }
+
+            // Retornar descarga del archivo
+            return Excel::download(new RepuestosStockMinimo($repuestos), $nombreArchivo);
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
     public function clonar_aplicaciones($cod_origen, $cod_destino){
         try {
             $repuesto_origen = repuesto::where('codigo_interno',$cod_origen)->first();
             $repuesto_destino = repuesto::where('codigo_interno',$cod_destino)->first();
+            if(!$repuesto_origen || !$repuesto_destino){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen o destino no existe.'], 404);
+            }
+            if($repuesto_origen->id === $repuesto_destino->id){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'El repuesto de origen y destino deben ser diferentes.'], 422);
+            }
             $existe = $this->revisar_clonacion($repuesto_origen->id,$repuesto_destino->id,2);
             if(!$existe){
                 if($repuesto_origen && $repuesto_destino){
@@ -1619,6 +2075,23 @@ public function similares(Request $request)
         return $clonaciones;
     }
 
+    private function dame_clonaciones_rv(){
+        $clonaciones = clonacion_rv::select(
+                            'clonacion_rv.id',
+                            'clonacion_rv.id_repuesto_origen',
+                            'clonacion_rv.id_repuesto_destino',
+                            'clonacion_rv.fecha_emision',
+                            'repuestos.codigo_interno as codigo_origen',
+                            'repuestos.descripcion as descripcion_origen',
+                            'repuestos_2.codigo_interno as codigo_destino',
+                            'repuestos_2.descripcion as descripcion_destino')
+                        ->join('repuestos','clonacion_rv.id_repuesto_origen','repuestos.id')
+                        ->join('repuestos as repuestos_2','clonacion_rv.id_repuesto_destino','repuestos_2.id')
+                        ->orderBy('clonacion_rv.id','DESC')
+                        ->get();
+        return $clonaciones;
+    }
+
     private function dame_clonaciones_fabricantes(){
         $clonaciones = clonacion_fabs::select('clonacion_fabs.id','clonacion_fabs.id_repuesto_origen','clonacion_fabs.id_repuesto_destino','clonacion_fabs.fecha_emision','repuestos.codigo_interno as codigo_origen','repuestos.descripcion as descripcion_origen','repuestos_2.codigo_interno as codigo_destino','repuestos_2.descripcion as descripcion_destino')
                         ->join('repuestos','clonacion_fabs.id_repuesto_origen','repuestos.id')
@@ -1628,7 +2101,7 @@ public function similares(Request $request)
         return $clonaciones;
     }
 
-    private function revisar_clonacion($id_repuesto_origen,$id_repuesto_destino,$op){
+     private function revisar_clonacion($id_repuesto_origen,$id_repuesto_destino,$op){
         if($op == 1){
             $clonacion = clonacion_oems::where('id_repuesto_origen',$id_repuesto_origen)
                                     ->where('id_repuesto_destino',$id_repuesto_destino)
@@ -1647,8 +2120,18 @@ public function similares(Request $request)
             }else{
                 return false;
             }
-        }else{
+        }else if($op == 3){
             $clonacion = clonacion_fabs::where('id_repuesto_origen',$id_repuesto_origen)
+                                    ->where('id_repuesto_destino',$id_repuesto_destino)
+                                    ->first();
+            if($clonacion){
+                return true;
+            }else{
+                return false;
+            }
+        }else{
+            // op == 4: regulador de voltaje
+            $clonacion = clonacion_rv::where('id_repuesto_origen',$id_repuesto_origen)
                                     ->where('id_repuesto_destino',$id_repuesto_destino)
                                     ->first();
             if($clonacion){
@@ -1659,15 +2142,29 @@ public function similares(Request $request)
         }
     }
 
+
     public function dame_fabricantes($id)
     {
 
         $fabs=fabricante::select('codigo_fab','marcarepuesto')
                                     ->where('repuestos_fabricantes.id_repuestos',$id)
                                     ->join('marcarepuestos','repuestos_fabricantes.id_marcarepuestos','marcarepuestos.id')
-                                    ->orderBy('marcarepuesto')
+                                    ->orderBy('codigo_fab')
                                     ->get();
         $v=view('fragm.repuesto_fabs',compact('fabs'))->render();
+        return $v;
+    }
+
+    public function dame_fabricantes_modificar($id_repuesto)
+    {
+
+        $fabs=fabricante::select('repuestos_fabricantes.id','repuestos_fabricantes.codigo_fab','marcarepuestos.marcarepuesto')
+                            ->join('marcarepuestos','repuestos_fabricantes.id_marcarepuestos','marcarepuestos.id')
+                            ->where('repuestos_fabricantes.activo',1)
+                            ->where('repuestos_fabricantes.id_repuestos',$id_repuesto)
+                            ->orderBy('marcarepuestos.marcarepuesto','ASC')
+                            ->get();
+        $v=view('fragm.factuprodu_fabs',compact('fabs'))->render();
         return $v;
     }
 
@@ -1684,19 +2181,6 @@ public function similares(Request $request)
         }else{
             return 'error';
         }
-    }
-
-    public function dame_fabricantes_modificar($id_repuesto)
-    {
-
-        $fabs=fabricante::select('repuestos_fabricantes.id','repuestos_fabricantes.codigo_fab','marcarepuestos.marcarepuesto')
-                            ->join('marcarepuestos','repuestos_fabricantes.id_marcarepuestos','marcarepuestos.id')
-                            ->where('repuestos_fabricantes.activo',1)
-                            ->where('repuestos_fabricantes.id_repuestos',$id_repuesto)
-                            ->orderBy('marcarepuestos.marcarepuesto','ASC')
-                            ->get();
-        $v=view('fragm.factuprodu_fabs',compact('fabs'))->render();
-        return $v;
     }
 
     private function damelocales()
@@ -1806,7 +2290,7 @@ public function similares(Request $request)
                         foreach($ultimas_ventas as $u){
                             $u->fecha_formateada = Carbon::parse($u->created_at)->format("d-m-Y");
                         }
-                        $v = view('inventario.repuestos_buscar_stock',compact('bodegas','repuestos_mas_vendidos','ultimos_repuestos','ultimas_ventas','ultimos_repuestos_vendidos'))->render();
+                        $v = view(\App\Services\StockPorLocalService::habilitado() ? 'inventario.stock_por_local' : 'inventario.repuestos_buscar_stock',compact('bodegas','repuestos_mas_vendidos','ultimos_repuestos','ultimas_ventas','ultimos_repuestos_vendidos'))->render();
                         return $v;
                     }
             }
@@ -1837,7 +2321,7 @@ public function similares(Request $request)
                     $u->fecha_formateada = Carbon::parse($u->created_at)->format("d-m-Y");
                     $u->hora = Carbon::parse($u->created_at)->format("H:i");
                 }
-                $v = view('inventario.repuestos_buscar_stock',compact('bodegas','repuestos_mas_vendidos','ultimos_repuestos','ultimas_ventas','ultimos_repuestos_vendidos'))->render();
+                $v = view(\App\Services\StockPorLocalService::habilitado() ? 'inventario.stock_por_local' : 'inventario.repuestos_buscar_stock',compact('bodegas','repuestos_mas_vendidos','ultimos_repuestos','ultimas_ventas','ultimos_repuestos_vendidos'))->render();
                 return $v;
             } else {
                 return redirect('home');
@@ -1851,6 +2335,7 @@ public function similares(Request $request)
 
     function dameultimosrepuestos(){
         try {
+        
             if(Auth::user()->dame_permisos_inventario()->count() > 0){
                 foreach (Auth::user()->dame_permisos_inventario() as $permiso) {
                     if($permiso->path_ruta == '/ultimos_repuestos'){
@@ -1859,13 +2344,13 @@ public function similares(Request $request)
                                 ->join('users','repuestos.usuarios_id','users.id')
                                 ->orderBy('repuestos.id','desc')->where('repuestos.id_familia','<>',312)->take(24)->get();
                             
-                        foreach($repuestos as $r){
+                        $placeholder = 'https://placehold.co/100x100';
+                foreach($repuestos as $r){
                             $foto = repuestofoto::where('id_repuestos','=',$r->id)->first();
-                            if(isset($foto)){
+                            if(isset($foto) && !empty($foto->urlfoto)){
                                 array_push($fotos,$foto->urlfoto);
                             }else{
-                                $foto=repuestofoto::where('id_repuestos','=',62816)->first();
-                                array_push($fotos,$foto->urlfoto);
+                                array_push($fotos,$placeholder);
                             }
                             
                         }
@@ -1874,21 +2359,24 @@ public function similares(Request $request)
                     }
                 }
             }
+          
             if(Auth::user()->rol->nombrerol !== 'Administrador'){
                 return 0;
             }else{
+   
                 $fotos = [];
                 $repuestos = repuesto::select('repuestos.*','users.name')
                         ->join('users','repuestos.usuarios_id','users.id')
                         ->orderBy('repuestos.id','desc')->where('repuestos.id_familia','<>',312)->take(24)->get();
-                    
+                
+                $placeholder = 'https://placehold.co/100x100';
                 foreach($repuestos as $r){
+                    
                     $foto = repuestofoto::where('id_repuestos','=',$r->id)->first();
-                    if(isset($foto)){
+                    if(isset($foto) && !empty($foto->urlfoto)){
                         array_push($fotos,$foto->urlfoto);
                     }else{
-                        $foto=repuestofoto::where('id_repuestos','=',62816)->first();
-                        array_push($fotos,$foto->urlfoto);
+                        array_push($fotos,$placeholder);
                     }
                     
                 }
@@ -1904,378 +2392,546 @@ public function similares(Request $request)
 
     function damestockrepuesto(Request $req){
         try {
+       
             $id = $req->codigo_repuesto;
-        $opt = $req->option;
-        $responsables = User::where('activo',1)->where('role_id','<>',20)->where('id','<>',16)->get();
-        // en todos los responsables buscar el que tenga nombre bodega y al campo name cambiarlo por jael rojas
-        foreach($responsables as $r){
-            if($r->name == 'Bodega'){
-                $r->name = 'Jael Rojas';
-            }
-        }
-        //Si recibe el parametro 'desde' es que viene de otra vista (Ingresados vs Vendidos)
-        if($req->desde){
-            if($opt === 'cod_int'){
-                $data = [];
-                $repuesto = repuesto::select('repuestos.id',
-                                            'repuestos.fecha_actualizacion_stock',
-                                            'repuestos.fecha_actualizacion_stock_dos',
-                                            'repuestos.fecha_actualizacion_stock_tres',
-                                            'repuestos.descripcion',
-                                            'repuestos.stock_actual',
-                                            'repuestos.stock_actual_dos',
-                                            'repuestos.stock_actual_tres',
-                                            'repuestos.precio_venta',
-                                            'repuestos.precio_antiguo',
-                                            'users.name')
-                                        ->join('users','repuestos.usuario_id_modifica','users.id')
-                                        ->where('repuestos.codigo_interno',$id)
-                                        ->get();
-                
-                if($repuesto[0]->fecha_actualizacion_stock > $repuesto[0]->fecha_actualizacion_stock_dos && $repuesto[0]->fecha_actualizacion_stock > $repuesto[0]->fecha_actualizacion_stock_tres){
-                    $fecha_ultima = $repuesto[0]->fecha_actualizacion_stock;
-                    $repuesto[0]->fecha_ultima = $fecha_ultima;
-                }elseif($repuesto[0]->fecha_actualizacion_stock_dos > $repuesto[0]->fecha_actualizacion_stock && $repuesto[0]->fecha_actualizacion_stock_dos > $repuesto[0]->fecha_actualizacion_stock_tres){
-                        $fecha_ultima = $repuesto[0]->fecha_actualizacion_stock_dos;
-                        $repuesto[0]->fecha_ultima = $fecha_ultima;
-                }else{
-                        $fecha_ultima = $repuesto[0]->fecha_actualizacion_stock_tres;
-                        $repuesto[0]->fecha_ultima = $fecha_ultima;
-                }
-                // $url = $imagen_repuesto[0]->urlfoto;
-                // $urlfoto = "{{asset('storage/'.$url)}}";
-                if($repuesto->count() > 0){
-                    try {
-                        $factura_detalle = compras_det::where('id_repuestos',$repuesto[0]->id)->orderBy('created_at','desc')->get();
-                        $boleta = boleta_detalle::select('boletas_detalle.cantidad','boletas.fecha_emision as fecha_emision','users.name','locales.local_nombre','boletas.num_boleta as num_doc')
-                                                ->where('boletas_detalle.id_repuestos',$repuesto[0]->id)
-                                                ->where('boletas.estado','<>',2)
-                                                ->join('users','boletas_detalle.usuarios_id','users.id')
-                                                ->join('boletas','boletas.id','boletas_detalle.id_boleta')
-                                                ->join('locales','boletas_detalle.id_local','locales.id')
-                                                ->orderBy('boletas.fecha_emision','asc')
-                                                ->get();
+            $opt = $req->option;
+            $responsables = User::where('activo',1)->whereIn('role_id', [10, 11,12,13,14,16])->get();
 
-                        foreach($boleta as $b){
-                            $b->tipo_doc='boleta';
-                        }
-                        $factura = factura_detalle::select('facturas_detalle.cantidad','facturas.fecha_emision as fecha_emision','users.name','locales.local_nombre','facturas.num_factura as num_doc')
-                                                    ->where('facturas_detalle.id_repuestos',$repuesto[0]->id)
-                                                    ->where('facturas.estado','<>',2)
-                                                    ->join('users','facturas_detalle.usuarios_id','users.id')
-                                                    ->join('facturas','facturas.id','facturas_detalle.id_factura')
-                                                    ->join('locales','facturas_detalle.id_local','locales.id')
-                                                    ->orderBy('facturas.fecha_emision','asc')
+            //Si recibe el parametro 'desde' es que viene de otra vista (Ingresados vs Vendidos)
+            if($req->desde){
+                if($opt === 'cod_int'){
+                    $data = [];
+                    $repuesto = repuesto::select('repuestos.id',
+                                                'repuestos.codigo_interno',
+                                                // 'repuestos.codigo_fab',
+                                                'repuestos.codigo_barras',
+                                                'repuestos.precio_compra',
+                                                'repuestos.descripcion',
+                                                'repuestos.stock_actual',
+                                                'repuestos.stock_actual_dos',
+                                                'repuestos.stock_actual_tres',
+                                                'repuestos.precio_venta',
+                                                'repuestos.precio_antiguo',
+                                                'repuestos.id_marca_repuesto',
+                                                'marcarepuestos.marcarepuesto',
+                                                'paises.nombre_pais',
+                                                'users.name',
+                                                'responsables.name as nombre_responsable_uno',
+                                                'responsables2.name as nombre_responsable_dos',
+                                                'responsables3.name as nombre_responsable_tres')
+                                            ->leftjoin('users','repuestos.usuario_id_modifica','users.id')
+                                            ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                                            ->leftjoin('users as responsables','repuestos.id_responsable','responsables.id')
+                                            ->leftjoin('users as responsables2','repuestos.id_responsable_dos','responsables2.id')
+                                            ->leftjoin('users as responsables3','repuestos.id_responsable_tres','responsables3.id')
+                                            ->join('paises','repuestos.id_pais','paises.id')
+                                            ->where('repuestos.codigo_interno',$id)
+                                            ->get();
+                
+                    if($repuesto->count() > 0){
+                        try {
+                            $factura_detalle = compras_det::select('compras_det.*','compras_cab.factura_numero','proveedores.empresa_nombre_corto')
+                                                    ->join('compras_cab','compras_det.id_factura_cab','compras_cab.id')
+                                                    ->leftjoin('proveedores','compras_cab.factura_id_proveedor','proveedores.id')
+                                                    ->where('compras_det.id_repuestos',$repuesto[0]->id)->orderBy('created_at','desc')
+                                                    ->get();
+                            $boleta = boleta_detalle::select('boletas_detalle.cantidad','boletas_detalle.precio_venta','boletas.fecha_emision as fecha_emision','users.name','boletas.num_boleta as num_doc','locales.local_nombre','clientes.nombres as nombre_cliente','boletas.estado')
+                                                    ->where('boletas_detalle.id_repuestos',$repuesto[0]->id)
+                                                    ->join('locales','boletas_detalle.id_local','locales.id')
+                                                    ->leftjoin('users','boletas_detalle.usuarios_id','users.id')
+                                                    ->join('boletas','boletas.id','boletas_detalle.id_boleta')
+                                                    ->leftjoin('clientes','boletas.id_cliente','clientes.id')
+                                                    ->where('boletas.estado',1)
+                                                    ->orderBy('boletas.fecha_emision','asc')
                                                     ->get();
 
-                        foreach($factura as $f){
-                            $f->tipo_doc='factura';
-                        }
+                            foreach($boleta as $b){
+                                $b->tipo_doc='boleta';
+                            }
+                     
+                            $factura = factura_detalle::select('facturas_detalle.cantidad','facturas_detalle.precio_venta','facturas.fecha_emision as fecha_emision','users.name','facturas.num_factura as num_doc','locales.local_nombre','clientes.nombres as nombre_cliente','facturas.estado')
+                                                        ->where('facturas_detalle.id_repuestos',$repuesto[0]->id)
+                                                        ->join('locales','facturas_detalle.id_local','locales.id')
+                                                        ->leftjoin('users','facturas_detalle.usuarios_id','users.id')
+                                                        ->join('facturas','facturas.id','facturas_detalle.id_factura')
+                                                        ->join('clientes','facturas.id_cliente','clientes.id')
+                                                        ->whereIn('facturas.estado', [1, 2])
+                                                        ->orderBy('facturas.fecha_emision','asc')
+                                                        ->get();
 
-                        $valemercaderia = vale_mercaderia_detalle::select('vale_mercaderia_detalle.cantidad','vale_mercaderia.created_at as fecha_emision','users.name','locales.local_nombre','vale_mercaderia.numero_boucher as num_doc')
-                                                                    ->where('vale_mercaderia_detalle.repuesto_id',$repuesto[0]->id)
-                                                                    ->join('users','vale_mercaderia_detalle.usuario_id','users.id')
-                                                                    ->join('vale_mercaderia','vale_mercaderia.id','vale_mercaderia_detalle.vale_mercaderia_id')
-                                                                    ->join('locales','vale_mercaderia_detalle.local_id','locales.id')
-                                                                    ->orderBy('vale_mercaderia.created_at','asc')
+
+                            foreach($factura as $f){
+                                $f->tipo_doc='factura';
+                            }
+                
+                            $valemercaderia = vale_mercaderia_detalle::select('vale_mercaderia_detalle.cantidad','vale_mercaderia.created_at as fecha_emision','users.name','vale_mercaderia.numero_boucher as num_doc')
+                                                                        ->where('vale_mercaderia_detalle.repuesto_id',$repuesto[0]->id)
+                                                                        ->leftjoin('users','vale_mercaderia_detalle.usuario_id','users.id')
+                                                                        ->join('vale_mercaderia','vale_mercaderia.id','vale_mercaderia_detalle.vale_mercaderia_id')
+                                                                        ->orderBy('vale_mercaderia.created_at','asc')
+                                                                        ->get();
+
+                            foreach($valemercaderia as $v){
+                                $v->tipo_doc='valemercaderia';
+                            }
+
+                            $traspasos = traspaso_mercaderia_detalle::select('traspaso_mercaderia_detalle.*','users.name')
+                                                                    ->join('traspaso_mercaderia','traspaso_mercaderia_detalle.id_traspaso_mercaderia','traspaso_mercaderia.id')
+                                                                    ->join('users','traspaso_mercaderia.usuario_id','users.id')
+                                                                    ->where('traspaso_mercaderia_detalle.repuesto_id',$repuesto[0]->id)
                                                                     ->get();
 
-                        foreach($valemercaderia as $v){
-                            $v->tipo_doc='valemercaderia';
-                        }
-                                                    
-                        $traspasos = traspaso_mercaderia_detalle::select('traspaso_mercaderia_detalle.*','users.name')
-                                                                  ->join('traspaso_mercaderia','traspaso_mercaderia_detalle.id_traspaso_mercaderia','traspaso_mercaderia.id')
-                                                                  ->join('users','traspaso_mercaderia.usuario_id','users.id')
-                                                                  ->where('traspaso_mercaderia_detalle.repuesto_id',$repuesto[0]->id)
-                                                                  ->get();
+                            foreach($factura_detalle as $f){
+                                //Le damos formato a la fecha
+                                $f->created_at = Carbon::parse($f->created_at)->format("d-m-Y");
+                            }
+                            //Juntamos todas las ventas, tanto boletas, facturas y vale de mercaderia
+                            $boleta_detalle = ($boleta->mergeRecursive($factura)->mergeRecursive($valemercaderia));
 
-                        foreach($factura_detalle as $f){
-                            //Le damos formato a la fecha
-                            $f->created_at = Carbon::parse($f->created_at)->format("d-m-Y");
-                        }
-                        //Juntamos todas las ventas, tanto boletas, facturas y vale de mercaderia
-                        $boleta_detalle = ($boleta->mergeRecursive($factura)->mergeRecursive($valemercaderia));
-                        
-                        foreach($boleta_detalle as $b){
-                            $b->fecha_emision = Carbon::parse($b->fecha_emision)->format("d-m-Y");
-                            
-                        }
+                            // Ordenar ANTES de formatear las fechas (cuando aún son DateTime/Carbon)
+                            $boleta_detalle = $boleta_detalle->sortByDesc('fecha_emision')->values();
 
-                        foreach($traspasos as $t){
-                            $t->fecha_emision = Carbon::parse($t->fecha_emision)->format("d-m-Y");
-                        }
-                        $imagen_repuesto = repuestofoto::select('urlfoto')->where('id_repuestos',$repuesto[0]->id)->get();
-                        //Formateamos la fecha de modificación del stock
-                        $repuesto[0]->fecha_ultima = Carbon::parse($repuesto[0]->fecha_ultima)->format("d-m-Y");
-                        foreach($factura_detalle as $f){
-                            //Separamos el valor de created_at para que solo me muestre la fecha en formato YYYY-MM-DD que será guardado en la primera posición
-                            $porciones = explode("T", $f->created_at);
-                            //Creamos el atributo fecha para asignarle la nueva fecha formateada
-                            $f->fecha = Carbon::parse($porciones[0])->format("d-m-Y");
-                        }
-                        array_push($data,$factura_detalle,$boleta_detalle,$repuesto[0],$traspasos);
-                        return $data;
-                    } catch (\Exception $e) {
-                        return $e->getMessage();
-                    }
-                    
-                }else{
-                    return ["error","Verifique el codigo interno"];
-                }
-                
-            }
-            
-        }else{
-            //Recibido desde la vista stockrepuesto
-            if($opt === 'cod_int'){
-                $encontrados=repuesto::where('repuestos.codigo_interno',$id)
-                ->where('repuestos.activo',1)
-                ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
-                ->join('paises', 'repuestos.id_pais', 'paises.id')
-                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
-                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
-                ->join('users as usuarios','repuestos.usuario_id_modifica','usuarios.id')
-                ->leftjoin('users as responsables', 'repuestos.id_responsable', 'responsables.id')
-                ->leftjoin('users as responsables_dos', 'repuestos.id_responsable_dos', 'responsables_dos.id')
-                ->leftjoin('users as responsables_tres', 'repuestos.id_responsable_tres', 'responsables_tres.id')
-                // ->join('repuestos_fotos','repuestos.id','repuestos_fotos.id_repuestos')
-                ->select('proveedores.empresa_nombre_corto', 
-                    'paises.nombre_pais', 
-                    'marcarepuestos.marcarepuesto', 
-                    'repuestos.*',
-                    'usuarios.name as nombre_usuario',
-                    'responsables.name as nombre_responsable',
-                    'responsables_dos.name as nombre_responsable_dos',
-                    'responsables_tres.name as nombre_responsable_tres'
-                    )
-                    ->get();
-                
-                
-                if($encontrados->count()>0){
-                    $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$encontrados[0]->id)->first();
-                    $repuesto=$encontrados;
-                    if($urlfoto){
-                        return [$repuesto,$urlfoto, $responsables];
-                    }else{
-                        $urlfoto = 'fotozzz/notfound.png';
-                        
-                        return [$repuesto,$urlfoto, $responsables];
-                    }
-                    
-                }else{
-                    return ["error","Verifique el codigo interno"];
-                }
-                
-            }else if($opt === 'oem'){
-                    
-                    $oem = oem::select('id_repuestos')
-                                ->where('oems.codigo_oem','LIKE','%'.$id.'%')
-                                ->where('oems.activo',1)
-                                ->get()
-                                ->toArray();
-                 
-                    if(count($oem)>0){
-                        $encontrados=repuesto::wherein('repuestos.id',$oem)
-                            ->where('repuestos.activo',1)
-                            ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
-                            ->join('paises', 'repuestos.id_pais', 'paises.id')
-                            ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
-                            ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
-                            ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                            // Ahora formateamos las fechas
+                            foreach($boleta_detalle as $b){
+                                $b->fecha_emision = Carbon::parse($b->fecha_emision)->format("d-m-Y");
+                            }
+
+                            foreach($traspasos as $t){
+                                $t->fecha_emision = Carbon::parse($t->fecha_emision)->format("d-m-Y");
+                            }
+                            $imagenes_repuesto = repuestofoto::select('urlfoto')->where('id_repuestos',$repuesto[0]->id)->get();
+                            //Formateamos la fecha de modificación del stock
+                            $repuesto[0]->fecha_ultima = Carbon::parse($repuesto[0]->fecha_ultima)->format("d-m-Y");
+             
+                            foreach($factura_detalle as $f){
+                                //Separamos el valor de created_at para que solo me muestre la fecha en formato YYYY-MM-DD que será guardado en la primera posición
+                                $porciones = explode("T", $f->created_at);
+                                //Creamos el atributo fecha para asignarle la nueva fecha formateada
+                                $f->fecha = Carbon::parse($porciones[0])->format("d-m-Y");
+                            }
+
+                            $devoluciones_mercaderia = devolucion_mercaderia::select('devolucion_mercaderia.cantidad','devolucion_mercaderia.created_at as fecha_emision','users.name','notas_de_credito.num_nota_credito as num_nc','devolucion_mercaderia.tipo_doc','notas_de_credito.docum_referencia')
+                            ->where('devolucion_mercaderia.repuesto_id',$repuesto[0]->id)
+                            ->where('devolucion_mercaderia.activo',0)
+                            ->join('notas_de_credito','devolucion_mercaderia.num_nc','notas_de_credito.num_nota_credito')
+                            ->join('users','devolucion_mercaderia.usuario_id','users.id')
                             ->get();
-        
+                        
+                            $total_devoluciones = 0;
+                     
+                            foreach($devoluciones_mercaderia as $d){
+                                $total_devoluciones += $d->cantidad;
+                                if($d->tipo_doc == 'bo'){
+                                    $d->id_doc = boleta::where('num_boleta',$d->num_nc)->value('id');
+                                }else if($d->tipo_doc == 'fa'){
+                                    $d->id_doc = factura::where('num_factura',$d->num_nc)->value('id');
+                                }else if($d->tipo_doc == 'nc'){
+                                 
+                                    $doc = nota_de_credito::where('id',$d->num_nc)->first();
+                                    if($doc){
+                                        $d->id_nc = $doc->id;
+                                        $d->id_doc = $doc->id;
+                                    }
+                              
+                                }
+                            }
+                            $fechas_caida_stock_minimo = stock_minimo::where('id_repuesto', $repuesto[0]->id)
+                                                                    ->orderBy('created_at', 'desc')
+                                                                    ->get();
+
+                            foreach($fechas_caida_stock_minimo as $f){
+                                $f->fecha = Carbon::parse($f->created_at)->format("d-m-Y");
+                            }
+
+                            array_push(
+                                $data,
+                                $factura_detalle,
+                                $boleta_detalle,
+                                $repuesto[0],
+                                $traspasos,
+                                $fechas_caida_stock_minimo,
+                                $devoluciones_mercaderia,
+                                $total_devoluciones,
+                                $imagenes_repuesto
+                            );
+                            return $data;
+                        } catch (\Exception $e) {
+                            return $e->getMessage();
+                        }
+
+                    }else{
+                        return ["error","Verifique el codigo interno"];
+                    }
+
+                }
+
+            }else{
+                //Recibido desde la vista stockrepuesto
+                if($opt === 'cod_int'){
+                    $encontrados=repuesto::where('repuestos.codigo_interno',$id)
+                    ->where('repuestos.activo',1)
+                    ->leftjoin('users','repuestos.id_responsable','users.id')
+                    ->leftjoin('users as responsables2','repuestos.id_responsable_dos','responsables2.id')
+                    ->leftjoin('users as responsables3','repuestos.id_responsable_tres','responsables3.id')
+                    ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+                    // ->join('repuestos_fotos','repuestos.id','repuestos_fotos.id_repuestos')
+                    ->select('repuestos.*','users.name as nombre_responsable','responsables2.name as nombre_responsable_dos','responsables3.name as nombre_responsable_tres','marcarepuestos.marcarepuesto','paises.nombre_pais')
+                    ->get();
+
+                    if($encontrados->count()>0){
+                        $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$encontrados[0]->id)->first();
+                        $repuesto=$encontrados;
+                        $locales = $this->damelocales_activos();
+                        if($urlfoto){
+                            return [$repuesto,$urlfoto, $responsables, $locales];
+                        }else{
+                            $urlfoto = 'fotozzz/notfound.png';
+
+                            return [$repuesto,$urlfoto, $responsables, $locales];
+                        }
+
+                    }else{
+                        return ["error","Verifique el codigo interno"];
+                    }
+
+                }else if($opt === 'oem'){
+
+                        $oem = oem::select('id_repuestos')
+                                    ->where('oems.codigo_oem','LIKE','%'.$id.'%')
+                                    ->where('oems.activo',1)
+                                    ->get()
+                                    ->toArray();
+
+                        if(count($oem)>0){
+                            $encontrados=repuesto::wherein('repuestos.id',$oem)
+                                ->where('repuestos.activo',1)
+                                ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                                ->get();
+
+                        }else{
+                            return ["error","Verifique el codigo OEM"];
+                        }
+
+
+                    if($encontrados->count()>0){
+                        $repuesto=$encontrados;
+                        return [$repuesto,'', $responsables];
                     }else{
                         return ["error","Verifique el codigo OEM"];
                     }
 
-                
-                if($encontrados->count()>0){
-                    $repuesto=$encontrados;
-                    return [$repuesto,'', $responsables];
                 }else{
-                    return ["error","Verifique el codigo OEM"];
-                }
-                
-            }else{
-                try {
-                    $repuestos = repuesto::where('repuestos.cod_repuesto_proveedor', 'LIKE', '%'.$id . '%')
-                ->where('repuestos.activo',1)
-                ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
-                    ->join('paises', 'repuestos.id_pais', 'paises.id')
-                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
-                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
-                    ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
-                    ->get();
-                    
-                    if($repuestos->count() > 0){
-                        $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$repuestos[0]->id)->first();
-                        return [$repuestos,$urlfoto, $responsables];
-                    }else{
-                        return ["error","Verifique el codigo de proveedor"];
+                    try {
+                        $repuestos = repuesto::where('repuestos.cod_repuesto_proveedor', 'LIKE', '%'.$id . '%')
+                        ->where('repuestos.activo',1)
+                        ->select('repuestos.*')
+                        ->get();
+
+                        if($repuestos->count() > 0){
+                            $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$repuestos[0]->id)->first();
+                            return [$repuestos,$urlfoto, $responsables];
+                        }else{
+                            return ["error","Verifique el codigo de proveedor"];
+                        }
+
+                    } catch (\Exception $e) {
+                        return $e->getMessage();
                     }
-                    
-                } catch (\Exception $e) {
-                    return $e->getMessage();
+
                 }
-                
             }
-        }
+            } catch (\Exception $e) {
+                return $e->getMessage();
+            }
+
+
+
+    }
+
+    function revisar_stock_proveedor(){
+        $repuestos = repuesto::select('repuestos.*','familias.nombrefamilia','marcarepuestos.marcarepuesto','proveedores.empresa_nombre_corto')
+                                                ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+                                                ->join('familias','familias.id','repuestos.id_familia')
+                                                ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+                                                ->where('repuestos.estado','Sin stock en proveedor')
+                                                ->where('repuestos.activo',1)
+                                                 ->where('repuestos.id_familia','<>',312)
+                                                ->get();
+
+            $repuestos_sin_stock_proveedor = [];
+
+            // revisar si los repuestos tienen stock en la bodega
+            foreach($repuestos as $r){
+                $stock_minimo = stock_minimo::where('id_repuesto',$r->id)->first();
+                if($stock_minimo && \App\Services\StockPorLocalService::total($r) < $r->stock_minimo){
+                    array_push($repuestos_sin_stock_proveedor,$r);
+                }
+            }  
+
+            return count($repuestos_sin_stock_proveedor);
+    }
+
+      public function guardar_nuevo_stock_minimo_critico($id, $nuevo_stock_minimo, $estado){
+        try {
+    
+            $repuesto = repuesto::find($id);
+
+            $repuesto->stock_minimo = $nuevo_stock_minimo;
+    
+            if($estado == "Aprobado"){
+                $repuesto->estado = null;
+            }else{
+                $repuesto->estado = $estado;
+            }
+    
+            $repuesto->id_modifica_estado = Auth::user()->id;
+            $repuesto->fecha_modificacion_estado = Carbon::now()->toDateTimeString();
+            $repuesto->save();
+    
+    
+            return [
+                'estado' => 'OK',
+                'mensaje' => 'Stock mínimo crítico actualizado',
+                'id' => $repuesto->id,
+                'nuevo_estado' => $repuesto->estado,
+                'stock_minimo' => $repuesto->stock_minimo
+            ];
+    
         } catch (\Exception $e) {
-            return $e->getMessage();
+    
+            return [
+                'estado' => 'ERROR',
+                'mensaje' => $e->getMessage()
+            ];
+    
         }
-        
-        
-        
+    }
+
+    function revisar_stock_critico(){
+        $id_familia_sin_definir = 312;
+            $rep = repuesto::select(
+                'repuestos.*',
+                'marcarepuestos.id as idmarca',
+                'marcarepuestos.marcarepuesto',
+                'proveedores.empresa_nombre_corto'
+            )
+            ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
+            ->where('repuestos.activo',1)
+            ->where('repuestos.estado','')
+            ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' < 1')
+            ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+            ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+            ->get();
+            return count($rep);
     }
 
     function listar_oems(){
         try {
             $clonaciones = clonacion_oems::all();
-            // recorrer las clonaciones y obtener los datos de los repuestos
-            foreach ($clonaciones as $clonacion) {
-                $repuesto = repuesto::find($clonacion->id_repuesto_destino);
-                $clonacion->codigo_interno_destino = $repuesto->codigo_interno;
-                $repuesto_ = repuesto::find($clonacion->id_repuesto_origen);
-                
-                $clonacion->codigo_interno_origen = $repuesto_->codigo_interno;
+            if($clonaciones->count() > 0){
+                foreach ($clonaciones as $clonacion) {
+                    $repuesto = repuesto::find($clonacion->id_repuesto_destino);
+                    $repuesto_ = repuesto::find($clonacion->id_repuesto_origen);
+                    $clonacion->codigo_interno_destino = $repuesto ? $repuesto->codigo_interno : 'NO EXISTE';
+                    $clonacion->codigo_interno_origen = $repuesto_ ? $repuesto_->codigo_interno : 'NO EXISTE';
+                }
+            }else{
+                $clonaciones = [];
             }
-
-            //return $clonaciones[0];
-           
             return view('manten.listar_oems',[
                 'clonaciones' => $clonaciones
             ]);
         } catch (\Exception $e) {
-            //throw $th;
             return $e->getMessage();
         }
-        
-    }
-
-    public function clonaciones(){
-        $similares = clonacion_similares::select('clonacion_similares.*','repuestos.codigo_interno as codigo_interno_destino','r.codigo_interno as codigo_interno_origen')
-                                        ->join('repuestos','clonacion_similares.id_repuesto_destino','repuestos.id')
-                                        ->join('repuestos as r','clonacion_similares.id_repuesto_origen','r.id')
-                                        ->get();
-        $fabs = clonacion_fabs::select('clonacion_fabs.*','repuestos.codigo_interno as codigo_interno_destino','r.codigo_interno as codigo_interno_origen')
-                                        ->join('repuestos','clonacion_fabs.id_repuesto_destino','repuestos.id')
-                                        ->join('repuestos as r','clonacion_fabs.id_repuesto_origen','r.id')
-                                        ->get();
-        return view('manten.clonaciones',[
-            'similares' => $similares,
-            'fabs' => $fabs
-        ]);
     }
 
     public function deshacer_clonacion_oems($id){
         try {
             $clonacion = clonacion_oems::find($id);
-            // eliminar las oems clonadas del repuesto original en el repuesto clonado
-            // buscar todos los oems del repuesto de origen en el repuesto destino
-            $oems_origen = oem::where('id_repuestos',$clonacion->id_repuesto_origen)->get();
-            $oems_destino = oem::where('id_repuestos',$clonacion->id_repuesto_destino)->get();
-            foreach ($oems_origen as $oem) {
-                foreach ($oems_destino as $oem_destino) {
-                    if($oem->codigo_oem == $oem_destino->codigo_oem){
-                        $oem_destino->delete();
-                    }
-                }
-            }
-            $clonacion->delete();
-            return 'ok';
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-    }
 
-    public function deshacer_similares($id){
-        try {
-            $clonacion = clonacion_similares::find($id);
-            // eliminar las oems clonadas del repuesto original en el repuesto clonado
-            // buscar todos los similares del repuesto de origen en el repuesto destino
-            $similares_origen = similar::where('id_repuestos',$clonacion->id_repuesto_origen)->get();
-            $similares_destino = similar::where('id_repuestos',$clonacion->id_repuesto_destino)->get();
-            foreach ($similares_origen as $sim) {
-                foreach ($similares_destino as $sim_destino) {
-                    if($sim->id_marca_vehiculo == $sim_destino->id_marca_vehiculo && $sim->id_modelo_vehiculo == $sim_destino->id_modelo_vehiculo && $sim->anios_vehiculo == $sim_destino->anios_vehiculo){
-                        $sim_destino->delete();
-                    }
-                }
+            if(!$clonacion){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'La clonación OEM ya no existe.'], 404);
             }
-            $clonacion->delete();
-            $clonaciones = $this->dame_clonaciones_similares();
-            $aplicaciones = $this->dame_similares($clonacion->id_repuesto_destino);
-            return ['mensaje' => 'ok', 'clonaciones' => $clonaciones, 'aplicaciones' => $aplicaciones];
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-    }
 
-    public function deshacer_fabricantes($id){
-        try {
-            $clonacion = clonacion_fabs::find($id);
-            // eliminar las oems clonadas del repuesto original en el repuesto clonado
-            // buscar todos los similares del repuesto de origen en el repuesto destino
-            $fabs_origen = fabricante::where('id_repuestos',$clonacion->id_repuesto_origen)->get();
-            $fabs_destino = fabricante::where('id_repuestos',$clonacion->id_repuesto_destino)->get();
-            foreach ($fabs_origen as $fab) {
-                foreach ($fabs_destino as $fab_destino) {
-                    if($fab->id_marcarepuestos == $fab_destino->id_marcarepuestos && $fab->codigo_fab == $fab_destino->codigo_fab){
-                        $fab_destino->delete();
-                    }
-                }
-            }
+            // El historial no permite distinguir los OEM clonados de los preexistentes.
+            // Por seguridad solo se elimina la relación del historial.
             $clonacion->delete();
-            $clonaciones = $this->dame_clonaciones_fabricantes();
-            $aplicaciones = $this->dame_fabricantes($clonacion->id_repuesto_destino);
-            return ['mensaje' => 'ok', 'clonaciones' => $clonaciones, 'aplicaciones' => $aplicaciones];
+
+            return response()->json([
+                'mensaje' => 'ok',
+                'detalle' => 'La clonación fue eliminada del historial.'
+            ]);
         } catch (\Exception $e) {
-            return $e->getMessage();
+            \Log::error('Error eliminando clonación OEM: '.$e->getMessage());
+            return response()->json(['mensaje' => 'error', 'detalle' => 'No fue posible eliminar la clonación OEM.'], 500);
         }
     }
 
     public function revisar_stock_minimo(){
         try {
-            $id_familia_sin_definir = 312;
-            $hoy = Carbon::today();
-            $repuestos = stock_minimo::select('stock_minimo.fecha_emision','repuestos.codigo_interno','repuestos.id as id_repuesto')
-                                                    ->join('repuestos','stock_minimo.id_repuesto','repuestos.id')
-                                                    ->whereNull('repuestos.estado')
-                                                    ->where('repuestos.id_familia','<>', $id_familia_sin_definir)
-                                                    ->groupBy('repuestos.codigo_interno')
-                                                    ->get();
-            // creamos un array para guardar los repuestos con stock minimo
-            $a = [];
+                $hoy = Carbon::today();
+                $id_familia_sin_definir = 312;
+                try {
+                   //Subconsulta para obtener la ultima fecha de emision de cada repuesto
+                    $subquery = stock_minimo::select('id_repuesto', \DB::raw('MAX(fecha_emision) as ultima_fecha_emision'))
+                    ->groupBy('id_repuesto');
 
-            // recorremos los repuestos con bajo stock y borramos los repuestos que ya tengan un stock superior al minimo
-            foreach($repuestos as $r){
+                    // unir la subconsulta con la tabla de repuestos 
+                    $reps = repuesto::select('repuestos.*', 'stock_minimo.ultima_fecha_emision')
+                        ->joinSub($subquery, 'stock_minimo', function ($join) {
+                            $join->on('repuestos.id', '=', 'stock_minimo.id_repuesto');
+                        })
+                        ->where('repuestos.activo',1)
+                        ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
+                        ->where('repuestos.estado','')
+                        ->orderBy('stock_minimo.ultima_fecha_emision')
+                        ->groupBy('repuestos.id')
+                        ->get();
+                } catch (\Exception $e) {
+                    return $e->getMessage();
+                }
+                
+                $reps_ = [];
+                foreach($reps as $r){
+
                     // formateamos la fecha de emision
-                    $r->fecha_emision = Carbon::today()->format('d-m-Y');
-                    $repuesto = repuesto::find($r->id_repuesto);
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+                    $r->fecha_emision = Carbon::parse($r->fecha_emision)->format('d-m-Y');
+                    $r->ultima_fecha_emision = Carbon::parse($r->ultima_fecha_emision)->format('d-m-Y');
+                    $repuesto = repuesto::find($r->id);
+                    
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
+                 
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
-                        array_push($a, $r);
+                       array_push($reps_, $r);
                     } 
-            }
+                }
 
-            return count($a);
+            return count($reps_);
         } catch (\Exception $e) {
            return $e->getMessage();
         }
         
     }
 
-    public function revisar_stock_proveedor(){
+    public function clonaciones_rv(){
         try {
-            $id_familia_sin_definir = 312;
-            $hoy = Carbon::today();
-            $repuestos = repuesto::where('estado','Sin stock en proveedor')->get();
-            return count($repuestos);
-            
+            $clonaciones = $this->dame_clonaciones_rv();
+            return view('manten.clonaciones_rv', compact('clonaciones'));
         } catch (\Exception $e) {
-           return $e->getMessage();
+            return $e->getMessage();
+        }
+    }
+
+    public function dame_rv_clonar($codigo_interno){
+        try {
+            $repuesto = repuesto::where('codigo_interno', $codigo_interno)->first();
+            if($repuesto){
+                return $this->dame_rv($repuesto->id);
+            }else{
+                return 'error';
+            }
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    public function deshacer_clonacion_rv($id){
+        try {
+            $clonacion = clonacion_rv::find($id);
+            $reguladores = regulador_voltaje::where('id_repuesto', $clonacion->id_repuesto_destino)->get();
+            foreach ($reguladores as $rv) {
+                $rv->delete();
+            }
+            $clonacion->delete();
+            $clonaciones = $this->dame_clonaciones_rv();
+            return ['mensaje' => 'ok', 'clonaciones' => $clonaciones];
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    public function eliminar_clonacion_aplicaciones($id){
+        try {
+            $clonacion = clonacion_similares::find($id);
+            if(!$clonacion){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'La clonación de aplicaciones ya no existe.'], 404);
+            }
+            $clonacion->delete();
+            return response()->json([
+                'mensaje' => 'ok',
+                'detalle' => 'La clonación fue eliminada del historial.',
+                'clonaciones' => $this->dame_clonaciones_similares(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error eliminando clonación de aplicaciones: '.$e->getMessage());
+            return response()->json(['mensaje' => 'error', 'detalle' => 'No fue posible eliminar la clonación.'], 500);
+        }
+    }
+
+    public function eliminar_clonacion_fabricantes($id){
+        try {
+            $clonacion = clonacion_fabs::find($id);
+            if(!$clonacion){
+                return response()->json(['mensaje' => 'error', 'detalle' => 'La clonación de fabricantes ya no existe.'], 404);
+            }
+            $clonacion->delete();
+            return response()->json([
+                'mensaje' => 'ok',
+                'detalle' => 'La clonación fue eliminada del historial.',
+                'clonaciones' => $this->dame_clonaciones_fabricantes(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error eliminando clonación de fabricantes: '.$e->getMessage());
+            return response()->json(['mensaje' => 'error', 'detalle' => 'No fue posible eliminar la clonación.'], 500);
+        }
+    }
+    public function clonaciones(){
+        try {
+            $clonaciones = clonacion_oems::all();
+            // recorrer las clonaciones y obtener los datos de los repuestos
+            foreach ($clonaciones as $clonacion) {
+                $repuesto = repuesto::find($clonacion->id_repuesto_destino);
+                // $clonacion->codigo_interno_destino = $repuesto->codigo_interno;
+                $repuesto_ = repuesto::find($clonacion->id_repuesto_origen);
+                
+                    $clonacion->codigo_interno_destino = $repuesto ? $repuesto->codigo_interno : 'NO EXISTE';
+                    $clonacion->codigo_interno_origen = $repuesto_ ? $repuesto_->codigo_interno : 'NO EXISTE';
+            }
+
+            $fabs=clonacion_fabs::all();
+
+            foreach($fabs as $fab){
+                $repuesto = repuesto::find($fab->id_repuesto_destino);
+                // $clonacion->codigo_interno_destino = $repuesto->codigo_interno;
+                $repuesto_ = repuesto::find($fab->id_repuesto_origen);
+                
+                    $fab->codigo_interno_destino = $repuesto ? $repuesto->codigo_interno : 'NO EXISTE';
+                    $fab->codigo_interno_origen = $repuesto_ ? $repuesto_->codigo_interno : 'NO EXISTE';
+            }
+
+            $similares = clonacion_similares::all();
+
+            foreach($similares as $similar){
+                $repuesto = repuesto::find($similar->id_repuesto_destino);
+                $repuesto_ = repuesto::find($similar->id_repuesto_origen);
+                
+                    $similar->codigo_interno_destino = $repuesto ? $repuesto->codigo_interno : 'NO EXISTE';
+                    $similar->codigo_interno_origen = $repuesto_ ? $repuesto_->codigo_interno : 'NO EXISTE';
+            }
+
+            return view('manten.clonaciones',[
+                'fabs' => $fabs,
+                'similares' => $similares
+            ]);
+        } catch (\Exception $e) {
+            return $e->getMessage();
         }
     }
 
@@ -2299,7 +2955,7 @@ public function similares(Request $request)
 
         $repuesto = repuesto::find($r->id_repuesto);
 
-        $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+        $stock_total = \App\Services\StockPorLocalService::total($repuesto);
 
         // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
         if($repuesto->stock_minimo >= $stock_total){
@@ -2323,10 +2979,11 @@ public function similares(Request $request)
             // recorrer las clonaciones y obtener los datos de los repuestos
             foreach ($clonaciones as $clonacion) {
                 $repuesto = repuesto::find($clonacion->id_repuesto_destino);
-                $clonacion->codigo_interno_destino = $repuesto->codigo_interno;
+              
                 $repuesto_ = repuesto::find($clonacion->id_repuesto_origen);
                 
-                $clonacion->codigo_interno_origen = $repuesto_->codigo_interno;
+                $clonacion->codigo_interno_origen = $repuesto_ ? $repuesto_->codigo_interno : 'NO EXISTE';
+                $clonacion->codigo_interno_destino = $repuesto ? $repuesto->codigo_interno : 'NO EXISTE';
             }
            
             $v = view('fragm.tabla_historial_clonaciones_oems',[
@@ -2344,91 +3001,113 @@ public function similares(Request $request)
         return $repuesto;
     }
 
-    function guardarstock(Request $req){
-        $stock = $req->stock;
-        $id_repuesto = $req->id_repuesto;
-        $id_responsable = $req->idresponsable;
-        $repuesto = repuesto::find($id_repuesto);
-        $hoy = Carbon::today()->toDateString();
-
-        if($req->opt == 'stock2'){
-            
-
-            try {
-                $repuesto->stock_actual_dos = $stock;
-                
-                $repuesto->usuario_id_modifica = Auth::user()->id;
-                if($repuesto->fecha_actualizacion_stock_dos == $hoy){
-                    //Guardamos la fecha actual cuando se cambio el stock
-                    $repuesto->fecha_actualizacion_stock_dos = Carbon::today()->toDateString();
-                    $repuesto->id_responsable_dos = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual_dos,$repuesto->id,'stock2'];
-                }else{
-                    //Guardamos la fecha actual cuando se cambio el stock
-                    $repuesto->fecha_actualizacion_stock_dos = Carbon::today()->toDateString();
-                    $repuesto->id_responsable_dos = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual_dos,$repuesto->id,'stock2'];
-                }
-                
-    
-                
-            } catch (\Exception $e) {
-                return $e->getMessage;
-            }
-        }elseif($req->opt == 'stock3'){
-
-            try {
-                $repuesto->stock_actual_tres = $stock;
-                
-                $repuesto->usuario_id_modifica = Auth::user()->id;
-                if($repuesto->fecha_actualizacion_stock_tres == $hoy){
-                    //Guardamos la fecha actual cuando se cambio el stock
-                    $repuesto->fecha_actualizacion_stock_tres = Carbon::today()->toDateString();
-                    $repuesto->id_responsable_tres = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual_tres,$repuesto->id,'stock3'];
-                }else{
-                    //Guardamos la fecha actual cuando se cambio el stock
-                    $repuesto->fecha_actualizacion_stock_tres = Carbon::today()->toDateString();
-                    $repuesto->id_responsable_tres = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual_tres,$repuesto->id,'stock3'];
-                }
-                
-            } catch (\Exception $e) {
-                return $e->getMessage;
-            }
-        }else{
-            try {
-                $repuesto->stock_actual = $stock;
-                //Guardamos la fecha actual cuando se cambio el stock
-                
-                $repuesto->usuario_id_modifica = Auth::user()->id;
-                if($repuesto->fecha_actualizacion_stock == $hoy){
-                    $repuesto->fecha_actualizacion_stock = Carbon::today()->toDateString();
-                    $repuesto->id_responsable = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual,$repuesto->id];
-                }else{
-                    $repuesto->fecha_actualizacion_stock = Carbon::today()->toDateString();
-                    $repuesto->id_responsable = $id_responsable;
-                    $repuesto->save();
-                    return ["OK",$repuesto->stock_actual,$repuesto->id];
-                }
-                
-
-                
-            } catch (\Exception $e) {
-                return $e->getMessage;
-            }
+    function guardarstock(Request $req, StockService $stockService){
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            abort_unless(optional(Auth::user()->rol)->nombrerol === 'Administrador', 403);
         }
-        
-        
+
+        $datos = $req->validate([
+            'stock' => 'required|integer|min:0|max:65535',
+            'id_repuesto' => 'required|integer|exists:repuestos,id',
+            'idresponsable' => 'nullable|integer',
+            'opt' => 'nullable|in:stock2,stock3',
+            'motivo' => 'required|string|min:5|max:500',
+        ], [
+            'motivo.required' => 'Debe indicar el motivo del ajuste.',
+            'motivo.min' => 'El motivo debe tener al menos 5 caracteres.',
+            'stock.required' => 'Debe ingresar el stock nuevo.',
+            'stock.integer' => 'El stock debe ser un número entero.',
+        ]);
+
+        $ubicacionIndice = $req->opt === 'stock2' ? 2 : ($req->opt === 'stock3' ? 3 : 1);
+
+        try {
+            $autorizadoHasta = (int) $req->session()->pull('autoriza_disminuir_stock_hasta', 0);
+
+            $resultado = $stockService->ajustar(
+                (int) $datos['id_repuesto'],
+                $ubicacionIndice,
+                (int) $datos['stock'],
+                (int) Auth::id(),
+                $datos['motivo'],
+                isset($datos['idresponsable']) ? (int) $datos['idresponsable'] : null,
+                [
+                    'tipo' => 'AJUSTE_MANUAL',
+                    'disminucion_autorizada' => $autorizadoHasta >= now()->timestamp,
+                    'ip' => $req->ip(),
+                    'user_agent' => substr((string) $req->userAgent(), 0, 500),
+                ]
+            );
+
+            $repuesto = $resultado['repuesto'];
+            $campo = $ubicacionIndice === 1
+                ? 'stock_actual'
+                : ($ubicacionIndice === 2 ? 'stock_actual_dos' : 'stock_actual_tres');
+
+            $vc = new ventas_controlador();
+            $vc->revisar_stock_minimo($repuesto->id);
+
+            $respuesta = ['OK', (int) $repuesto->{$campo}, $repuesto->id];
+            if ($ubicacionIndice > 1) {
+                $respuesta[] = 'stock'.$ubicacionIndice;
+            }
+
+            return response()->json($respuesta);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            report($e);
+            return response()->json(['message' => 'No fue posible registrar el ajuste de stock.'], 500);
+        }
+    }
+
+    function historial_stock(Request $req, $id){
+        $req->validate([
+            'ubicacion' => 'nullable|integer|between:1,3',
+        ]);
+
+        repuesto::findOrFail($id);
+
+        $consulta = StockMovimiento::with('usuario:id,name')
+            ->where('repuesto_id', $id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        if ($req->filled('ubicacion')) {
+            $consulta->where('ubicacion_indice', (int) $req->ubicacion);
+        }
+
+        $movimientos = $consulta->limit(100)->get();
+        $responsables = User::whereIn(
+            'id',
+            $movimientos->pluck('responsable_id')->filter()->unique()
+        )->pluck('name', 'id');
+
+        return response()->json($movimientos->map(function ($movimiento) use ($responsables) {
+            return [
+                'id' => $movimiento->id,
+                'ubicacion_indice' => $movimiento->ubicacion_indice,
+                'stock_anterior' => $movimiento->stock_anterior,
+                'cantidad_movimiento' => $movimiento->cantidad_movimiento,
+                'stock_nuevo' => $movimiento->stock_nuevo,
+                'tipo' => $movimiento->tipo,
+                'motivo' => $movimiento->motivo,
+                'usuario' => optional($movimiento->usuario)->name ?: 'Proceso automático del sistema',
+                'responsable' => $responsables->get($movimiento->responsable_id),
+                'fecha' => optional($movimiento->created_at)->format('d-m-Y H:i:s'),
+                'ip' => $movimiento->ip,
+                'grupo_uuid' => $movimiento->grupo_uuid,
+                'referencia_tipo' => $movimiento->referencia_tipo,
+                'referencia_id' => $movimiento->referencia_id,
+            ];
+        }));
     }
 
     function modificar_ubicacion(Request $req){
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            abort_unless(optional(Auth::user()->rol)->nombrerol === 'Administrador', 403);
+        }
+
         //Si viene opt es que es la ubicación dos
         if($req->opt == "ubicacion2"){
             try {
@@ -2524,6 +3203,382 @@ public function similares(Request $request)
         
     }
 
+    function ingresados_vendidos_datos(Request $req){
+        $esAdministrador = Auth::user()->rol->nombrerol === 'Administrador';
+        $tienePermiso = permissions_detail::where('permission_id', 4)
+            ->where('usuarios_id', Auth::id())
+            ->where('path_ruta', '/repuesto/ingresados_vendidos')
+            ->exists();
+
+        abort_unless($esAdministrador || $tienePermiso, 403, 'No tiene permiso para consultar esta información.');
+
+        $datos = $req->validate([
+            'codigo' => 'required|string|max:200',
+            'tipo_busqueda' => 'required|in:cod_int,oem,cod_prov',
+        ]);
+
+        $codigo = trim($datos['codigo']);
+        $consulta = repuesto::query()
+            ->where('repuestos.activo', 1)
+            ->leftJoin('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+            ->leftJoin('paises', 'repuestos.id_pais', 'paises.id')
+            ->leftJoin('users as modificador', 'repuestos.usuario_id_modifica', 'modificador.id')
+            ->leftJoin('users as responsable1', 'repuestos.id_responsable', 'responsable1.id')
+            ->leftJoin('users as responsable2', 'repuestos.id_responsable_dos', 'responsable2.id')
+            ->leftJoin('users as responsable3', 'repuestos.id_responsable_tres', 'responsable3.id');
+
+        if ($datos['tipo_busqueda'] === 'cod_int') {
+            $consulta->where('repuestos.codigo_interno', $codigo);
+        } elseif ($datos['tipo_busqueda'] === 'oem') {
+            $consulta->whereIn('repuestos.id', oem::where('activo', 1)
+                ->where('codigo_oem', 'like', '%'.$codigo.'%')
+                ->pluck('id_repuestos'));
+        } else {
+            $consulta->where('repuestos.cod_repuesto_proveedor', 'like', '%'.$codigo.'%');
+        }
+
+        $coincidencias = (clone $consulta)->select(
+                'repuestos.codigo_interno',
+                'repuestos.descripcion',
+                'repuestos.cod_repuesto_proveedor',
+                'marcarepuestos.marcarepuesto'
+            )
+            ->distinct()
+            ->orderBy('repuestos.codigo_interno')
+            ->limit(25)
+            ->get();
+
+        if ($coincidencias->count() > 1 && $datos['tipo_busqueda'] !== 'cod_int') {
+            return response()->json([
+                'message' => 'Se encontraron varios repuestos. Seleccione el código interno correcto.',
+                'coincidencias' => $coincidencias,
+            ], 409);
+        }
+
+        $repuesto = $consulta->select(
+            'repuestos.*',
+            'marcarepuestos.marcarepuesto',
+            'paises.nombre_pais',
+            'modificador.name as modificado_por',
+            'responsable1.name as responsable_uno',
+            'responsable2.name as responsable_dos',
+            'responsable3.name as responsable_tres'
+        )->orderBy('repuestos.codigo_interno')->first();
+
+        if (!$repuesto) {
+            return response()->json(['message' => 'No se encontró un repuesto activo con ese criterio.'], 404);
+        }
+
+        $ingresos = compras_det::select(
+                'compras_det.id',
+                'compras_det.cantidad',
+                'compras_det.created_at',
+                'compras_cab.factura_numero',
+                'proveedores.empresa_nombre_corto as proveedor'
+            )
+            ->join('compras_cab', 'compras_det.id_factura_cab', 'compras_cab.id')
+            ->leftJoin('proveedores', 'compras_cab.factura_id_proveedor', 'proveedores.id')
+            ->where('compras_det.id_repuestos', $repuesto->id)
+            ->orderByDesc('compras_det.created_at')
+            ->get()
+            ->map(function ($ingreso) {
+                return [
+                    'id' => $ingreso->id,
+                    'fecha' => optional($ingreso->created_at)->format('d-m-Y H:i'),
+                    'cantidad' => (int) $ingreso->cantidad,
+                    'documento' => $ingreso->factura_numero,
+                    'proveedor' => $ingreso->proveedor,
+                ];
+            });
+
+        $ventas = collect();
+
+        // La cabecera puede quedar anulada aunque la nota de credito sea parcial.
+        // El detalle de la NC indica el repuesto y las unidades devueltas reales.
+        $cantidadesConNotaCredito = nota_de_credito_detalle::select(
+                'notas_de_credito.docum_referencia',
+                'notas_de_credito_detalle.id_facturas_detalle',
+                'notas_de_credito_detalle.cantidad'
+            )
+            ->join('notas_de_credito', 'notas_de_credito.id', 'notas_de_credito_detalle.id_nota_de_credito')
+            ->where('notas_de_credito_detalle.id_repuestos', $repuesto->id)
+            ->where('notas_de_credito_detalle.activo', 1)
+            ->where('notas_de_credito.activo', 1)
+            ->where('notas_de_credito.estado_sii', 'ACEPTADO')
+            ->get()
+            ->reduce(function ($cantidades, $detalle) {
+                $referencia = explode('*', (string) $detalle->docum_referencia);
+                if (count($referencia) >= 2) {
+                    $clave = strtolower(trim($referencia[0])).'|'.(int) $detalle->id_facturas_detalle;
+                    $cantidades[$clave] = ($cantidades[$clave] ?? 0) + (int) $detalle->cantidad;
+                }
+                return $cantidades;
+            }, []);
+
+        $datosVenta = function ($tipoDocumento, $detalleId, $cantidadOriginal, $estadoDocumento) use ($cantidadesConNotaCredito) {
+            $cantidadOriginal = (int) $cantidadOriginal;
+            $cantidadDevuelta = min($cantidadOriginal, (int) ($cantidadesConNotaCredito[strtolower($tipoDocumento).'|'.(int) $detalleId] ?? 0));
+            $cantidadNeta = max(0, $cantidadOriginal - $cantidadDevuelta);
+
+            return [
+                'cantidad' => $cantidadNeta,
+                'cantidad_original' => $cantidadOriginal,
+                'cantidad_devuelta' => $cantidadDevuelta,
+                'estado' => $cantidadNeta > 0 ? 1 : 0,
+                'estado_documento' => (int) $estadoDocumento,
+                'estado_venta' => $cantidadDevuelta === 0 ? 'vigente' : ($cantidadNeta === 0 ? 'devuelto' : 'parcial'),
+            ];
+        };
+
+        $boletas = boleta_detalle::select(
+                'boletas_detalle.id as detalle_id',
+                'boletas.id as documento_id',
+                'boletas.num_boleta as numero',
+                'boletas.fecha_emision',
+                'boletas.estado',
+                'boletas_detalle.cantidad',
+                'boletas_detalle.precio_venta',
+                'users.name as usuario',
+                'locales.local_nombre as local'
+            )
+            ->join('boletas', 'boletas.id', 'boletas_detalle.id_boleta')
+            ->leftJoin('users', 'boletas_detalle.usuarios_id', 'users.id')
+            ->leftJoin('locales', 'boletas_detalle.id_local', 'locales.id')
+            ->where('boletas_detalle.id_repuestos', $repuesto->id)
+            ->get();
+
+        foreach ($boletas as $venta) {
+            $ventas->push(array_merge([
+                'tipo' => 'Boleta',
+                'tipo_dte' => 39,
+                'documento_id' => $venta->documento_id,
+                'numero' => $venta->numero,
+                'fecha' => Carbon::parse($venta->fecha_emision)->format('d-m-Y'),
+                'fecha_orden' => Carbon::parse($venta->fecha_emision)->timestamp,
+                'precio' => (float) $venta->precio_venta,
+                'usuario' => $venta->usuario,
+                'local' => $venta->local,
+            ], $datosVenta('bo', $venta->detalle_id, $venta->cantidad, $venta->estado)));
+        }
+
+        $facturas = factura_detalle::select(
+                'facturas_detalle.id as detalle_id',
+                'facturas.id as documento_id',
+                'facturas.num_factura as numero',
+                'facturas.fecha_emision',
+                'facturas.estado',
+                'facturas_detalle.cantidad',
+                'facturas_detalle.precio_venta',
+                'users.name as usuario',
+                'locales.local_nombre as local'
+            )
+            ->join('facturas', 'facturas.id', 'facturas_detalle.id_factura')
+            ->leftJoin('users', 'facturas_detalle.usuarios_id', 'users.id')
+            ->leftJoin('locales', 'facturas_detalle.id_local', 'locales.id')
+            ->where('facturas_detalle.id_repuestos', $repuesto->id)
+            ->get();
+
+        foreach ($facturas as $venta) {
+            $ventas->push(array_merge([
+                'tipo' => 'Factura',
+                'tipo_dte' => 33,
+                'documento_id' => $venta->documento_id,
+                'numero' => $venta->numero,
+                'fecha' => Carbon::parse($venta->fecha_emision)->format('d-m-Y'),
+                'fecha_orden' => Carbon::parse($venta->fecha_emision)->timestamp,
+                'precio' => (float) $venta->precio_venta,
+                'usuario' => $venta->usuario,
+                'local' => $venta->local,
+            ], $datosVenta('fa', $venta->detalle_id, $venta->cantidad, $venta->estado)));
+        }
+
+        $vales = vale_mercaderia_detalle::select(
+                'vale_mercaderia.id as documento_id',
+                'vale_mercaderia.numero_boucher as numero',
+                'vale_mercaderia.created_at as fecha_emision',
+                'vale_mercaderia_detalle.cantidad',
+                'users.name as usuario'
+            )
+            ->join('vale_mercaderia', 'vale_mercaderia.id', 'vale_mercaderia_detalle.vale_mercaderia_id')
+            ->leftJoin('users', 'vale_mercaderia_detalle.usuario_id', 'users.id')
+            ->where('vale_mercaderia_detalle.repuesto_id', $repuesto->id)
+            ->get();
+
+        foreach ($vales as $venta) {
+            $ventas->push([
+                'tipo' => 'Vale',
+                'tipo_dte' => null,
+                'documento_id' => $venta->documento_id,
+                'numero' => $venta->numero,
+                'fecha' => Carbon::parse($venta->fecha_emision)->format('d-m-Y'),
+                'fecha_orden' => Carbon::parse($venta->fecha_emision)->timestamp,
+                'cantidad' => (int) $venta->cantidad,
+                'cantidad_original' => (int) $venta->cantidad,
+                'cantidad_devuelta' => 0,
+                'precio' => null,
+                'usuario' => $venta->usuario,
+                'local' => 'Vale de mercadería',
+                'estado' => 1,
+                'estado_documento' => 1,
+                'estado_venta' => 'vigente',
+            ]);
+        }
+
+        $ventas = $ventas->sortByDesc('fecha_orden')->values();
+        $totalVendido = $ventas->sum('cantidad');
+        $totalAnulado = $ventas->sum('cantidad_devuelta');
+
+        $devoluciones = devolucion_mercaderia::select(
+                'devolucion_mercaderia.id',
+                'devolucion_mercaderia.cantidad',
+                'devolucion_mercaderia.created_at',
+                'devolucion_mercaderia.tipo_doc',
+                'notas_de_credito.num_nota_credito',
+                'notas_de_credito.docum_referencia',
+                'users.name as usuario'
+            )
+            ->leftJoin('notas_de_credito', 'devolucion_mercaderia.num_nc', 'notas_de_credito.num_nota_credito')
+            ->leftJoin('users', 'devolucion_mercaderia.usuario_id', 'users.id')
+            ->where('devolucion_mercaderia.repuesto_id', $repuesto->id)
+            ->where('devolucion_mercaderia.activo', 0)
+            ->orderByDesc('devolucion_mercaderia.created_at')
+            ->get()
+            ->map(function ($devolucion) {
+                return [
+                    'id' => $devolucion->id,
+                    'fecha' => optional($devolucion->created_at)->format('d-m-Y H:i'),
+                    'cantidad' => (int) $devolucion->cantidad,
+                    'nota_credito' => $devolucion->num_nota_credito,
+                    'referencia' => $devolucion->docum_referencia,
+                    'usuario' => $devolucion->usuario,
+                ];
+            });
+
+        $traspasos = traspaso_mercaderia_detalle::select(
+                'traspaso_mercaderia_detalle.cantidad',
+                'traspaso_mercaderia_detalle.fecha_emision',
+                'traspaso_mercaderia_detalle.locaciones',
+                'traspaso_mercaderia_detalle.estado',
+                'users.name as usuario'
+            )
+            ->join('traspaso_mercaderia', 'traspaso_mercaderia_detalle.id_traspaso_mercaderia', 'traspaso_mercaderia.id')
+            ->leftJoin('users', 'traspaso_mercaderia.usuario_id', 'users.id')
+            ->where('traspaso_mercaderia_detalle.repuesto_id', $repuesto->id)
+            ->orderByDesc('traspaso_mercaderia_detalle.fecha_emision')
+            ->get()
+            ->map(function ($traspaso) {
+                return [
+                    'fecha' => Carbon::parse($traspaso->fecha_emision)->format('d-m-Y'),
+                    'cantidad' => (int) $traspaso->cantidad,
+                    'locaciones' => (int) $traspaso->locaciones,
+                    'estado' => (int) $traspaso->estado,
+                    'usuario' => $traspaso->usuario,
+                ];
+            });
+
+        $movimientos = StockMovimiento::with('usuario:id,name')
+            ->where('repuesto_id', $repuesto->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(function ($movimiento) {
+                return [
+                    'id' => $movimiento->id,
+                    'fecha' => optional($movimiento->created_at)->format('d-m-Y H:i:s'),
+                    'ubicacion' => (int) $movimiento->ubicacion_indice,
+                    'anterior' => (int) $movimiento->stock_anterior,
+                    'diferencia' => (int) $movimiento->cantidad_movimiento,
+                    'nuevo' => (int) $movimiento->stock_nuevo,
+                    'tipo' => $movimiento->tipo,
+                    'motivo' => $movimiento->motivo,
+                    'usuario' => optional($movimiento->usuario)->name ?: 'Proceso automático',
+                    'grupo_uuid' => $movimiento->grupo_uuid,
+                ];
+            });
+
+        $foto = repuestofoto::where('id_repuestos', $repuesto->id)->value('urlfoto');
+        $stockTotal = \App\Services\StockPorLocalService::total($repuesto);
+
+        return response()->json([
+            'repuesto' => [
+                'id' => $repuesto->id,
+                'codigo_interno' => $repuesto->codigo_interno,
+                'codigo_proveedor' => $repuesto->cod_repuesto_proveedor,
+                'descripcion' => $repuesto->descripcion,
+                'marca' => $repuesto->marcarepuesto,
+                'pais' => $repuesto->nombre_pais,
+                'precio_venta' => (float) $repuesto->precio_venta,
+                'precio_anterior' => (float) $repuesto->precio_antiguo,
+                'stock_minimo' => (int) $repuesto->stock_minimo,
+                'stock_total' => $stockTotal,
+                'modificado_por' => $repuesto->modificado_por,
+                'foto' => $foto ? asset('storage/'.$foto) : null,
+                'ubicaciones' => \App\Services\StockPorLocalService::habilitado()
+                    ? \App\RepuestoStock::with(['local','responsable'])->where('repuesto_id', $repuesto->id)->get()->map(function ($stock) {
+                        return [
+                            'indice' => $stock->local_id, 'nombre' => optional($stock->local)->local_nombre,
+                            'stock' => $stock->cantidad, 'ubicacion' => $stock->ubicacion_fisica,
+                            'responsable' => optional($stock->responsable)->name,
+                            'actualizado' => optional($stock->updated_at)->format('d-m-Y'),
+                        ];
+                    })->all()
+                    : [
+                    [
+                        'indice' => 1,
+                        'nombre' => 'Bodega',
+                        'stock' => (int) $repuesto->stock_actual,
+                        'ubicacion' => $repuesto->ubicacion,
+                        'responsable' => $repuesto->responsable_uno,
+                        'actualizado' => $repuesto->fecha_actualizacion_stock
+                            ? Carbon::parse($repuesto->fecha_actualizacion_stock)->format('d-m-Y')
+                            : null,
+                    ],
+                    [
+                        'indice' => 2,
+                        'nombre' => 'Tienda',
+                        'stock' => (int) $repuesto->stock_actual_dos,
+                        'ubicacion' => $repuesto->ubicacion_dos,
+                        'responsable' => $repuesto->responsable_dos,
+                        'actualizado' => $repuesto->fecha_actualizacion_stock_dos
+                            ? Carbon::parse($repuesto->fecha_actualizacion_stock_dos)->format('d-m-Y')
+                            : null,
+                    ],
+                    [
+                        'indice' => 3,
+                        'nombre' => 'Casa Matriz',
+                        'stock' => (int) $repuesto->stock_actual_tres,
+                        'ubicacion' => $repuesto->ubicacion_tres,
+                        'responsable' => $repuesto->responsable_tres,
+                        'actualizado' => $repuesto->fecha_actualizacion_stock_tres
+                            ? Carbon::parse($repuesto->fecha_actualizacion_stock_tres)->format('d-m-Y')
+                            : null,
+                    ],
+                ],
+            ],
+            'resumen' => [
+                'ingresado' => (int) $ingresos->sum('cantidad'),
+                'vendido' => (int) $totalVendido,
+                'anulado' => (int) $totalAnulado,
+                'devuelto' => (int) $devoluciones->sum('cantidad'),
+                'stock_actual' => $stockTotal,
+                'bajo_minimo' => $stockTotal <= (int) $repuesto->stock_minimo,
+            ],
+            'ingresos' => $ingresos,
+            'ventas' => $ventas,
+            'devoluciones' => $devoluciones,
+            'traspasos' => $traspasos,
+            'movimientos' => $movimientos,
+            'stock_minimo_fechas' => stock_minimo::where('id_repuesto', $repuesto->id)
+                ->orderByDesc('created_at')
+                ->limit(30)
+                ->get()
+                ->map(function ($registro) {
+                    return optional($registro->created_at)->format('d-m-Y H:i');
+                }),
+        ]);
+    }
+
     public function repuestos_sin_ubicacion(){
         try {
             $repuestos = repuesto::select('repuestos.*','marcarepuestos.marcarepuesto')
@@ -2539,23 +3594,43 @@ public function similares(Request $request)
         
     }
 
-    function eliminar_repuesto($id){
-        /* Borrar los hijos
-        similares y fotos
-
-        */
+    public function eliminar_repuesto($id){
         try {
-            similar::where('id_repuestos',$id)->delete();
-            repuestofoto::where('id_repuestos',$id)->delete();
-            repuesto::destroy($id);
+            $repuesto = repuesto::find($id);
 
-            return 'OK';
+            if(!$repuesto){
+                return response()->json([
+                    'mensaje' => 'error',
+                    'detalle' => 'El repuesto no existe o ya fue eliminado.'
+                ], 404);
+            }
+
+            if((int) $repuesto->activo === 0){
+                return response()->json([
+                    'mensaje' => 'error',
+                    'detalle' => 'El repuesto ya se encuentra inactivo.'
+                ], 409);
+            }
+
+            // Se conserva el registro y todas sus relaciones para mantener
+            // la trazabilidad de ventas, movimientos, fotografías y similares.
+            $repuesto->activo = 0;
+            $repuesto->save();
+
+            return response()->json([
+                'mensaje' => 'ok',
+                'detalle' => 'El repuesto fue desactivado correctamente.',
+                'codigo_interno' => $repuesto->codigo_interno
+            ]);
         } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-        
-    }
+            \Log::error('Error desactivando repuesto '.$id.': '.$e->getMessage());
 
+            return response()->json([
+                'mensaje' => 'error',
+                'detalle' => 'No fue posible desactivar el repuesto.'
+            ], 500);
+        }
+    }
     function avanzarNumTraspaso(){
         try {
             $usuario = Auth::user();
@@ -2595,7 +3670,7 @@ public function similares(Request $request)
 
             $repuestos = [];
             foreach($rs as $r){
-                $stock = $r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres;
+                $stock = \App\Services\StockPorLocalService::total($r);
                 if($stock > 0){
                     array_push($repuestos, $r);
                 }
@@ -2618,13 +3693,13 @@ public function similares(Request $request)
                         ->whereDate('fecha_actualizacion_stock_tres', '>', '2022-06-01')
                         ->where('id_familia','<>',312)
                         ->where('precio_venta','>',0)
-                        ->select('codigo_interno','descripcion','stock_actual','stock_actual_dos','stock_actual_tres','precio_venta')
+                        ->select('id','codigo_interno','descripcion','stock_actual','stock_actual_dos','stock_actual_tres','precio_venta')
                         ->orderBy('fecha_actualiza_precio','desc')
                         ->get();
 
             $repuestos = [];
             foreach($rs as $r){
-                $stock = $r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres;
+                $stock = \App\Services\StockPorLocalService::total($r);
                 if($stock > 0){
                     array_push($repuestos, $r);
                 }
@@ -2649,10 +3724,9 @@ public function similares(Request $request)
 
     public function detalle_pedido($idrep){
         try {
-            $detalle_pedido = detalle_pedido::select('detalle_pedido.*','repuestos.codigo_interno','repuestos.cod_repuesto_proveedor as codigo_proveedor','repuestos.descripcion','proveedores.empresa_nombre_corto','users.name as usuario')
+            $detalle_pedido = detalle_pedido::select('detalle_pedido.*','repuestos.codigo_interno','repuestos.descripcion','proveedores.empresa_nombre_corto')
                                 ->join('repuestos','detalle_pedido.id_repuesto','repuestos.id')
                                 ->join('proveedores','detalle_pedido.id_proveedor','proveedores.id')
-                                ->join('users','detalle_pedido.usuario_id','users.id')
                                 ->where('detalle_pedido.id_repuesto',$idrep)
                                 ->first();
             if($detalle_pedido) {
@@ -2667,14 +3741,13 @@ public function similares(Request $request)
         
     }
 
-    public function guardar_detalle_pedido($idrepuesto,$idproveedor, $cantidad, $cod_rep_prov){
+    public function guardar_detalle_pedido($idrepuesto,$idproveedor, $cantidad){
         try {
             // preguntar si ya existe un pedido para el repuesto y proveedor
             $detalle_pedido_proveedor = detalle_pedido::where('id_repuesto',$idrepuesto)->where('id_proveedor',$idproveedor)->first();
             $solo_pedido_repuesto = detalle_pedido::where('id_repuesto',$idrepuesto)->first();
             if($detalle_pedido_proveedor){
                 $detalle_pedido_proveedor->cantidad = $cantidad;
-                $detalle_pedido_proveedor->cod_rep_prov = $cod_rep_prov;
                 $detalle_pedido_proveedor->save();
                
             }elseif($solo_pedido_repuesto){
@@ -2685,7 +3758,6 @@ public function similares(Request $request)
                 $detalle_pedido->id_repuesto = $idrepuesto;
                 $detalle_pedido->id_proveedor = $idproveedor;
                 $detalle_pedido->cantidad = $cantidad;
-                $detalle_pedido->cod_rep_prov = $cod_rep_prov;
                 $detalle_pedido->usuario_id = $usuario->id;
                 $detalle_pedido->fecha_emision = Carbon::today()->toDateString();
                 $detalle_pedido->save();
@@ -2696,57 +3768,5 @@ public function similares(Request $request)
             return $e->getMessage();
         }
         
-    }
-
-    public function descargarRepuestosFamiliaExcel($idFamilia){
-        try {
-            // Obtener los datos de los repuestos
-            // Obtén los datos de los repuestos desde la base de datos usando Eloquent ORM
-            $rs = repuesto::where('id_familia',$idFamilia)
-                        ->where('precio_venta','>',0)
-                        ->select('codigo_interno','descripcion','stock_actual','stock_actual_dos','stock_actual_tres','precio_venta')
-                        ->orderBy('fecha_actualiza_precio','desc')
-                        ->get();
-
-            $repuestos = [];
-            foreach($rs as $r){
-                array_push($repuestos, $r);
-                // $stock = $r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres;
-                // if($stock > 0){
-                //     // array_push($repuestos, $r);
-                // }
-            }
-
-            // Convertir el arreglo de repuestos a una colección de Laravel
-            $coleccionRepuestos = collect($repuestos);
-
-            // Generar el archivo Excel utilizando el paquete Laravel Excel
-            return Excel::download(new Repuestos_actualizadosExport($coleccionRepuestos), 'repuestos_'.$idFamilia.'.xlsx');
-            
-            }catch(\Exception $e) {
-            // Puedes personalizar la respuesta de error según tus necesidades
-            return response()->json([
-                'message' => 'Error al descargar el archivo Excel.',
-                'error' => $e->getMessage() // Puedes obtener el mensaje de error de la excepción
-            ], 500);
-            }
-
-    }
-
-    public function detallestockminimo($idrep){
-        try {
-            $detalle_stock_minimo = stock_minimo::select('stock_minimo.*','repuestos.codigo_interno','repuestos.descripcion')
-                                ->join('repuestos','stock_minimo.id_repuesto','repuestos.id')
-                                ->where('stock_minimo.id_repuesto',$idrep)
-                                ->first();
-            if($detalle_stock_minimo) {
-                // formatear la fecha de emision con formato d-m-y con la libreria carbon
-                $detalle_stock_minimo->fecha_emision = Carbon::parse($detalle_stock_minimo->fecha_emision)->format('d-m-Y');
-            }
-            
-            return $detalle_stock_minimo;
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
     }
 }

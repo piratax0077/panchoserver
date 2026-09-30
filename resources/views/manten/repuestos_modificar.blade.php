@@ -146,324 +146,255 @@ function ampliar()
 
         success: function(resp){
           console.log(resp);
-          $('#rec_alt_rep').empty();
-          $('#result').empty();
-          $('#bendix').empty();
-         
+        $('#rec_alt_rep').empty();
+        $('#bendix').empty();
+        $('#result').empty();
+        $('#span_medidas').empty();
+        $('#fotos_ficha_tecnica').empty();
+        let cadena = $('#medidas_respaldo').val();
+        // Dividir la cadena en un array usando explode
+           // Dividir la cadena en un array usando split
+        let medidasRespaldo = cadena.split(',');
+
+        // Filtrar elementos vacíos del medidasRespaldo
+        medidasRespaldo = medidasRespaldo.filter(item => item.trim() !== '');
+
+        console.log(medidasRespaldo);
+        if(resp == 'bendix'){
+          $('#rec_alt_rep').addClass('d-none');
+          $('#bendix').removeClass('d-none');
+          $('#bendix').append(`
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          
+          <div class='form-group'>
+              <label>MOTOR DE PARTIDA</label>
+              <input class='form-control' id="motorpartida" type='text' placeholder ='Motor de partida' oninput="habilitarBotonMotor()" />
+          </div>
+          
+          
+            <input type="button" role="button" class='btn btn-success btn-sm mb-3' onclick="guardar_motor()" id="btn_motor" value="Guardar datos" disabled="true" /> 
+          </div>
+          </div>
+          `);
+        }else if(resp == 'rv'){
+          $('#rec_alt_rep').removeClass('d-none');
+          $('#rec_alt_rep').append(`
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          <div>
+          <div class='form-group'>
+              <label>RECTIFICADOR </label>
+              <input class='form-control' id="rectificador" type='text' placeholder ='Rectificador' oninput="habilitarBotonRecAlt()" />
+          </div>
+          <div class='form-group'>
+              <label>ALTERNADOR </label>
+              <input class='form-control' id="alternador" type='text' placeholder ='Alternador' oninput="habilitarBotonRecAlt()" />
+          </div>
+          <div>
+            <input type="button" role="button" class='btn btn-success btn-sm mb-3' onclick="guardar_rec_alt()" id="btn_guardar_rec_alt" value="Guardar datos" disabled="true" /> 
+          </div>
+          </div>
+          `);
+        }else if(resp == 'aceite'){
+          $('#fotos_ficha_tecnica').empty();
+          $('#fotos_ficha_tecnica').append(`
+          <label>Subir Ficha técnica (pdf):</label>
+          <input type="file" name="ficha_tecnica" id="ficha_tecnica" class="form-control-file">
+          <div id="ficha_tecnica_submit">
+                <input type="submit" name="btnGuardarFicha" id="btnGuardarFicha" value="Agregar Ficha Técnica" class="btn btn-primary btn-sm" onclick="guardarficha()" style="margin-left:2px"/>
+            </div>
+          `);
+          $('#span_medidas').empty();
+          $('#span_medidas').append(`
+          <label for="medidas">Medidas:</label>
+          <div class="clearfix"></div>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;"></textarea>
+          <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
+          <input type="hidden" id="familia_length" />
+          `);
+        }else if(resp[0] == 'pd'){
+          let medidas_disco = resp[1];
+          let medidas_prensa = resp[2];
+          $('#span_medidas').empty();
+          $('#span_medidas').append(`<label class='float-left' for='medidas'>Medidas: </label>`);
+          let button_html = `
+          <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
+          `;
+          let btn_ver_medidas = `<button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal' >Seleccionar medidas </button>`;
+          // Se le agrega el textarea de id medidas que esta escondido para que se pueda agregar la lista de medidas al nuevo repuesto
+          let textarea = `
+          <label for="medidas" style='display: none;'>Medidas:</label>
+                    <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style='display: none;'></textarea>
+          `;
+          $('#span_medidas').append(btn_ver_medidas);
+          $('#span_medidas').append(button_html);
+          $('#span_medidas').append(textarea);
+          $('#modal_body_medidas').empty();
+          let html = `
+          <div class='clearfix'> </div>
+          <table class="table">
+            <thead>
+            <tr>
+              <th scope="col">Descripción</th>
+              <th scope="col">Medidas</th>
+              <th scope="col">Seleccionar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+                  <th scope='row'>DISCO</th> 
+                  <th scope='row'><input type="text" class="form-control dato" id="medida1_pd" value="DISCO-"  /></th> 
+                  <th scope='row'> 
+                    <button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal_pd' >Seleccionar medidas </button> <input type="hidden" id="medida_value" />
+                  </th>
+            </tr>
+            <tr>
+                  <th scope='row'>PRENSA</th> 
+                  <th scope='row'><input type="text" class="form-control dato" id="medida2_pd" value="PRENSA-"  /></th> 
+                  <th scope='row'> 
+                    <button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal_pd_dos' >Seleccionar medidas </button> <input type="hidden" id="medida_value" />
+                  </th>
+            </tr>
+            </tbody>`;
+            
+          $('#modal_body_medidas').append(html);
+          $('#modal_body_medidas_pd').empty();
+          let html_ = `
+          <div class='clearfix'> </div>
+          <table class="table">
+            <thead>
+            <tr>
+              <th scope="col">Descripción</th>
+              <th scope="col">Medidas</th>
+              <th scope="col">Seleccionar</th>
+            </tr>
+          </thead>
+          <tbody>`;
+          var cont_ = 0;
+            medidas_disco.forEach(e => {
+                cont_++;
+                html_+= `
+                <tr>
+                  <th scope='row'>`+e.descripcion+ `</th> 
+                  <th scope='row'> <input type="text" class="form-control dato_disco" id="medida_`+cont_+`" value="`+e.descripcion+`-" disabled /> <input type="hidden" id="medida_value_" /></th> 
+                  <th scope='row'> 
+                    <div class='form-check'>
+                      <input class='form-check-input' type='checkbox' id='chkbx_`+cont_+`' onclick="abrirCampoMedidas_pd(`+cont_+`)" value='`+e.descripcion+`'> 
+                    </div>  
+                  </th>
+                </tr>`;
+              });
+          html+= `</tbody>
+          </table>
+          `;
+          $('#modal_body_medidas_pd').append(html_);
+
+          $('#modal_body_medidas_pd_dos').empty();
+          let html_dos = `
+          <div class='clearfix'> </div>
+          <table class="table">
+            <thead>
+            <tr>
+              <th scope="col">Descripción</th>
+              <th scope="col">Medidas</th>
+              <th scope="col">Seleccionar</th>
+            </tr>
+          </thead>
+          <tbody>`;
+          var cont_dos = 0;
+            medidas_prensa.forEach(e => {
+                cont_dos++;
+                html_dos+= `
+                <tr>
+                  <th scope='row'>`+e.descripcion+ `</th> 
+                  <th scope='row'> <input type="text" class="form-control dato_prensa" id="medida_dos`+cont_dos+`" value="`+e.descripcion+`-" disabled /> <input type="hidden" id="medida_value_" /></th> 
+                  <th scope='row'> 
+                    <div class='form-check'>
+                      <input class='form-check-input' type='checkbox' id='chkbx_dos`+cont_dos+`' onclick="abrirCampoMedidas_pd_dos(`+cont_dos+`)" value='`+e.descripcion+`'> 
+                    </div>  
+                  </th>
+                </tr>`;
+              });
+          html_dos+= `</tbody>
+          </table>
+          `;
+          $('#modal_body_medidas_pd_dos').append(html_dos);
+        }else {
+          
           if(resp.length == 0){
+        
+          $('#span_medidas').empty();
+          $('#span_medidas').append(`
+          <label for="medidas">Medidas:</label>
+          <div class="clearfix"></div>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;"></textarea>
+          <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
+          <input type="hidden" id="familia_length" />
+          `);
+        }else{
+          $('#span_medidas').empty();
+          $('#span_medidas').append(`<label class='float-left' for='medidas'>Medidas: </label>`);
+          let button_html = `
+          <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
+          `;
+          let btn_ver_medidas = `<button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal' >Seleccionar medidas </button>`;
+          // Se le agrega el textarea de id medidas que esta escondido para que se pueda agregar la lista de medidas al nuevo repuesto
+          let textarea = `
+          <label for="medidas" style='display: none;'>Medidas:</label>
+                    <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style='display: none;'></textarea>
+          `;
+          $('#span_medidas').append(btn_ver_medidas);
+          $('#span_medidas').append(button_html);
+          $('#span_medidas').append(textarea);
+          $('#modal_body_medidas').empty();
+          let html = `
+          <div class='clearfix'> </div>
+          <table class="table">
+            <thead>
+            <tr>
+              <th scope="col">Descripción</th>
+              <th scope="col">Medidas</th>
+              <th scope="col">Seleccionar</th>
+              <th scope="col"></th>
+              <th scope="col"> </th>
+            </tr>
+          </thead>
+          <tbody>`;
+          var cont = 0;
+          resp.forEach(e => {
+            cont++;
 
-            $('#span_medidas').empty();
+            // Buscar la medida equivalente en el array de medidas de respaldo
+            let medidaRespaldo = medidasRespaldo.find(medida => medida.startsWith(e.descripcion + '-'));
 
-            $('#span_medidas').append(`
+            // Extraer el valor después del guion "-"
+            let valorMedida = medidaRespaldo ? medidaRespaldo.split('-')[1].trim() : '';
 
-            <label for="medidas">Medidas:</label>
-
-                      <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo"></textarea>
-                      
-            `);
-
-          }else if(resp == "bendix"){
-            $('#rec_alt_rep').addClass('d-none');
-            
-            $('#bendix').append(`
-            <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
-            
-            <div class='form-group'>
-                <label>MOTOR DE PARTIDA</label>
-                <input class='form-control' id="motorpartida" type='text' placeholder ='Motor de partida' />
-            </div>
-            
-            
-              <input type="button" role="button" class='btn btn-success btn-sm mb-3' onclick="guardar_motor()" id="btn_motor" value="Guardar datos" disabled="true" /> 
-            </div>
-            </div>
-            `);
-            // hacer que el atributo disabled sea false del boton btn_motor
-          document.getElementById("btn_motor").disabled=false;
-          }else if(resp == 'rv'){
-          
-            $('#rec_alt_rep').removeClass('d-none');
-            $('#rec_alt_rep').addClass('d-block');
-            $('#rec_alt_rep').append(`
-            
-            <div>
-            <div class='form-group'>
-                <label>RECTIFICADOR </label>
-                <input class='form-control' id="rectificador" type='text' placeholder ='Rectificador' />
-            </div>
-            <div class='form-group'>
-                <label>ALTERNADOR </label>
-                <input class='form-control' id="alternador" type='text' placeholder ='Alternador' />
-            </div>
-            <div>
-              <input type="button" role="button" class='btn btn-success btn-sm mb-4' onclick="guardar_rec_alt()" value="Guardar datos" /> 
-            </div>
-            </div>
-            `);
-          
-          }else if(resp[0] == 'pd'){
-            let medidas_disco = resp[1];
-            let medidas_prensa = resp[2];
-            let medidas_respaldo = $('#medidas_respaldo').val();
-            // seperar las medidas_respaldo por los caracteres ,,
-            let array_medidas_respaldo = medidas_respaldo.split(',,');
-            let respaldo_disco = array_medidas_respaldo[0];
-            // eliminar el primer caracter de la cedena respaldo_disco que es una coma
-            respaldo_disco = respaldo_disco.substring(1);
-            
-            let respaldo_prensa = array_medidas_respaldo[1];
-            let array_respaldo_disco = respaldo_disco.split(',');
-            // se elimina el primer registro del array que es un espacio en blanco
-            array_respaldo_disco.shift();
-            let array_respaldo_prensa = respaldo_prensa.split(',');
-            // se elimina el primer registro del array que es un espacio en blanco
-            array_respaldo_prensa.shift();
-            // se elimina la cadena DISCO: y PRENSA: de los registros del array
-            array_respaldo_disco = array_respaldo_disco.map(function(item){
-              return item.replace('DISCO:','');
-            });
-            array_respaldo_prensa = array_respaldo_prensa.map(function(item){
-              return item.replace('PRENSA:','');
-            });
-
-            console.log(array_respaldo_disco);
-
-            $('#span_medidas').empty();
-            $('#span_medidas').append(`<label class='float-left' for='medidas'>Medidas: </label>`);
-            let button_html = `
-            <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" disabled >+</button>
-            `;
-            let btn_ver_medidas = `<button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal' >Seleccionar medidas </button>`;
-            // Se le agrega el textarea de id medidas que esta escondido para que se pueda agregar la lista de medidas al nuevo repuesto
-            let textarea = `
-            <label for="medidas" style='display: none;'>Medidas:</label>
-                      <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style='display: none;'></textarea>
-            `;
-            $('#span_medidas').append(btn_ver_medidas);
-            $('#span_medidas').append(button_html);
-            $('#span_medidas').append(textarea);
-            $('#modal_body_medidas').empty();
-            let html = `
-            <div class='clearfix'> </div>
-            <table class="table">
-              <thead>
-              <tr>
-                <th scope="col">Descripción</th>
-                <th scope="col">Medidas</th>
-                <th scope="col">Seleccionar</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                    <th scope='row'>DISCO</th> 
-                    <th scope='row'><input type="text" class="form-control dato" id="medida1_pd" value="`+respaldo_disco+`"  /></th> 
-                    <th scope='row'> 
-                      <button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal_pd' >Seleccionar medidas </button> <input type="hidden" id="medida_value" />
-                    </th>
-              </tr>
-              <tr>
-                    <th scope='row'>PRENSA</th> 
-                    <th scope='row'><input type="text" class="form-control dato" id="medida2_pd" value="`+respaldo_prensa+`"  /></th> 
-                    <th scope='row'> 
-                      <button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal_pd_dos' >Seleccionar medidas </button> <input type="hidden" id="medida_value" />
-                    </th>
-              </tr>
-              </tbody>`;
-              
-            $('#modal_body_medidas').append(html);
-            $('#modal_body_medidas_pd').empty();
-            let html_ = `
-            <div class='clearfix'> </div>
-            <table class="table">
-              <thead>
-              <tr>
-                <th scope="col">Descripción</th>
-                <th scope="col">Medidas</th>
-                <th scope="col">Seleccionar</th>
-              </tr>
-            </thead>
-            <tbody>`;
-            var cont_ = 0;
-              medidas_disco.forEach(e => {
-                  cont_++;
-                  e.descripcion_ = e.descripcion+'-';
-                  array_respaldo_disco.forEach(m => {
-                    // si m hasta el caracter - es igual a e.descripcion se le asigna el valor de m a e.descripcion_
-                    if(m.substring(0, m.indexOf('-')) == e.descripcion){
-                      
-                      e.descripcion_ = m;
-                    }
-                  });
-                  html_+= `
-                  <tr>
-                    <th scope='row'>`+e.descripcion+ `</th> 
-                    <th scope='row'> <input type="text" class="form-control dato_disco" id="medida_`+cont_+`" value="`+e.descripcion_+`" disabled /> <input type="hidden" id="medida_value_" /></th> 
-                    <th scope='row'> 
-                      <div class='form-check'>
-                        <input class='form-check-input' type='checkbox' id='chkbx_`+cont_+`' onclick="abrirCampoMedidas_pd(`+cont_+`)" value='`+e.descripcion+`'> 
-                      </div>  
-                    </th>
-                  </tr>`;
-                });
-            html+= `</tbody>
-            </table>
-            `;
-            $('#modal_body_medidas_pd').append(html_);
-
-            $('#modal_body_medidas_pd_dos').empty();
-
-            let html_dos = `
-            <div class='clearfix'> </div>
-            <table class="table">
-              <thead>
-              <tr>
-                <th scope="col">Descripción</th>
-                <th scope="col">Medidas</th>
-                <th scope="col">Seleccionar</th>
-              </tr>
-            </thead>
-            <tbody>`;
-            var cont_dos = 0;
-              medidas_prensa.forEach(e => {
-                  cont_dos++;
-                  e.descripcion_ = e.descripcion+'-';
-                  array_respaldo_prensa.forEach(m => {
-                    // si m hasta el caracter - es igual a e.descripcion se le asigna el valor de m a e.descripcion_
-                    if(m.substring(0, m.indexOf('-')) == e.descripcion){
-                      
-                      e.descripcion_ = m;
-                    }
-                  });
-                  html_dos+= `
-                  <tr>
-                    <th scope='row'>`+e.descripcion+ `</th> 
-                    <th scope='row'> <input type="text" class="form-control dato_prensa" id="medida_dos`+cont_dos+`" value="`+e.descripcion_+`" disabled /> <input type="hidden" id="medida_value_" /></th> 
-                    <th scope='row'> 
-                      <div class='form-check'>
-                        <input class='form-check-input' type='checkbox' id='chkbx_dos`+cont_dos+`' onclick="abrirCampoMedidas_pd_dos(`+cont_dos+`)" value='`+e.descripcion+`'> 
-                      </div>  
-                    </th>
-                  </tr>`;
-                });
-            html_dos+= `</tbody>
-            </table>
-            `;
-            $('#modal_body_medidas_pd_dos').append(html_dos);
+            html += `
+            <tr>
+              <th scope='row'>` + e.descripcion + `</th> 
+              <th scope='row'> 
+                <input type="text" class="form-control dato" id="medida` + cont + `" value="` + e.descripcion + `-` + valorMedida + `" disabled /> 
+                <input type="hidden" id="medida_value" />
+              </th> 
+              <th scope='row'> 
+                <div class='form-check'>
+                  <input class='form-check-input' type='checkbox' id='chkbx` + cont + `' onclick="abrirCampoMedidas(` + cont + `)" value='` + e.descripcion + `'> 
+                </div>  
+              </th>
+              <th>
+                <button class="btn btn-danger btn-sm" onclick="eliminar_medida_familia(` + e.id + `)">X</button>
+              </th>
+              <th>
+                <button class="btn btn-info btn-sm" onclick="editar_medida_familia(` + e.id + `)">Editar</button>
+              </th>
+            </tr>`;
+          });
+          html+= `</tbody>
+          </table>
+          `;
+          $('#modal_body_medidas').append(html);
           }
-          
-          else{
-
-            $('#span_medidas').empty();
-
-            $('#span_medidas').append(`<label class='float-left' for='medidas'>Medidas: </label>`);
-
-            let button_html = `
-
-            <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
-
-            `;
-
-            let btn_ver_medidas = `<button class='btn btn-info btn-sm float-left' style='clear: both;' data-toggle='modal' data-target='#verMedidasModal' >Seleccionar medidas </button>`;
-
-            // Se le agrega el textarea de id medidas que esta escondido para que se pueda agregar la lista de medidas al nuevo repuesto
-
-            let textarea = `
-
-            <label for="medidas" style="display:none;">Medidas:</label>
-
-                      <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style='display: none;'></textarea>
-
-            `;
-
-            $('#span_medidas').append(btn_ver_medidas);
-
-            // $('#span_medidas').append(button_html);
-
-            $('#span_medidas').append(textarea);
-
-            $('#modal_body_medidas').empty();
-
-            let html = `
-
-            <div class='clearfix'> </div>
-
-            <table class="table">
-
-              <thead>
-
-              <tr>
-
-                <th scope="col">Descripción</th>
-                <th scope="col">Medidas</th>
-                <th scope="col">Seleccionar</th>
-                <th scope="col">Eliminar </th>
-              </tr>
-
-            </thead>
-
-            <tbody>`;
-
-            var cont = 0;
-            var array_descripciones = [];
-            var medidas_respaldo = $('#medidas_respaldo').val();
-            // seperar las medidas por el caracter ,
-            var array_medidas_respaldo = medidas_respaldo.split(',');
-            // eliminar el primer elemento del array que es vacio
-            array_medidas_respaldo.shift();
-              
-                resp.forEach(e => {
-                  
-                 
-                  cont++;
-                  e.descripcion_ = e.descripcion+'-';
-                  e.disabledx = 'disabled';
-                  array_medidas_respaldo.forEach(m => {
-                    // si m hasta el caracter - es igual a e.descripcion se le asigna el valor de m a e.descripcion_
-                    if(m.substring(0, m.indexOf('-')) == e.descripcion){
-                      
-                      e.descripcion_ = m;
-                      e.checkedx = 'checked';
-                      e.disabledx = '';
-                    }
-                  });
-                  
-                 
-                  html+= `
-                    <tr>
-
-                      <th scope='row'>`+e.descripcion+ `</th> 
-                      <th scope='row'> <input type="text" class="form-control dato" id="medida`+cont+`" value="`+e.descripcion_+`" `+e.disabledx+` /> <input type="hidden" id="medida_value" /></th> 
-                      <th scope='row'> 
-
-                        <div class='form-check'>
-
-                          <input class='form-check-input' type='checkbox' id='chkbx`+cont+`' onclick="abrirCampoMedidas(`+cont+`)" value='`+e.descripcion+`' `+e.checkedx+`> 
-
-                        </div>  
-
-                      </th>
-                      <th> <button class='btn btn-danger btn-sm' role="button" onclick="eliminar_medida_familia(`+e.id+`)">X</button> </th>
-
-                    </tr>`;
-                    
-                  });
-
-                html+= `</tbody>
-
-                </table>
-
-                `;
-            
-
-              $('#modal_body_medidas').append(html);
-            
-
-            }
-
-
-
-            
-
+      }
         }
 
      });
@@ -526,7 +457,7 @@ function ampliar()
 
         }); //Fin ajax dameUtilidad
 
-    }
+  }
 
 
     function ubicarse_en_anios()
@@ -569,6 +500,7 @@ function ampliar()
         },
         url:url,
         success:function(marks){ //Viene en formato json
+          console.log(marks);
           var marcas=JSON.parse(marks);
           $('#MarcaRepuesto').append('<option value="">Elija una Marca de Repuesto</option>');
           marcas.forEach(function(marca){
@@ -1905,6 +1837,9 @@ function ampliar()
           document.getElementById("zona_OEMs").disabled=false;
           document.getElementById("zona_FABs").disabled=false;
 
+          // Cargar medidas automáticamente según la familia
+          dame_medidas();
+
           let idf = document.getElementById("familia").value;
           if(idf == 206 || idf == 282){
             $('#rec_alt_rep').empty();
@@ -1937,7 +1872,7 @@ function ampliar()
           <div>
           <div class='form-group'>
               <label>MOTOR DE PARTIDA</label>
-              <input class='form-control' id="motorpartida" type='text' placeholder ='Motor de partida' />
+              <input class='form-control' id="motorpartida" type='text' placeholder ='Motor de partida' oninput="habilitarBotonMotor()" />
           </div>
           
           <div>
@@ -1963,6 +1898,35 @@ function ampliar()
 
     });
 
+    }
+
+    function habilitarBotonRecAlt(){
+      let rectificador = document.getElementById("rectificador");
+      let alternador = document.getElementById("alternador");
+      let btnGuardar = document.getElementById("btn_guardar_rec_alt");
+      
+      if(rectificador && alternador && btnGuardar){
+        // Si al menos uno de los campos tiene contenido, habilitar el botón
+        if(rectificador.value.trim().length > 0 || alternador.value.trim().length > 0){
+          btnGuardar.disabled = false;
+        } else {
+          btnGuardar.disabled = true;
+        }
+      }
+    }
+
+    function habilitarBotonMotor(){
+      let motorPartida = document.getElementById("motorpartida");
+      let btnMotor = document.getElementById("btn_motor");
+      
+      if(motorPartida && btnMotor){
+        // Si el campo tiene contenido (más de un carácter), habilitar el botón
+        if(motorPartida.value.trim().length > 0){
+          btnMotor.disabled = false;
+        } else {
+          btnMotor.disabled = true;
+        }
+      }
     }
 
     function guardar_motor(){
@@ -2330,50 +2294,46 @@ window.onload = function(e){
 }
 
 function eliminar_repuesto(){
-  var id_repuesto=document.getElementById("id_repuesto").value;
-  var url = '/repuesto/eliminar/'+id_repuesto;
+  const idRepuesto = document.getElementById('id_repuesto').value;
 
   Vue.swal({
-        title:'¿Estás seguro?',
-        text:'El repuesto se eliminará del sistema, sin poder recuperarlo',
-        icon:'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Sí, Eliminar!'
-      }).then(result => {
-        if(result.isConfirmed){
-          $.ajax({
-            type:'get',
-            url:url,
-            beforeSend: function(){
-              Vue.swal({
-                icon:'info',
-                title:'Eliminando ...'
-              })
-            },
-            success: function(resp){
-              Vue.swal.close();
-              if(resp == 'OK'){
-                Vue.swal({
-                  icon:'success',
-                  title:'Exito',
-                  text:'Repuesto eliminado con éxito'
-                });
-              }
-            },
-            error: function(err){
-              Vue.swal({
-                icon:'error',
-                text: err.responseText,
+    title: 'Desactivar repuesto',
+    html: '<p>El repuesto dejará de aparecer en las búsquedas activas.</p><small>Su historial, movimientos, fotografías y relaciones se conservarán y podrá reactivarse posteriormente.</small>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc3545',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: '<i class="fas fa-ban"></i> Desactivar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    showLoaderOnConfirm: true,
+    allowOutsideClick: function(){ return !Vue.swal.isLoading(); },
+    preConfirm: function(){
+      return $.ajax({
+        type: 'DELETE',
+        url: '/repuesto/eliminar/'+idRepuesto,
+        headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')}
+      }).catch(function(error){
+        const mensaje = error.responseJSON && error.responseJSON.detalle
+          ? error.responseJSON.detalle
+          : 'No fue posible desactivar el repuesto.';
+        Vue.swal.showValidationMessage(mensaje);
+      });
+    }
+  }).then(function(resultado){
+    if(!resultado.value) return;
 
-              });
-            }
-            });
-          }
-        });
-      }
-    
+    Vue.swal({
+      icon: 'success',
+      title: 'Repuesto desactivado',
+      text: resultado.value.detalle,
+      confirmButtonText: 'Ver repuestos inactivos',
+      allowOutsideClick: false
+    }).then(function(){
+      window.location.href = '/repuesto/inactivos';
+    });
+  });
+}
   function cambiarProveedor(){
     let url = '/proveedor/dameproveedores_array';
     $.ajax({
@@ -2437,6 +2397,30 @@ function eliminar_repuesto(){
 
       }
 
+    }
+
+    function editar_medida_familia(idmedida){
+    $('#modalEditarMedida').modal('show');
+    // no mostrar el modal verMedidasModal
+    $('#verMedidasModal').modal('hide');
+    let url = "{{url('medidas')}}"+'/'+idmedida+'/editar';
+    $.ajax({
+      type: 'get',
+      url: url,
+      success: function(resp){
+        console.log(resp);
+        $('#medida_nombre').val(resp.descripcion);
+        $('#medida_id').val(resp.id);
+      },
+      error: function(error){
+        console.log(error.responseText);
+      }
+    });
+}
+
+function mostrarModalPrincipal(){
+      $("#verMedidasModal").modal("show");
+      $('#modalEditarMedida').modal('hide');
     }
 
     function abrirCampoMedidas_pd_dos(value){
@@ -2974,7 +2958,7 @@ label {
 
   <div class="modal fade" id="verMedidasModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
 
-    <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-dialog modal-xl" role="document">
   
       <div class="modal-content">
   
@@ -3066,6 +3050,30 @@ label {
       <div class="modal-footer">
         <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
         <button type="button" class="btn btn-success" onclick="guardarProveedor()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" tabindex="-1" role="dialog" id="modalEditarMedida">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">Editar Medida</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+            
+            <label for="medida">Medida</label>
+            <input type="text" name="medida" id="medida_nombre" class="form-control">
+            <input type="hidden" name="id_medida" id="medida_id">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success btn-sm" onclick="editarNombreMedida()">Guardar</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="mostrarModalPrincipal()">Cerrar</button>
       </div>
     </div>
   </div>

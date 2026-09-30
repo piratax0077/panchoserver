@@ -95,6 +95,14 @@ function espere(mensaje)
                     });
 
                   html_locales += '</select>';
+                  // Pasar las familias de PHP a JS
+                  var familias = @json($familias);
+                  let html_familias = '<select id="familia_id">';
+                  familias.forEach(fam => {
+                    html_familias += '<option value="'+fam.id+'">'+fam.nombrefamilia+'</option>';
+                  });
+                  html_familias += '</select>';
+
                     $('#id_kit').val(detalle_kit[0].id_kit);
                     console.log(detalle_kit);
                     $('#busqueda_resultado').removeClass('d-none');
@@ -110,17 +118,18 @@ function espere(mensaje)
                       let url = "/repuesto/modificar/"+element.id;
                         $('#tbody_resultados').append(`
                         <tr>
-                                                    
+                                                  
                             <td scope="row" style="width: 20%" >`+element.descripcion+`</td>
                             <td><span class="stock_bajo" id="stock-`+element.id+`">`+stock_total+`</span></td>
-                           
                             <td><span id="ubicacion-`+element.id+`">$ `+commaSeparateNumber(parseInt(element.precio_venta).toFixed(0))+`</span></td>
-                            
                             <td>`+element.cod_repuesto_proveedor+`</td>
-                            
                             <td>`+element.nombre_pais+`</td>
+                            <td style="display: flex; gap: 4px; align-items: center;">
+                                `+html_familias+`
+                                <button class="btn btn-primary btn-sm" onclick="guardar_rep_familia(`+element.id+`, this)"><i class="fas fa-save"></i></button>
+                            </td>
                             <td>`+html_locales+`</td>
-                            <td><button class="btn btn-success btn-sm" onclick="seleccionar_kit(`+element.id+`)">Seleccionar </button> </td>
+                            <td><button class="btn btn-success btn-sm" onclick="seleccionar_kit(`+element.id+`)"><i class="fas fa-check"></i></button> </td>
                         </tr>
                  `);
                     
@@ -142,7 +151,7 @@ function espere(mensaje)
                       <td>`+ubicacion+` </td>
                       <td>$ `+commaSeparateNumber(parseInt(d.precio_venta).toFixed(0))+` </td>
                       
-                      <td><button class='btn btn-danger btn-sm' onclick="eliminar_repuesto_kit(`+d.id_repuesto+`)">X</button> </td>
+                      <td><button class='btn btn-danger btn-sm' onclick="eliminar_repuesto_kit(`+d.id_repuesto+`)"><i class="fas fa-trash"></i></button> </td>
                       </tr>`);
                    });
                   }else{
@@ -158,7 +167,13 @@ function espere(mensaje)
                     });
 
                   html_locales += '</select>';
-                  
+                  html_familias = '<select id="familia_id">';
+                  var familias = @json($familias);
+                  familias.forEach(familia => {
+                    html_familias += '<option value='+familia.id+'>'+familia.nombrefamilia+' </option>';
+                  });
+                  html_familias += '</select>';
+
                    
                     $('#busqueda_resultado').removeClass('d-none');
                     $('#busqueda_resultado').addClass('d-block');
@@ -173,12 +188,14 @@ function espere(mensaje)
                                                   
                             <td scope="row" style="width: 20%" >`+element.descripcion+`</td>
                             <td><span class="stock_bajo" id="stock-`+element.id+`">`+stock_total+`</span></td>
-                           
                             <td><span id="ubicacion-`+element.id+`">$ `+commaSeparateNumber(parseInt(element.precio_venta).toFixed(0))+`</span></td>
-                            
                             <td>`+element.cod_repuesto_proveedor+`</td>
                             <td>`+element.nombre_pais+`</td>
-                            <td>`+html_locales+` </td>
+                            <td style="display: flex; gap: 4px; align-items: center;">
+                                `+html_familias+`
+                                <button class="btn btn-primary btn-sm" onclick="guardar_rep_familia(`+element.id+`, this)">Guardar</button>
+                            </td>
+                            <td>`+html_locales+`</td>
                             <td><button class="btn btn-success btn-sm" onclick="seleccionar_kit(`+element.id+`)">Seleccionar </button> </td>
                         </tr>
                  `);
@@ -536,6 +553,86 @@ function espere(mensaje)
       });
       
     }
+    function guardar_rep_familia(id_repuesto, btn) {
+        // Obtener el select de familia que está inmediatamente antes del botón
+        var select = btn.previousElementSibling;
+        var id_familia = select.value;
+        
+        // Validar que se seleccione una familia
+        if(!id_familia || id_familia === ''){
+            Vue.swal({
+                icon: 'warning',
+                text: 'Seleccione una familia válida',
+                timer: 2000,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false
+            });
+            return false;
+        }
+
+        // Realizar la petición AJAX para guardar la familia
+        $.ajax({
+            url: '{{ route("guardar_familia_kit") }}',
+            method: 'POST',
+            data: {
+                id_repuesto: id_repuesto,
+                id_familia: id_familia,
+                _token: $('meta[name="csrf-token"]').attr('content')
+            },
+            beforeSend: function(){
+                // Opcional: mostrar estado de carga
+                btn.disabled = true;
+            },
+            success: function(resp) {
+                btn.disabled = false;
+                console.log('Respuesta del servidor:', resp);
+                
+                // Validar la respuesta
+                if(resp.estado === 'OK'){
+                    Vue.swal({
+                        icon: 'success',
+                        text: 'Familia actualizada correctamente',
+                        timer: 2000,
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false
+                    });
+                } else {
+                    Vue.swal({
+                        icon: 'warning',
+                        text: resp.mensaje || 'Error al actualizar la familia',
+                        timer: 3000,
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false
+                    });
+                }
+            },
+            error: function(err) {
+                btn.disabled = false;
+                console.error('Error en la solicitud:', err);
+                
+                // Intentar obtener el mensaje de error del servidor
+                let mensaje = 'Error al guardar la familia';
+                try {
+                    let response = JSON.parse(err.responseText);
+                    mensaje = response.mensaje || mensaje;
+                } catch(e) {
+                    mensaje = err.statusText || mensaje;
+                }
+                
+                Vue.swal({
+                    icon: 'error',
+                    text: mensaje,
+                    timer: 3000,
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false
+                });
+            }
+        });
+    }
 </script>
 @endsection
 
@@ -648,11 +745,12 @@ function espere(mensaje)
                           <th scope="col" class="letra_pequeña">Precio venta</th>
                           <th scope="col" class="letra_pequeña" style="width: 100px;">Codigo de proveedor</th>
                           <th scope="col" class="letra_pequeña">Pais</th>
+                          <th scope="col" class="letra_pequeña">Familia</th>
                           <th scope="col" class="letra_pequeña">Locales</th>
                           <th scope="col" class="letra_pequeña"></th>
                         </tr>
                       </thead>
-                      <tbody id="tbody_resultados">
+                      <tbody id="tbody_resultados" style="font-size: 10px;">
                         
                       </tbody>
                     </table>

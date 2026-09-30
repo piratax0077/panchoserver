@@ -25,7 +25,7 @@
             <tr>
                 <th scope="row">{{$r->codigo_interno}}</th>
                 <td>{{$r->descripcion}}</td>
-                <td>{{number_format($r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres)}}</td>
+                <td>{{number_format(\App\Services\StockPorLocalService::total($r))}}</td>
                 <td>$ {{number_format($r->precio_venta)}}</td>
               </tr>
             @endforeach

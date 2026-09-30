@@ -28,9 +28,6 @@
 			<td>{{$c->contacto}}</td>
 
 		@endif
-
-
-
 	</tr>
 	@endforeach
 </tbody>

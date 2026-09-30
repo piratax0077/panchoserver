@@ -165,7 +165,7 @@
                 type:'GET',
                 url: url,
                 success: function(resp){
-                    
+                    console.log(resp);
                     $('#detalle_boleta').html(resp);  
                     // valor del input con id es_credito
                     let acredito = $('#es_credito').val();

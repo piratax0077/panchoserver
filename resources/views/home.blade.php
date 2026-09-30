@@ -57,7 +57,7 @@
                 $('#modal_body_ultimos_repuestos').append(`
                 <div class="col-md-3">
                   
-                  <img src="/storage/`+resp[1][contador]+`" style="width: 200px; height: 200px;"/><br>
+                  <img src="/storage/`+resp[1][contador]+`" style="width: 200px; height: 200px;" onerror="this.onerror=null; this.src='https://placehold.co/100x100'"/><br>
                   <span>`+e.descripcion+`</span><br>
                   <span>`+e.codigo_interno+`</span><br>
                   <span class="font-weight-bold badge badge-info text-white" style="font-size: 16px;">$ `+commaSeparateNumber(precio_total)+` </span>
@@ -185,6 +185,27 @@
                             </tr>
                             `);
                     });
+
+                    $('#modalBodyInfoPedidoTerrestre2').empty();
+                    repuestos_pedidos.forEach(repuesto => {
+                            // al precio unitario de los repuestos agregarle el separador de miles
+                            let precio_unitario = Number(repuesto.precio_unitario).toFixed(0);
+                            precio_unitario = commaSeparateNumber(precio_unitario);
+                            // al precio total de los repuestos agregarle el separador de miles
+                            let total = Number(repuesto.total).toFixed(0);
+                            total = commaSeparateNumber(total);
+
+                            $('#modalBodyInfoPedidoTerrestre2').append(`
+                            <tr>
+                                <td>`+repuesto.cantidad+`</td>
+                                <td>`+repuesto.cod_repuesto_proveedor+` </td>
+                                 <td>`+repuesto.empresa_nombre_corto+` </td>
+                                <td>$`+precio_unitario+` </td>
+                                <td>$`+total+` </td>
+                                
+                            </tr>
+                            `);
+                    }); 
                 },
                 error: function(err){   
                     console.log(err);
@@ -227,7 +248,7 @@
                                         pedidos_terrestre.forEach( pedido => {
                                             $('#tbody_revision_pedidos_terrestres').append(`
                                             <tr> 
-                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.num_abono+`)">`+pedido.num_abono+` </a> </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.id+`)">`+pedido.num_abono+` </a> </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_abono_modal(`+pedido.id+`)'>X</button> </td>
@@ -238,7 +259,7 @@
                                         pedidos_aereos.forEach( pedido => {
                                             $('#tbody_revision_pedidos_aereos').append(`
                                             <tr> 
-                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.num_abono+`)">`+pedido.num_abono+`</a> </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.id+`)">`+pedido.num_abono+`</a> </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_abono_modal(`+pedido.id+`)'>X</button> </td>
@@ -340,7 +361,7 @@
                                         pedidos_terrestre.forEach( pedido => {
                                             $('#tbody_revision_pedidos_terrestres').append(`
                                             <tr> 
-                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.num_abono+`)">`+pedido.num_abono+` </a> </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.id+`)">`+pedido.num_abono+` </a> </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_abono_modal(`+pedido.id+`)'>X</button> </td>
@@ -352,7 +373,7 @@
                                         pedidos_aereos.forEach( pedido => {
                                             $('#tbody_revision_pedidos_aereos').append(`
                                             <tr> 
-                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.num_abono+`)">`+pedido.num_abono+`</a> </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido(`+pedido.id+`)">`+pedido.num_abono+`</a> </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_abono_modal(`+pedido.id+`)'>X</button> </td>
@@ -395,6 +416,41 @@
 
     .contenedor_imagen {overflow:hidden; border-radius: 50px; }
 
+    .resumen-pagos {
+      margin: 0 0 24px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+    }
+    .resumen-pagos__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid #eef1f4;
+    }
+    .resumen-pagos__header h2 { margin: 0; font-size: 19px; font-weight: 700; color: #1f2937; }
+    .resumen-pagos__header p { margin: 3px 0 0; color: #667085; font-size: 13px; }
+    .resumen-pagos__total { text-align: right; white-space: nowrap; }
+    .resumen-pagos__total small { display: block; color: #667085; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .resumen-pagos__total strong { color: #111827; font-size: 22px; }
+    .resumen-pagos__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; padding: 18px 20px 20px; }
+    .pago-metrica { padding: 14px; border: 1px solid #edf0f3; border-radius: 12px; background: #fbfcfd; }
+    .pago-metrica__top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+    .pago-metrica__nombre { min-width: 0; overflow: hidden; color: #344054; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .pago-metrica__porcentaje { color: #2563eb; font-weight: 800; }
+    .pago-metrica__barra { height: 8px; overflow: hidden; border-radius: 999px; background: #e8eef7; }
+    .pago-metrica__progreso { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #60a5fa); }
+    .pago-metrica__monto { display: block; margin-top: 8px; color: #667085; font-size: 12px; }
+    .resumen-pagos__vacio { grid-column: 1 / -1; margin: 0; padding: 12px; color: #667085; text-align: center; }
+    @media (max-width: 575.98px) {
+      .resumen-pagos__header { align-items: flex-start; flex-direction: column; }
+      .resumen-pagos__total { text-align: left; }
+    }
+
     @keyframes example {
       0%   {background-color: black; color: white;}
       25%  {background-color: #d6cb1b; color: #000;}
@@ -420,6 +476,36 @@
       <span aria-hidden="true">&times;</span>
     </button>
   </div>
+  @endif
+  @if(isset($resumenPagosMes) && in_array(strtolower(Auth::user()->id), ['16']))
+    <section class="resumen-pagos" aria-labelledby="titulo-resumen-pagos">
+      <div class="resumen-pagos__header">
+        <div>
+          <h2 id="titulo-resumen-pagos"><i class="fas fa-chart-pie text-primary mr-2"></i>Ventas por forma de pago</h2>
+          <p>{{ $alcancePagos }} · {{ ucfirst($periodoPagos) }}</p>
+        </div>
+        <div class="resumen-pagos__total">
+          <small>Total pagado en ventas</small>
+          <strong>${{ number_format($totalPagosMes, 0, ',', '.') }}</strong>
+        </div>
+      </div>
+      <div class="resumen-pagos__grid">
+        @forelse($resumenPagosMes as $pagoMes)
+          <article class="pago-metrica">
+            <div class="pago-metrica__top">
+              <span class="pago-metrica__nombre" title="{{ $pagoMes->formapago }}">{{ $pagoMes->formapago }}</span>
+              <span class="pago-metrica__porcentaje">{{ number_format($pagoMes->porcentaje, 1, ',', '.') }}%</span>
+            </div>
+            <div class="pago-metrica__barra" role="progressbar" aria-label="{{ $pagoMes->formapago }}" aria-valuenow="{{ $pagoMes->porcentaje }}" aria-valuemin="0" aria-valuemax="100">
+              <div class="pago-metrica__progreso" style="width: {{ min($pagoMes->porcentaje, 100) }}%"></div>
+            </div>
+            <span class="pago-metrica__monto">${{ number_format($pagoMes->total, 0, ',', '.') }}</span>
+          </article>
+        @empty
+          <p class="resumen-pagos__vacio">Todavía no hay pagos asociados a ventas durante este mes.</p>
+        @endforelse
+      </div>
+    </section>
   @endif
     <div class="row justify-content-center">
       @if(Auth::user()->rol->nombrerol === "Administrador")
@@ -485,7 +571,7 @@
                       }
                     @endphp
                     <tr class="{{$color}}">
-                      <td><a href="javascript:void(0)" onclick="cargar_pedido({{$t->num_abono}})">{{$t->num_abono}}</a> </td>
+                      <td><a href="javascript:void(0)" onclick="cargar_pedido({{$t->id}})">{{$t->num_abono}}</a> </td>
                       <td>{{$t->nombre_cliente}}</td>
                       <td>{{$t->fecha_emision}} @if($t->fecha_emision == $fechaLimiteTerrestre)@endif</td>
                       <td><button class="btn btn-danger btn-sm" onclick="eliminar_abono_modal({{$t->id}})">X</button></td>
@@ -516,7 +602,7 @@
                       }
                     @endphp
                     <tr class="{{$color}}">
-                      <td><a href="javascript:void(0)" onclick="cargar_pedido({{$t->num_abono}})">{{$t->num_abono}}</a></td>
+                      <td><a href="javascript:void(0)" onclick="cargar_pedido({{$t->id}})">{{$t->num_abono}}</a></td>
                       <td>{{$t->nombre_cliente}}</td>
                       <td>{{$t->fecha_emision}} </td>
                       <td><button class="btn btn-danger btn-sm" onclick="eliminar_abono_modal({{$t->id}})">X</button></td>
@@ -669,6 +755,22 @@
             </tr>
           </thead>
           <tbody id="modalBodyInfoPedidoTerrestre" style="font-size: 13px;">
+            
+            
+          </tbody>
+        </table>
+        <!-- tabla para otros datos del repuesto -->
+        <table class="table">
+          <thead class="thead-light">
+            <tr>
+              <th scope="col">Cant.</th>
+              <th scope="col">Cod.Proveedor</th>
+              <th scope="col">Proveedor</th>
+              <th scope="col">P.U.</th>
+              <th scope="col">Total</th>
+            </tr>
+          </thead>
+          <tbody id="modalBodyInfoPedidoTerrestre2" style="font-size: 13px;">
             
             
           </tbody>

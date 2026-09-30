@@ -20,6 +20,9 @@
   var documento_procesado="Ninguno";
   var div_cliente_xpress_mostrar=false;
   var id_repuesto_codigo=0;
+  var proceso_dte_actual = null;
+  var alerta_sesion_dte_mostrada = false;
+  var oferta_confirmada_en_proceso = false;
 
   //Para resaltar la fila seleccionada
   var ultimaFila=null;
@@ -35,7 +38,8 @@
     im.mask(xpress_precio);
     */
 
-
+    let valorAnterior = 0; // Variable para almacenar el valor anterior
+      let sonido = new Audio('/notificaciones/campana.mp3'); // Ruta al sonido en public/
 
   setInterval(() => {
     console.log('revisando');
@@ -82,6 +86,40 @@
     let max=300;
     let rpta=error.substring(0,max);
     return rpta;
+  }
+
+  function limpiar_monto(valor){
+    let str = String(valor ?? '').trim();
+
+    if(str === ''){
+      return 0;
+    }
+
+    // Limpieza básica: deja números, punto, coma y signo negativo.
+    str = str.replace(/[^0-9.,-]/g, '');
+
+    if(str.includes(',')){
+      // Formato chileno/europeo: 1.234,56 -> 1234.56
+      str = str.replace(/\./g, '').replace(',', '.');
+    }else{
+      let partes = str.split('.');
+
+      if(partes.length > 2){
+        // Múltiples puntos: 1.234.567 -> 1234567
+        str = str.replace(/\./g, '');
+      }else if(partes.length === 2){
+        let decimales = partes[1];
+
+        if(decimales.length <= 2){
+          // Decimal: 76000.00 -> 76000
+        }else{
+          // Miles: 76.000 -> 76000
+          str = str.replace(/\./g, '');
+        }
+      }
+    }
+
+    return Math.round(parseFloat(str) || 0);
   }
 
   function formatear_miles(){
@@ -207,6 +245,18 @@
     $("#rut"+rut).html(rf);
   }
 
+  function actualizar_visibilidad_cliente(){
+    const idCliente = Number($('#id_cliente').val() || 0);
+    const tieneCliente = idCliente > 0;
+
+    $('#cliente_sin_seleccionar').toggle(!tieneCliente);
+    $('#cliente_seleccionado').toggle(tieneCliente);
+  }
+
+  $(function(){
+    actualizar_visibilidad_cliente();
+  });
+
   function limpiar_todo(){
     borrar_carrito('actual');
     id_repuesto_codigo=0;
@@ -221,6 +271,7 @@
     let bb=document.getElementById("radio_boleta");
     bb.checked=true;
     document.getElementById("id_cliente").value=0;
+    actualizar_visibilidad_cliente();
     $("#cliente_rut").html("RUT: ");
     $("#cliente_nombres").html("Cliente: ");
     $("#cliente_direccion").html("Direccion: ");
@@ -703,10 +754,11 @@
         type:'get',
         url: url,
         beforeSend: function(){
-          $('#mensaje_modal').html('Buscando ...');
+          $('#mensaje_modal').html('<i class="fa-solid fa-spinner fa-spin mr-1"></i> Buscando repuesto...');
+          $('#btn_agregar_repuesto_buscado').prop('disabled', true);
         },
         success: function(resp){
-          $('#mensaje_modal').html('Listo');
+          $('#mensaje_modal').html('<i class="fa-solid fa-circle-check text-success mr-1"></i> Repuesto encontrado');
           if(resp == -1){
             Vue.swal({
               icon:'error',
@@ -732,23 +784,54 @@
             }else{
               clase = 'bg-danger text-white';
             }
+            const construirUbicacion = (nombre, detalle, stock) => {
+              const cantidadStock = Number(stock || 0);
+              let claseStock = '';
+
+              if(cantidadStock <= 0){
+                claseStock = 'sin-stock';
+              }else if(cantidadStock <= 3){
+                claseStock = 'stock-bajo';
+              }
+
+              return `
+                <div class="xpress-location-item">
+                  <span class="xpress-location-name">${nombre}</span>
+                  <span class="xpress-location-detail">${detalle || 'Sin ubicación registrada'}</span>
+                  <span class="xpress-location-stock ${claseStock}">${cantidadStock}</span>
+                </div>
+              `;
+            };
+
+            const ubicacionesHtml = `
+              <div class="xpress-location-list">
+                ${construirUbicacion('Bodega', e.ubicacion, e.stock_actual)}
+                ${construirUbicacion('Tienda', e.ubicacion_dos, e.stock_actual_dos)}
+                ${construirUbicacion('CM', e.ubicacion_tres, e.stock_actual_tres)}
+              </div>
+            `;
+
             $('#informacion_repuesto').append(`
-            <tr> 
-                  <td class='letra_pequeña'>`+e.descripcion+` </td>
-                  <td class='letra_pequeña `+clase+` text-center'>`+dias+` </td>
-                  <td class='letra_pequeña'>`+e.ubicacion+`(`+e.stock_actual+`) </td>
-                  
-                  <td class='letra_pequeña'>`+e.ubicacion_dos+`(`+e.stock_actual_dos+`) </td>
-                  
-                  <td class='letra_pequeña'>`+e.ubicacion_tres+`(`+e.stock_actual_tres+`) </td>
-                  <td class='letra_pequeña'><input type='text' placeholder='Cantidad' id='input_cantidad' onkeypress="return soloNumeros(event)" onkeyup="soloNumeros(event)"  /></td>
-                  <td><select id='select_locales'>
-                    
-                  </select></td>
-                  <td class='letra_pequeña'>$ `+Number(e.precio_venta).toFixed(0)+`</td>
-                </tr>
+              <tr>
+                <td class="buscar-xpress-description">${e.descripcion || 'Sin descripción'}</td>
+                <td class="${clase} text-center font-weight-bold">${dias} días</td>
+                <td>${ubicacionesHtml}</td>
+                <td>
+                  <input type="text"
+                         placeholder="Cantidad"
+                         id="input_cantidad"
+                         inputmode="numeric"
+                         autocomplete="off"
+                         onkeypress="return soloNumeros(event)"
+                         onkeyup="soloNumeros(event)">
+                </td>
+                <td><select id="select_locales"></select></td>
+                <td class="buscar-xpress-price text-right">$ ${Number(e.precio_venta || 0).toLocaleString('es-CL')}</td>
+              </tr>
             `);
-            $('#btn_agregar_repuesto_buscado').attr('onclick','agregar_repuesto_buscado('+e.id+')');
+            $('#btn_agregar_repuesto_buscado')
+              .attr('onclick','agregar_repuesto_buscado('+e.id+')')
+              .prop('disabled', false);
             $('#select_locales').empty();
             locales.forEach(local=> {
               $('#select_locales').append(`
@@ -1056,7 +1139,15 @@ function agregar_repuesto_xpress(){
         success:function(idxpress){
           
             if(idxpress>0){
+              let vc = verificar_que_carrito();
+              if(vc){
+                console.log('carrito_Transferido');
+                agregar_carrito_transferido(idxpress,2);
+              }else {
+                console.log('carrito_Normal');
                 agregar_carrito(idxpress,2);
+              }
+                
                 $("#repuesto-xpress-modal").modal("hide");
                 document.getElementById("xpress-codigo").value="";
                 document.getElementById("xpress-descripcion").value="";
@@ -1135,10 +1226,16 @@ function agregar_repuesto_xpress(){
         idlocal = 1;
     }
 
-    if(cual==3){ //desde ingreso por código
-        cant=document.getElementById("input_cantidad").value.trim();
-        
-        idlocal=$('#select_locales').val();
+    if(cual==3){ // desde ingreso por código o búsqueda express
+        const cantidadFooter = document.getElementById("input_cantidad_footer");
+        const cantidadModal  = document.getElementById("input_cantidad");
+
+        // En la vista principal existe input_cantidad_footer; en el modal express, input_cantidad.
+        cant = cantidadFooter && !cantidadFooter.disabled
+            ? cantidadFooter.value.trim()
+            : (cantidadModal ? cantidadModal.value.trim() : '');
+
+        idlocal = $('#select_locales').val() || 1;
     }
 
     if(cual == 4){
@@ -1199,11 +1296,27 @@ function agregar_repuesto_xpress(){
         url:url,
         data:parametros,
         success:function(resp){
-          
+          console.log(resp);
           if(resp == 'OK'){
             Vue.swal({
               icon:'info',
               title:'En construccion'
+            });
+            return false;
+          }
+
+          if(resp == 'bujia_minimo'){
+            Vue.swal({
+              text:'La cantidad mínima para bujías es de 3 unidades',
+              icon:'error'
+            });
+            return false;
+          }
+
+          if(resp == 'valvula_minimo'){
+            Vue.swal({
+              text:'La cantidad mínima para valvulas es de 4 unidades',
+              icon:'error'
             });
             return false;
           }
@@ -1229,11 +1342,29 @@ function agregar_repuesto_xpress(){
                     });
           }else{
             let t=new Intl.NumberFormat('es-CL').format(resp);
+            let total_carrito = Number(resp);
             
             $("#mensajes-modal").html("Total: "+t);
-            document.getElementsByName("forma_pago_monto")[0].value=t.replace(/\./g,"");
+            
+            // Verificar si hay un giftcard cargado
+            let valor_giftcard = limpiar_monto($('#monto-6').val());
+            
+            // Si hay giftcard, calcular la diferencia
+            if(valor_giftcard > 0){
+              let diferencia = total_carrito - valor_giftcard;
+              if(diferencia < 0) diferencia = 0; // No permitir negativo
+              document.getElementById("monto-1").value = diferencia;
+            } else {
+              // Si no hay giftcard, asignar el total al efectivo
+              document.getElementById("monto-1").value = total_carrito;
+            }
+            
             document.getElementById("buscar_por_descripcion").value="";
             dame_carrito();
+            // Recalcular montos después de cargar el carrito
+            setTimeout(function(){
+              recalcular_montos_pago();
+            }, 500);
             clic_en(1);
             $("#buscar-repuesto-modal").modal("hide");
             Vue.swal({
@@ -1274,27 +1405,6 @@ function ver_relacionados(idrep)
 
   function dame_carrito()
   {
-    
-    // Limpiar total
-    // $('#monto-1').val('');
-    // // Petición
-    // var url="{{url('ventas/dame_carrito')}}"; //fragm.ventas_carrito
-    
-    //   $.ajax({
-    //    type:'GET',
-    //    beforeSend: function () {
-    //     //$("#carrito").html("Buscando Carrito...");
-    //       },
-    //    url:url,
-    //    success:function(carrito){
-
-    //     $("#carrito").html(carrito);
-    //    },
-    //     error: function(error){
-    //       $('#carrito').html(formatear_error(error.responseText));
-    //     }
-
-    //   }); //Fin petición
     // hacer lo mismo pero con fetch
     fetch("{{url('ventas/dame_carrito')}}")
     .then(response => response.text())
@@ -1536,6 +1646,7 @@ function ver_relacionados(idrep)
                 success:function(resp){
                     let cliente = resp[1];
                     $('#id_cliente').val(cliente.id);
+                    actualizar_visibilidad_cliente();
                     $('#cliente_rut').empty();
                     $('#cliente_rut').append(cliente.rut);
                     $('#cliente_nombres').empty();
@@ -1585,8 +1696,8 @@ function ver_relacionados(idrep)
         if(resp === 'OK'){
           
           dame_carrito();
-          $('#btn_procesar_').removeClass('d-block');
-          $('#btn_procesar_').addClass('d-none');
+          // $('#btn_procesar_').removeClass('d-block');
+          // $('#btn_procesar_').addClass('d-none');
         }
       }, error: function(err){
         Vue.swal({
@@ -1596,6 +1707,24 @@ function ver_relacionados(idrep)
           });
       }
     })
+  }
+
+  function mostrar_carrito_vacio_elegante(mensaje = 'Comience agregando productos para crear una nueva venta.')
+  {
+    $('#carrito').html(`
+      <div class="venta-carrito-vacio">
+        <div class="venta-carrito-vacio__icono">
+          <i class="fa-solid fa-cart-shopping"></i>
+        </div>
+        <h3 class="venta-carrito-vacio__titulo">Carrito vacío</h3>
+        <p class="venta-carrito-vacio__texto">${mensaje}</p>
+        <div class="venta-carrito-vacio__ayuda">
+          <span><kbd>F3</kbd> Ingreso por código</span>
+          <span><kbd>F4</kbd> Buscar repuesto</span>
+        </div>
+        <input type="hidden" id="items_carrito" value="0">
+      </div>
+    `);
   }
 
   function borrar_carritos_guardados()
@@ -1619,10 +1748,12 @@ function ver_relacionados(idrep)
           },
        url:url,
        success:function(resp){
-        if(resp=='actual')
-            $('#carrito').html("<h4 class='alert alert-info d-flex justify-content-center'>Carrito Vacio</h4><input type='hidden' id='items_carrito' value='0'>");
+        if(resp=='actual'){
+            mostrar_carrito_vacio_elegante();
             $('#total_forma_pago').html("0");
             dame_formas_pago();
+            habilitar_boton_procesar_dte();
+        }
         if(resp=='guardados')
             Vue.swal({
                 text: 'Carritos guardados borrados...',
@@ -1632,10 +1763,12 @@ function ver_relacionados(idrep)
                 showConfirmButton: false,
                 timer: 3000,
             });
-        if(resp=='transferidos')
-            $('#carrito').html("<h4 class='alert alert-info d-flex justify-content-center'>Carrito Vacio</h4><input type='hidden' id='items_carrito' value='0'>");
+        if(resp=='transferidos'){
+            mostrar_carrito_vacio_elegante();
             $('#total_forma_pago').html("0");
             dame_formas_pago();
+            habilitar_boton_procesar_dte();
+        }
        },
         error: function(error){
         $('#carrito').html(formatear_error(error.responseText));
@@ -1733,7 +1866,7 @@ function transferir_carrito_confirmar(){
   
   let cajero_id = $('input[name="flexRadioCajero"]:checked').val();
   //Se genera un cliente_id para manejar los carritos transferidos
-  let cliente_id = Math.floor(Math.random() * 1000);
+  let cliente_id = Math.floor(Math.random() * 90000);
   let titulo = $('#nombre_carrito_transferido').val();
   if(titulo == '' ){
     titulo = 'sin nombre';
@@ -1801,7 +1934,7 @@ function modifikar_precio(idrep)
 
             mostrar_panel_buscar=false;
             buscar();
-            precio_a_modifikar=parseInt(document.getElementById("pv-"+idrep).value.replace(/\./g,""));
+            precio_a_modifikar=limpiar_monto(document.getElementById("pv-"+idrep).value);
             id_precio_a_modifikar=idrep;
             precio_a_modificar.value=precio_a_modifikar;
             document.getElementById("rezultadoz").className="col-sm-9 tabla-scroll-y-300";
@@ -1857,7 +1990,7 @@ function guardar_nuevo_precio()
     if(new_val_tmp.inputmask){
         new_val=new_val_tmp.inputmask.unmaskedvalue();
     }else{
-        new_val=parseInt(new_val_tmp.value.replace(/\./g,""));
+        new_val=limpiar_monto(new_val_tmp.value);
     }
 
     let guardó_ok=false;
@@ -1991,8 +2124,10 @@ function dame_relacionados(idrep)
           // preguntar si es carrito transferido
           let vc = verificar_que_carrito();
           if(vc){
+            console.log('carrito_Transferido');
             agregar_carrito_transferido(idrep);
           }else {
+            console.log('carrito_Normal');
             agregar_carrito(idrep,3);
           }
           
@@ -2004,13 +2139,173 @@ function dame_relacionados(idrep)
     
   }
 
-  function agregar_carrito_transferido(idrep){
+  function recalcular_montos_pago(){
+    // Obtener el total actual del carrito
+    let total_input = document.getElementById("total_carrito");
+    let total_carrito = 0;
+    if(total_input){
+      total_carrito = limpiar_monto(total_input.value);
+    }
+    
+    // Verificar si hay un giftcard cargado
+    let valor_giftcard = limpiar_monto($('#monto-6').val());
+    console.log('Recalculando montos de pago... Total carrito: '+total_carrito+', Valor giftcard: '+valor_giftcard);
+    // Si hay giftcard, calcular la diferencia para efectivo
+    if(valor_giftcard > 0 && total_carrito > 0){
+      console.log('Recalculando montos de pago... Total carrito: '+total_carrito+', Valor giftcard: '+valor_giftcard);
+      let diferencia = total_carrito - valor_giftcard;
+      if(diferencia < 0) diferencia = 0; // No permitir negativo
+      document.getElementById("monto-1").value = diferencia;
+    } else if(total_carrito > 0){
+      // Si no hay giftcard, asignar el total al efectivo
+      document.getElementById("monto-1").value = total_carrito;
+    }
+  }
+
+  function recalcular_pagos_giftcard(){
+    // Función auxiliar para limpiar valores formateados
+    function limpiar_valor(valor){
+      // Convierte a string y trimea
+      let str = String(valor).trim();
+      
+      // Si tiene puntos Y comas, es formato europeo (1.234.567,89)
+      // Si tiene solo puntos, puede ser decimal (76000.00) o miles (76.000)
+      // Si tiene solo comas, es decimal (76000,00)
+      
+      // Detectar formato:
+      // - Si tiene coma, la coma es el decimal y los puntos son miles
+      // - Si solo tiene punto y hay solo 1-2 dígitos después, es decimal
+      // - Si solo tiene punto y hay 3 dígitos después, es separador de miles
+      
+      if(str.includes(',')){
+        // Formato con coma como decimal (1.234,56)
+        str = str.replace(/\./g, '').replace(',', '.');
+      } else {
+        // Solo puntos o sin formato
+        // Contar puntos
+        let comaParts = str.split('.');
+        if(comaParts.length > 2){
+          // Múltiples puntos = separadores de miles (1.234.567)
+          str = str.replace(/\./g, '');
+        } else if(comaParts.length === 2){
+          // Un punto: verificar si es decimal (<=2 dígitos después) o miles
+          let afterDot = comaParts[1];
+          if(afterDot.length <= 2){
+            // Es decimal, mantener tal cual
+            // str ya está bien
+          } else {
+            // Parece ser miles, eliminar el punto
+            str = str.replace(/\./g, '');
+          }
+        }
+      }
+      
+      let num = parseFloat(str) || 0;
+      return num;
+    }
+    
+    // Obtener el total del carrito
+    let total_input = document.getElementById("total_carrito");
+    let total_carrito = 0;
+    
+    if(total_input && total_input.value){
+      total_carrito = limpiar_valor(total_input.value);
+      console.log('Total carrito - Valor original:', total_input.value, '→ Valor limpio:', total_carrito);
+    }
+    
+    // Obtener el valor del giftcard
+    let monto6_input = document.getElementById("monto-6");
+    let valor_giftcard = 0;
+    if(monto6_input){
+      valor_giftcard = limpiar_valor(monto6_input.value);
+      console.log('Giftcard - Valor original:', monto6_input.value, '→ Valor limpio:', valor_giftcard);
+    }
+    
+    console.log('VALORES FINALES - Total carrito: '+total_carrito+', Giftcard: '+valor_giftcard);
+    
+    if(valor_giftcard <= 0){
+      Vue.swal({
+        icon:'error',
+        text:'No hay un giftcard cargado',
+        toast: true,
+        position: 'top-end',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      return false;
+    }
+    
+    if(total_carrito <= 0){
+      Vue.swal({
+        icon:'error',
+        title:'Error',
+        html:'El carrito está vacío o el total no se pudo obtener.<br>Total obtenido: '+total_carrito,
+        toast: true,
+        position: 'top-end',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      return false;
+    }
+    
+    // Calcular la diferencia para efectivo
+    let diferencia = total_carrito - valor_giftcard;
+    if(diferencia < 0) diferencia = 0;
+    
+    console.log('Diferencia calculada:', diferencia);
+    
+    // Actualizar monto-1 (efectivo) SIN formato
+    let monto1_input = document.getElementById("monto-1");
+    if(monto1_input){
+      monto1_input.value = Math.round(diferencia);
+      console.log('monto-1 actualizado a:', Math.round(diferencia));
+    }
+    $('#formita-1').prop('checked', diferencia > 0);
+    
+    // Formatear para mostrar
+    let total_formateado = new Intl.NumberFormat('es-CL').format(Math.round(total_carrito));
+    let giftcard_formateado = new Intl.NumberFormat('es-CL').format(Math.round(valor_giftcard));
+    let diferencia_formateado = new Intl.NumberFormat('es-CL').format(Math.round(diferencia));
+    
+    // Validar que las formas de pago coincidan con el total
+    let total_pagos = valor_giftcard + diferencia;
+    if(Math.abs(total_pagos - total_carrito) <= 1){
+      Vue.swal({
+        icon:'success',
+        title:'Éxito',
+        html:'<b>Pagos recalculados correctamente:</b><br><br><b>Giftcard:</b> $'+giftcard_formateado+'<br><b>Efectivo:</b> $'+diferencia_formateado+'<br><hr><b>Total:</b> $'+total_formateado,
+        toast: true,
+        position: 'top-end',
+        timer: 5000,
+        showConfirmButton: false
+      });
+    } else {
+      Vue.swal({
+        icon:'warning',
+        title:'Advertencia',
+        html:'<b>Discrepancia detectada:</b><br><b>Total carrito:</b> $'+total_formateado+'<br><b>Suma de pagos:</b> $'+new Intl.NumberFormat('es-CL').format(Math.round(total_pagos)),
+        toast: true,
+        position: 'top-end',
+        timer: 5000,
+        showConfirmButton: false
+      });
+    }
+  }
+
+  function agregar_carrito_transferido(idrep, cual = 1){
     let url = '{{url("ventas/agregar_carrito_transferido")}}';
-    let idlocal=$('#select_locales').val();
-    let cant=document.getElementById("input_cantidad").value.trim();
+    if(cual == 1){
+      var idlocal=$('#select_locales').val();
+      var cant=document.getElementById("input_cantidad").value.trim();
+    }else if(cual == 2){
+      var idlocal = 1;
+      var cant = document.getElementById("xpress-cantidad").value;
+    }
+    
     let cliente_id = $('#cliente_id').val();
     let carrito_id = $('#carrito_id').val();
     let data = {idrep: idrep, idlocal: idlocal, cantidad: cant, cliente_id: cliente_id, carrito_id: carrito_id};
+    console.log(data);
     // headings para el ajax
     let headers = {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')};
     $.ajax({
@@ -2019,7 +2314,7 @@ function dame_relacionados(idrep)
       url:url,
       data:data,
       success:function(rpta){
-        // return console.log(rpta);
+        console.log(rpta);
         if(rpta == "error"){
           return Vue.swal({
                 text: 'No hay stock en local seleccionado',
@@ -2293,7 +2588,7 @@ function dame_relacionados(idrep)
     var dcto = 0;
     var m="";
     var d="formita-descuento";
-    var dcto = Number(document.getElementById(d).value.replace(/\./g,""));
+    var dcto = limpiar_monto(document.getElementById(d).value);
     if(dcto >= 100){
       Vue.swal({
         icon:'error',
@@ -2309,7 +2604,7 @@ function dame_relacionados(idrep)
     paguitos.each(function() {
       //Aqui se obtiene el valor del id de los pagos seleccionados
       m="monto-"+$(this).val();
-      monto=Number(document.getElementById(m).value.replace(/\./g,""));
+      monto=limpiar_monto(document.getElementById(m).value);
       
       let dcto_x_item = Number((dcto / 100) * monto);
       console.log(monto - dcto_x_item);
@@ -2330,13 +2625,13 @@ function dame_relacionados(idrep)
     var total_pago=calcular_sumatoria();
 
     //Comparar con el total del carrito
-    let dcto = Number(document.getElementById('formita-descuento').value); 
-    let total_carrito=Number(document.getElementById("total_carrito").value);
+    let dcto = limpiar_monto(document.getElementById('formita-descuento').value); 
+    let total_carrito=limpiar_monto(document.getElementById("total_carrito").value);
     // El descuento se divide por 100 para sacar el porcentaje y ese resultado se multiplica por el total del carrito.
     // Con esto calculamos el valor a restar con el descuento aplicado.
     // El resultado anterior se resta al total del carrito.
     let total_carrito_descuento = Number(total_carrito) - Number((dcto/100) * Number(total_carrito)); 
-    let total_pagado=Number(total_pago);
+    let total_pagado=limpiar_monto(total_pago);
     let diferencia=Math.abs(total_pagado-total_carrito_descuento);
 
     if(diferencia>2)
@@ -2377,13 +2672,36 @@ function dame_relacionados(idrep)
 
   function activar_forma_pago(id){
     if((document.getElementById("formita-2").checked) && id== 2 ){
-      $('#modalNuevaFormaPagoCredito').modal('show'); // abrir
+      //$('#modalNuevaFormaPagoCredito').modal('show'); // abrir
     }
 
     if((document.getElementById("formita-5").checked) && id==5 )
     {
-      $('#modalNuevaFormaPagoDebito').modal('show'); // abrir
+      //$('#modalNuevaFormaPagoDebito').modal('show'); // abrir
     }
+    
+    // Manejar giftcard (id=6)
+    if(id == 6){
+      let giftcard_checked = document.getElementById("formita-6").checked;
+      if(giftcard_checked){
+        // Si activa el giftcard, habilitar el campo de monto y referencia.
+        // El código puede venir desde el input o desde el hidden si ya fue cargado.
+        let codigo_giftcard_activo = $('#numero_giftcard_cargado').val() || $('#input_codigo_giftcard').val() || '';
+        $('#monto-6').prop('disabled', false);
+        $('#referencia-6').prop('readonly', false);
+        $('#referencia-6').prop('disabled', false);
+        if($('#referencia-6').val().trim() === ''){
+          $('#referencia-6').val(codigo_giftcard_activo ? 'Giftcard ' + codigo_giftcard_activo : 'Giftcard');
+        }
+        $('#referencia-6').focus();
+        $('#input_codigo_giftcard').focus();
+      } else {
+        // Si desactiva el giftcard, limpiar y mostrar botón Sumar
+        limpiar_giftcard();
+        $('#btn_sumar').show();
+      }
+    }
+    
     let dcto = document.getElementById('forma_descuento').checked;
     if((dcto)){
       if(id == 999){
@@ -2590,6 +2908,7 @@ function dame_relacionados(idrep)
     
     estadistica_buscar_cliente(cliente["id"]);
     document.getElementById("id_cliente").value=cliente["id"];
+    actualizar_visibilidad_cliente();
     $("#cliente_rut").html(cliente['rut']);
     $('#cliente_direccion').html(cliente['direccion']);
     $('#cliente_giro').html(cliente['giro']);
@@ -2873,7 +3192,7 @@ function dame_relacionados(idrep)
     function cerrar_procesar_envio(){
         cliente_xpress_cancelar();
         $("#procesar-envio-modal").modal("hide");
-        abrir_cliente_xpress();
+        //abrir_cliente_xpress();
     }
 
     function referencias_aceptar(){
@@ -2920,12 +3239,14 @@ function dame_relacionados(idrep)
                 });
                 return false;
             }
-            ref1.push({
-                docu:ref1_docu,
-                folio:ref1_folio,
-                fecha:ref1_fecha,
-                razon:ref1_razon
-            });
+            // Se reemplaza el contenido para evitar referencias duplicadas
+            // cuando el usuario abre y acepta el modal más de una vez.
+            ref1 = [{
+                docu: ref1_docu,
+                folio: ref1_folio.trim(),
+                fecha: ref1_fecha,
+                razon: ref1_razon.trim()
+            }];
             i++;
         }else{
             ref1=[];
@@ -2953,12 +3274,13 @@ function dame_relacionados(idrep)
                 });
                 return false;
             }
-            ref2.push({
-                docu:ref2_docu,
-                folio:ref2_folio,
-                fecha:ref2_fecha,
-                razon:ref2_razon
-            });
+            // Se reemplaza el contenido para evitar referencias duplicadas.
+            ref2 = [{
+                docu: ref2_docu,
+                folio: ref2_folio.trim(),
+                fecha: ref2_fecha,
+                razon: ref2_razon.trim()
+            }];
             i++;
         }else{
             ref2=[];
@@ -2986,12 +3308,13 @@ function dame_relacionados(idrep)
                 });
                 return false;
             }
-            ref3.push({
-                docu:ref3_docu,
-                folio:ref3_folio,
-                fecha:ref3_fecha,
-                razon:ref3_razon
-            });
+            // Se reemplaza el contenido para evitar referencias duplicadas.
+            ref3 = [{
+                docu: ref3_docu,
+                folio: ref3_folio.trim(),
+                fecha: ref3_fecha,
+                razon: ref3_razon.trim()
+            }];
             i++;
         }else{
             ref3=[];
@@ -3105,6 +3428,7 @@ function dame_relacionados(idrep)
                 showConfirmButton: false,
                 timer: 3000,
             });
+            habilitar_boton_procesar_dte();
             return false;
         }
 
@@ -3119,6 +3443,7 @@ function dame_relacionados(idrep)
                 showConfirmButton: false,
                 timer: 3000,
                 });
+            habilitar_boton_procesar_dte();
             return false;
         }
         let docu = $('input[name="tipo_documento"]:checked').val().trim();
@@ -3135,7 +3460,7 @@ function dame_relacionados(idrep)
         $.ajax({
             type:'POST',
             beforeSend: function () {
-
+                bloquear_boton_procesar('GUARDANDO...');
             },
             url:url,
             data:parametros,
@@ -3143,7 +3468,7 @@ function dame_relacionados(idrep)
                 console.log(resp);
                
                 let r=JSON.parse(resp);
-                if(r.estado='OK'){
+                if(r.estado === 'OK'){
                     imprimir_consignacion(r.consignacion);
                 }else{
                     Vue.swal({
@@ -3157,10 +3482,13 @@ function dame_relacionados(idrep)
             },
             error: function(error){
                 Vue.swal({
-                    title: 'ERRORRR',
+                    title: 'Error al procesar',
                     text: formatear_error(error.responseText),
-                    icon: 'error',
-                    });
+                    icon: 'error'
+                });
+            },
+            complete: function(){
+                habilitar_boton_procesar_dte();
             }
         });
     }
@@ -3226,6 +3554,7 @@ function imprimir_consignacion(num_consignacion){
                 showConfirmButton: false,
                 timer: 3000,
             });
+            habilitar_boton_procesar_dte();
             return false;
         }
 
@@ -3240,6 +3569,7 @@ function imprimir_consignacion(num_consignacion){
                 showConfirmButton: false,
                 timer: 3000,
                 });
+            habilitar_boton_procesar_dte();
             return false;
         }
         let docu = $('input[name="tipo_documento"]:checked').val().trim();
@@ -3267,14 +3597,14 @@ function imprimir_consignacion(num_consignacion){
         $.ajax({
             type:'POST',
             beforeSend: function () {
-
+                bloquear_boton_procesar('GUARDANDO...');
             },
             url:url,
             data:parametros,
             success:function(resp){
                 console.log(resp);
                 let r=JSON.parse(resp);
-                if(r.estado='OK'){
+                if(r.estado === 'OK'){
                     imprimir_cotizacion(r.cotizacion);
                     borrar_carrito('actual');
                 }else{
@@ -3287,10 +3617,13 @@ function imprimir_consignacion(num_consignacion){
             },
             error: function(error){
                 Vue.swal({
-                    title: 'ERRORRR',
+                    title: 'Error al procesar',
                     text: formatear_error(error.responseText),
-                    icon: 'error',
-                    });
+                    icon: 'error'
+                });
+            },
+            complete: function(){
+                habilitar_boton_procesar_dte();
             }
         });
     }
@@ -3327,63 +3660,243 @@ function imprimir_consignacion(num_consignacion){
         });
     }
 
+
+    function normalizar_texto_historial(valor){
+      return String(valor ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    }
+
+    function formatear_fecha_historial(fecha){
+      const texto = String(fecha ?? '').trim();
+
+      if(!texto){
+        return 'SIN FECHA';
+      }
+
+      const soloFecha = texto.substring(0, 10);
+      const partes = soloFecha.split('-');
+
+      if(partes.length === 3 && partes[0].length === 4){
+        return partes[2] + '-' + partes[1] + '-' + partes[0];
+      }
+
+      return soloFecha;
+    }
+
+    function filtrar_historial(tipo){
+      const esCotizacion = tipo === 'cotizaciones';
+      const inputId = esCotizacion
+        ? '#buscar_historial_cotizaciones'
+        : '#buscar_historial_consignaciones';
+      const tablaId = esCotizacion
+        ? '#listado_cotizaciones_historial'
+        : '#tbody_vales';
+      const contadorId = esCotizacion
+        ? '#contador_cotizaciones_visible'
+        : '#contador_consignaciones_visible';
+
+      const filtro = normalizar_texto_historial($(inputId).val());
+      let visibles = 0;
+
+      $(`${tablaId} tr[data-search]`).each(function(){
+        const contenido = normalizar_texto_historial($(this).attr('data-search'));
+        const mostrar = !filtro || contenido.includes(filtro);
+
+        $(this).toggle(mostrar);
+
+        if(mostrar){
+          visibles++;
+        }
+      });
+
+      $(contadorId).text(visibles);
+
+      const emptyId = esCotizacion
+        ? 'fila_sin_resultados_cotizaciones'
+        : 'fila_sin_resultados_consignaciones';
+
+      $('#' + emptyId).remove();
+
+      if(visibles === 0 && $(`${tablaId} tr[data-search]`).length > 0){
+        const colspan = esCotizacion ? 6 : 5;
+
+        $(tablaId).append(`
+          <tr id="${emptyId}">
+            <td colspan="${colspan}" class="historial-empty">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              No se encontraron coincidencias para la búsqueda.
+            </td>
+          </tr>
+        `);
+      }
+    }
+
+    function limpiar_filtro_historial(tipo){
+      const inputId = tipo === 'cotizaciones'
+        ? '#buscar_historial_cotizaciones'
+        : '#buscar_historial_consignaciones';
+
+      $(inputId).val('');
+      filtrar_historial(tipo);
+      $(inputId).focus();
+    }
+
     function historial_consignaciones(){
       Vue.swal.close();
-      let id_cliente=document.getElementById("id_cliente").value;
-      $('#modalHistorialConsignaciones').modal("show");
-      let url = "/clientes/dame_vales_consignacion";
-      $.ajax({
-          type:'get',
-          url: url,
-          success: function(vales){
-              console.log(vales);
-              $('#tbody_vales').empty();
-              let d=new Date();
-              let hoy="'"+d.getFullYear()+"-"+parseInt(d.getMonth()+1)+"-"+d.getDate()+"'";
-              if(vales.length > 0){
-                
-                vales.forEach(v => {
-                  //la fecha la ponemos en formato YYYY-MM-DD
-                let s=v.fecha_emision.split("-");
-                let fec="'"+s[2]+"-"+s[1]+"-"+s[0]+"'";
-                let dd=diferencia_dias(hoy,fec);
-                if(dd>21){
 
-                }else{
-                  let state;
-                  let clase;
-                  if(v.activo == 0){
-                      state = "PROCESADO";
-                  }else{
-                      state = "PENDIENTE";
-                  }
-                  $('#tbody_vales').append(`
-                                  <tr>
-                                      <td> <a href="javascript:void(0)" onclick="cargar_consignacion(`+v.num_consignacion+`)"> `+v.num_consignacion+` </a></td>
-                                      <td>`+v.fecha_emision+` </td>
-                                      <td>`+v.nombre_consignacion+` </td>
-                                      <td><button class='btn btn-success btn-sm' onclick='imprimir_vale_consignacion_historial("`+v.url_pdf+`")'><i class="fa-solid fa-print"></i> </button> </td>
-                                      <td><button class='btn btn-danger btn-sm' onclick='eliminar_consignacion(`+v.id+`)'>X</button></td>
-                                  </tr>
-                                  
-              `);
-                }
-                  
-              });
-              }else{
-                $('#tbody_vales').append(`
-                <tr>
-                  <td>No hay consignaciones. </td>
-                  </tr>
-                `);
-              }
-              
-          },
-          error: function(error){
-              console.log(error.responseText);
+      $('#buscar_historial_consignaciones').val('');
+      $('#contador_consignaciones_total').text('0');
+      $('#contador_consignaciones_visible').text('0');
+
+      $('#tbody_vales').html(`
+        <tr>
+          <td colspan="5" class="historial-empty">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Cargando vales de consignación...
+          </td>
+        </tr>
+      `);
+
+      $('#modalHistorialConsignaciones').modal("show");
+
+      $.ajax({
+        type: 'GET',
+        url: '/clientes/dame_vales_consignacion',
+        cache: false,
+        success: function(resp){
+          let vales = resp;
+
+          if(typeof resp === 'string'){
+            try{
+              vales = JSON.parse(resp);
+            }catch(error){
+              console.error('Respuesta inválida de consignaciones:', resp);
+              vales = [];
+            }
           }
+
+          if(vales && !Array.isArray(vales) && Array.isArray(vales.data)){
+            vales = vales.data;
+          }
+
+          if(!Array.isArray(vales) || vales.length === 0){
+            $('#tbody_vales').html(`
+              <tr>
+                <td colspan="5" class="historial-empty">
+                  <i class="fa-solid fa-box-open"></i>
+                  No hay vales de consignación registrados.
+                </td>
+              </tr>
+            `);
+
+            $('#contador_consignaciones_total').text('0');
+            $('#contador_consignaciones_visible').text('0');
+            return;
+          }
+
+          let filas = '';
+
+          vales.forEach(function(v){
+            const numero = Number(v.num_consignacion || 0);
+            const id = Number(v.id || 0);
+            const fechaOriginal = v.fecha_emision || '';
+            const fecha = formatear_fecha_historial(fechaOriginal);
+            const nombre = String(v.nombre_consignacion || 'SIN NOMBRE');
+            const pdf = String(v.url_pdf || '').replace(/"/g, '&quot;');
+
+            const estado = Number(v.activo) === 0 ? 'PROCESADO' : 'PENDIENTE';
+            const claseEstado = Number(v.activo) === 0 ? 'procesado' : 'pendiente';
+
+            const textoBusqueda = [
+              numero,
+              fecha,
+              nombre,
+              estado
+            ].join(' ');
+
+            filas += `
+              <tr data-search="${textoBusqueda.replace(/"/g, '&quot;')}">
+                <td>
+                  <a href="javascript:void(0)"
+                     class="historial-number-link"
+                     onclick="cargar_consignacion(${numero})"
+                     title="Cargar consignación N° ${numero}">
+                    <i class="fa-solid fa-hashtag"></i>${numero}
+                  </a>
+                </td>
+
+                <td>
+                  <span class="historial-date">
+                    <i class="fa-regular fa-calendar"></i>
+                    ${fecha}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="historial-name" title="${nombre.replace(/"/g, '&quot;')}">
+                    ${nombre}
+                  </span>
+                  <span class="historial-status ${claseEstado} mt-1">${estado}</span>
+                </td>
+
+                <td colspan="2">
+                  <div class="historial-actions">
+                    <button
+                      type="button"
+                      class="historial-action-btn historial-action-load"
+                      onclick="cargar_consignacion(${numero})"
+                      title="Cargar consignación">
+                      <i class="fa-solid fa-cart-shopping"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="historial-action-btn historial-action-print"
+                      onclick="imprimir_vale_consignacion_historial(&quot;${pdf}&quot;)"
+                      title="Imprimir vale">
+                      <i class="fa-solid fa-print"></i>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="historial-action-btn historial-action-delete"
+                      onclick="eliminar_consignacion(${id})"
+                      title="Eliminar consignación">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+
+          $('#tbody_vales').html(filas);
+          $('#contador_consignaciones_total').text(vales.length);
+          $('#contador_consignaciones_visible').text(vales.length);
+        },
+        error: function(error){
+          console.error(error.responseText || error);
+
+          $('#tbody_vales').html(`
+            <tr>
+              <td colspan="5" class="historial-empty text-danger">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                No fue posible cargar los vales de consignación.
+              </td>
+            </tr>
+          `);
+
+          Vue.swal({
+            title: 'ERROR',
+            text: formatear_error(error.responseText || 'No fue posible consultar las consignaciones.'),
+            icon: 'error'
+          });
+        }
       });
-  }
+    }
 
   function eliminar_consignacion(num_consignacion){
     // Como puedo mostrar un mensaje de confirmación antes de eliminar?
@@ -3526,133 +4039,221 @@ function imprimir_consignacion(num_consignacion){
         })
   }
 
-    function historial_cotizaciones(){
+function historial_cotizaciones(){
       Vue.swal.close();
-      let id_cliente=document.getElementById("id_cliente").value;
-    //nombre_cotizacion_buscar=document.getElementById("nombre_cotizacion_buscar").value;
-    
-    let url='{{url("/ventas/damehistorialcotizaciones")}}'+'/'+id_cliente;
+
+      const url = '{{url("/ventas/damehistorialcotizaciones")}}/0';
+
+      $('#buscar_historial_cotizaciones').val('');
+      $('#contador_cotizaciones_total').text('0');
+      $('#contador_cotizaciones_visible').text('0');
+
+      $("#listado_cotizaciones_historial").html(`
+        <tr>
+          <td colspan="6" class="historial-empty">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Cargando cotizaciones...
+          </td>
+        </tr>
+      `);
+
+      $("#mostrar-cotizaciones-modal_historial").modal("show");
 
       $.ajax({
-       type:'GET',
-       url:url,
-       success:function(resp){
-        var user = resp[1];
-        var cotizaciones = resp[0];
-        var dato=cotizaciones.substr(0,2);
-        //REVISAR: Mejorar esto para que no tenga conflictos en las llaves
-        if(dato=="[{") //viene un json
-        {
-          var c=JSON.parse(cotizaciones);
-          if(c.length>0)
-          {
-            //abrir modal mostrando los números de cotización y clientes para luego elegir y cargarla al carrito.
-            var cotiz="<strong>Fecha y Nombre</strong><br>";
-            var cotiz_ = "";
+        type: 'GET',
+        url: url,
+        cache: false,
+        success: function(resp){
+          console.log('Respuesta de cotizaciones:', resp);
+          let user = {};
+          let cotizaciones = [];
 
-            $("#subtitulo-listado-cotizaciones").html("(HISTORIAL)");
-            let d=new Date();
-            let hoy="'"+d.getFullYear()+"-"+parseInt(d.getMonth()+1)+"-"+d.getDate()+"'";
-            c.forEach(function(coti)
-            {
-                //la fecha la ponemos en formato YYYY-MM-DD
-                let s=coti.fecha.split("-");
-                let fec="'"+s[2]+"-"+s[1]+"-"+s[0]+"'";
-                let dd=diferencia_dias(hoy,fec);
-                if(dd>21){
-                    //cotiz+="<a href=\"javascript:void(0);\" onclick=\"cargar_cotizacion("+coti.num_cotizacion+")\" style=\"color:red\">N°: "+coti.num_cotizacion+" Fech:"+coti.fecha+" Nom:"+coti.nombre_cotizacion+" cli:"+(coti.elcliente==undefined ? " Ninguno": coti.elcliente)+"</a><br>";
+          try{
+            if(Array.isArray(resp)){
+              user = resp[1] || {};
+
+              if(Array.isArray(resp[0])){
+                cotizaciones = resp[0];
+              }else if(typeof resp[0] === 'string'){
+                cotizaciones = JSON.parse(resp[0] || '[]');
+              }
+            }else if(typeof resp === 'string'){
+              const respuesta = JSON.parse(resp);
+
+              if(Array.isArray(respuesta)){
+                user = respuesta[1] || {};
+
+                if(Array.isArray(respuesta[0])){
+                  cotizaciones = respuesta[0];
                 }else{
-                  if(coti.elcliente == undefined){
-                    var cli = 'NINGUNO';
-                  }else{
-                    var cli = coti.elcliente;
-                  }
-
-                  var estado = "";
-                  if(coti.activo == 0) estado = "RECHAZADO";
-                  if(coti.activo == 1) estado = "ESPERANDO";
-                  if(coti.activo == 2) estado = "CONFIRMADO";
-                  if(user.role_id == 10){
-                    var boton_html = `<button class="btn btn-danger btn-sm" onclick="eliminar_cotizacion(`+coti.num_cotizacion+`)"><i class="fa-solid fa-trash"></i></button>`;
-                  }else{
-                    var boton_html = "";
-                  }
-                  
-                  if(estado == "CONFIRMADO"){
-                    cotiz_ += `
-                      <a href='javascript:void(0)' onclick='cargar_cotizacion(`+coti.num_cotizacion+`)'>
-                        <tr>
-                          <td><a href="javascript:void(0)" onclick="cargar_cotizacion(`+coti.num_cotizacion+`)">`+coti.num_cotizacion+` </a> </td>
-                          <td>`+coti.fecha+` </td>
-                          <td>`+coti.nombre_cotizacion+` </td>
-                          <td>`+cli+`</td>
-                          <td>`+estado+` </td>
-                          <td>
-                            <button class="btn btn-success btn-sm" onclick="imprimir_cotizacion(`+coti.num_cotizacion+`)"><i class="fa-solid fa-print"></i></button> 
-                            `+boton_html+`
-                          </td>
-                        </tr>
-                      </a>
-                    `;
-                  }else{
-                    cotiz_ += `
-                    <a href='javascript:void(0)'>
-                      <tr>
-                        <td><a href="javascript:void(0)">`+coti.num_cotizacion+` </a> </td>
-                        <td>`+coti.fecha+` </td>
-                        <td>`+coti.nombre_cotizacion+` </td>
-                        <td>`+cli+`</td>
-                        <td>`+estado+` </td>
-                        <td><button class="btn btn-success btn-sm" onclick="imprimir_cotizacion(`+coti.num_cotizacion+`)"><i class="fa-solid fa-print"></i></button> </td>
-                      </tr>
-                    </a>
-                    `;
-                  }
-                  
-                    cotiz+="<a href=\"javascript:void(0);\" onclick=\"cargar_cotizacion("+coti.num_cotizacion+")\" style=\"color:blue\">N°: "+coti.num_cotizacion+" Fech:"+coti.fecha+" Nom:"+coti.nombre_cotizacion+" cli:"+(coti.elcliente==undefined ? " Ninguno": coti.elcliente)+"</a><br>";
-                  
-                    
+                  cotizaciones = JSON.parse(respuesta[0] || '[]');
                 }
-                
-            });
-            
-            $("#listado_cotizaciones_historial").html(cotiz_);
-            $("#mostrar-cotizaciones-modal_historial").modal("show");
-          }else{
-            Vue.swal({
-                text: 'No hay Cotizaciones Vigentes...',
-                position: 'top-end',
-                icon: 'error',
-                toast: true,
-                showConfirmButton: false,
-                timer: 3000,
-            });
+              }
+            }else if(resp && typeof resp === 'object'){
+              user = resp.user || {};
+              cotizaciones = resp.cotizaciones || resp.data || [];
+            }
+          }catch(error){
+            console.error('Respuesta inválida de cotizaciones:', error, resp);
+
+            $("#listado_cotizaciones_historial").html(`
+              <tr>
+                <td colspan="6" class="historial-empty text-danger">
+                  <i class="fa-solid fa-circle-exclamation"></i>
+                  La respuesta del servidor no tiene un formato válido.
+                </td>
+              </tr>
+            `);
+            return;
           }
-        }
-        if(dato=="[]")
-        {
-          Vue.swal({
-                text: 'No hay Cotizaciones Vigentes...',
-                position: 'top-end',
-                icon: 'error',
-                toast: true,
-                showConfirmButton: false,
-                timer: 3000,
-                });
-        }
 
+          if(!Array.isArray(cotizaciones) || cotizaciones.length === 0){
+            $("#listado_cotizaciones_historial").html(`
+              <tr>
+                <td colspan="6" class="historial-empty">
+                  <i class="fa-solid fa-file-circle-xmark"></i>
+                  No hay cotizaciones registradas.
+                </td>
+              </tr>
+            `);
 
-       },
+            $('#contador_cotizaciones_total').text('0');
+            $('#contador_cotizaciones_visible').text('0');
+            return;
+          }
+
+          let filas = '';
+
+          cotizaciones.forEach(function(coti){
+            const numero = Number(coti.num_cotizacion || 0);
+            const fecha = formatear_fecha_historial(coti.fecha || '');
+            const nombre = String(coti.nombre_cotizacion || 'SIN NOMBRE');
+            const nombreCliente = String(coti.elcliente || 'NINGUNO');
+
+            let estado = 'DESCONOCIDO';
+            let claseEstado = 'procesado';
+
+            if(Number(coti.activo) === 0){
+              estado = 'RECHAZADO';
+              claseEstado = 'rechazado';
+            }else if(Number(coti.activo) === 1){
+              estado = 'ESPERANDO';
+              claseEstado = 'esperando';
+            }else if(Number(coti.activo) === 2){
+              estado = 'CONFIRMADO';
+              claseEstado = 'confirmado';
+            }
+
+            const textoBusqueda = [
+              numero,
+              fecha,
+              nombre,
+              nombreCliente,
+              estado
+            ].join(' ');
+
+            const botonCargar = estado === 'CONFIRMADO'
+              ? `
+                <button
+                  type="button"
+                  class="historial-action-btn historial-action-load"
+                  onclick="cargar_cotizacion(${numero})"
+                  title="Cargar cotización">
+                  <i class="fa-solid fa-cart-shopping"></i>
+                </button>
+              `
+              : '';
+
+            const botonEliminar = Number(user.role_id) === 10
+              ? `
+                <button
+                  type="button"
+                  class="historial-action-btn historial-action-delete"
+                  onclick="eliminar_cotizacion(${numero})"
+                  title="Eliminar cotización">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              `
+              : '';
+
+            filas += `
+              <tr data-search="${textoBusqueda.replace(/"/g, '&quot;')}">
+                <td>
+                  <a href="javascript:void(0)"
+                     class="historial-number-link"
+                     onclick="cargar_cotizacion(${numero})"
+                     title="Cargar cotización N° ${numero}">
+                    <i class="fa-solid fa-hashtag"></i>${numero}
+                  </a>
+                </td>
+
+                <td>
+                  <span class="historial-date">
+                    <i class="fa-regular fa-calendar"></i>
+                    ${fecha}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="historial-name" title="${nombre.replace(/"/g, '&quot;')}">
+                    ${nombre}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="historial-client" title="${nombreCliente.replace(/"/g, '&quot;')}">
+                    <i class="fa-regular fa-user mr-1"></i>${nombreCliente}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="historial-status ${claseEstado}">
+                    ${estado}
+                  </span>
+                </td>
+
+                <td>
+                  <div class="historial-actions">
+                    ${botonCargar}
+
+                    <button
+                      type="button"
+                      class="historial-action-btn historial-action-print"
+                      onclick="imprimir_cotizacion(${numero})"
+                      title="Imprimir cotización">
+                      <i class="fa-solid fa-print"></i>
+                    </button>
+
+                    ${botonEliminar}
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+
+          $("#listado_cotizaciones_historial").html(filas);
+          $('#contador_cotizaciones_total').text(cotizaciones.length);
+          $('#contador_cotizaciones_visible').text(cotizaciones.length);
+        },
         error: function(error){
-          $("#mostrar-cotizaciones-modal").modal("hide");
+          console.error(error.responseText || error);
+
+          $("#listado_cotizaciones_historial").html(`
+            <tr>
+              <td colspan="6" class="historial-empty text-danger">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                No fue posible cargar las cotizaciones.
+              </td>
+            </tr>
+          `);
+
           Vue.swal({
             title: 'ERROR',
-            text: formatear_error(error.responseText),
-            icon: 'error',
-            });
+            text: formatear_error(error.responseText || 'No fue posible consultar las cotizaciones.'),
+            icon: 'error'
+          });
         }
-
-      }); //Fin petición
+      });
     }
 
     function eliminar_cotizacion(num_cot){
@@ -4016,6 +4617,7 @@ function cargar_vale_consignacion(num_consignacion){
         if(resp=='OK')
         {
           dame_carrito();
+          document.body.style.paddingRight = "0px"; //para corregir error de bootstrap al cerrar modal
         }else{
             Vue.swal({
                 title: 'ERROR',
@@ -4166,6 +4768,7 @@ function cargar_vale_consignacion(num_consignacion){
 
   window.onload = function(e){
         var xpress_precio=document.getElementById("xpress-precio");
+        
         Inputmask({"mask":"$ 999.999.999",numericInput: true}).mask(xpress_precio);
 
         if(window.$){ //para comprobar si esta cargado JQuery
@@ -4229,37 +4832,521 @@ function cargar_vale_consignacion(num_consignacion){
 
 }
 
-function confirmar_documento(){
-    let docu = $('input[name="tipo_documento"]:checked').val().trim();
-    docu=docu.toUpperCase();
-    Vue.swal({
-        text: "Desea continuar con "+docu+ ' ?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'CONTINUAR',
-        cancelButtonText: 'CANCELAR'
-        }).then((result) => {
-        if (result.isConfirmed) {
-            if(docu=='COTIZACION'){
-                cotizar();
-            }
-            if(docu=='CONSIGNACION'){
-                consignar();
-            }
-            if(docu=='BOLETA' || docu=='FACTURA'){
-                generar_xml();
-            }
-        }else{
-            /*
-            let bb=document.getElementById("radio_boleta");
-            let ff=document.getElementById("radio_factura");
-            bb.checked=true;
-            ff.checked=false;
-            */
+function escapar_html_resumen(valor){
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function texto_elemento_resumen(selector, valorDefecto=''){
+    const elemento = document.querySelector(selector);
+
+    if(!elemento){
+        return valorDefecto;
+    }
+
+    return String(
+        elemento.value !== undefined && elemento.value !== ''
+            ? elemento.value
+            : elemento.textContent
+    ).trim() || valorDefecto;
+}
+
+function nombre_forma_pago_resumen(check){
+    const id = check.id || '';
+    const value = check.value || '';
+
+    /*
+     * Intenta recuperar el nombre desde el label vinculado al checkbox.
+     */
+    let label = id
+        ? document.querySelector(`label[for="${id}"]`)
+        : null;
+
+    if(label){
+        const texto = label.textContent.trim();
+
+        if(texto){
+            return texto;
         }
+    }
+
+    /*
+     * Las formas de pago se cargan como tabla dinámica.
+     * Normalmente el checkbox está en la primera celda de la fila.
+     */
+    const fila = check.closest('tr');
+
+    if(fila){
+        const celdas = fila.querySelectorAll('td');
+
+        if(celdas.length > 0){
+            const copia = celdas[0].cloneNode(true);
+
+            copia.querySelectorAll('input, button, select, i').forEach(function(elemento){
+                elemento.remove();
+            });
+
+            const textoFila = copia.textContent.replace(/\s+/g, ' ').trim();
+
+            if(textoFila){
+                return textoFila;
+            }
+        }
+    }
+
+    const nombresConocidos = {
+        '1': 'Efectivo',
+        '2': 'Tarjeta de crédito',
+        '3': 'Cheque',
+        '4': 'Transferencia bancaria',
+        '5': 'Tarjeta de débito',
+        '6': 'Giftcard',
+        '7': 'Otro medio de pago'
+    };
+
+    return nombresConocidos[value] || `Forma de pago ${value}`;
+}
+
+function obtener_pagos_resumen(){
+    const pagos = [];
+
+    $('input[name="forma_pago"]:checked').each(function(){
+        const idPago = String($(this).val() || '').trim();
+        const inputMonto = document.getElementById('monto-' + idPago);
+        const inputReferencia = document.getElementById('referencia-' + idPago);
+
+        const monto = inputMonto
+            ? limpiar_monto(inputMonto.value)
+            : 0;
+
+        const referencia = inputReferencia
+            ? String(inputReferencia.value || '').trim()
+            : '';
+
+        pagos.push({
+            nombre: nombre_forma_pago_resumen(this),
+            monto: monto,
+            referencia: referencia
         });
+    });
+
+    return pagos;
+}
+
+function construir_resumen_confirmacion(docu, mensaje){
+    const formatoMoneda = new Intl.NumberFormat('es-CL');
+
+    const totalCarrito = limpiar_monto(
+        texto_elemento_resumen('#total_carrito', '0')
+    );
+
+    const totalPagos = obtener_pagos_resumen()
+        .reduce((acumulado, pago) => acumulado + Number(pago.monto || 0), 0);
+
+    const cantidadItems = Number(
+        texto_elemento_resumen('#items_carrito', '0')
+    ) || 0;
+
+    const clienteNombre = texto_elemento_resumen(
+        '#cliente_nombres',
+        'Sin cliente seleccionado'
+    )
+        .replace(/^Cliente:\s*/i, '')
+        .trim() || 'Sin cliente seleccionado';
+
+    const clienteRut = texto_elemento_resumen('#cliente_rut', '')
+        .replace(/^RUT:\s*/i, '')
+        .trim();
+
+    const idCliente = Number($('#id_cliente').val() || 0);
+    const mostrarCliente = idCliente > 0;
+
+    const modalidadSeleccionada = document.querySelector(
+        'input[name="tipo_venta"]:checked'
+    );
+
+    const modalidad = modalidadSeleccionada
+        ? modalidadSeleccionada.value
+        : 'No definida';
+
+    const descuento = limpiar_monto(
+        texto_elemento_resumen('#formita-descuento', '0')
+    );
+
+    const vuelto = limpiar_monto(
+        texto_elemento_resumen('#div_vuelto', '0')
+    );
+
+    const pagos = obtener_pagos_resumen();
+
+    let documentoDetalle = mensaje;
+
+    if(docu === 'COTIZACION'){
+        const nombreCotizacion = texto_elemento_resumen(
+            '#nombre_cotizacion',
+            'Sin nombre'
+        );
+
+        documentoDetalle += ` · ${nombreCotizacion}`;
+    }
+
+    if(docu === 'CONSIGNACION'){
+        const nombreConsignacion = texto_elemento_resumen(
+            '#nombre_consignacion',
+            'Sin nombre'
+        );
+
+        documentoDetalle += ` · ${nombreConsignacion}`;
+    }
+
+    let filasPagos = '';
+
+    if(pagos.length > 0){
+        filasPagos = pagos.map(function(pago){
+            const referencia = pago.referencia
+                ? `<div style="margin-top:2px;color:#64748b;font-size:11px;">
+                       Ref: ${escapar_html_resumen(pago.referencia)}
+                   </div>`
+                : '';
+
+            return `
+                <div style="
+                    display:flex;
+                    align-items:flex-start;
+                    justify-content:space-between;
+                    gap:12px;
+                    padding:8px 0;
+                    border-bottom:1px solid #e2e8f0;
+                ">
+                    <div style="text-align:left;">
+                        <div style="color:#334155;font-size:13px;font-weight:700;">
+                            ${escapar_html_resumen(pago.nombre)}
+                        </div>
+                        ${referencia}
+                    </div>
+
+                    <strong style="color:#0f172a;white-space:nowrap;">
+                        $${formatoMoneda.format(pago.monto)}
+                    </strong>
+                </div>
+            `;
+        }).join('');
+    }else{
+        filasPagos = `
+            <div style="
+                padding:10px;
+                color:#64748b;
+                background:#f8fafc;
+                border-radius:8px;
+                text-align:center;
+                font-size:12px;
+            ">
+                No corresponde o no hay formas de pago seleccionadas.
+            </div>
+        `;
+    }
+
+    const alertaDiferencia = (
+        (docu === 'BOLETA' || docu === 'FACTURA') &&
+        Math.abs(totalPagos - totalCarrito) > 2
+    )
+        ? `
+            <div style="
+                margin-top:12px;
+                padding:10px 12px;
+                color:#92400e;
+                background:#fffbeb;
+                border:1px solid #fde68a;
+                border-radius:8px;
+                font-size:12px;
+                text-align:left;
+            ">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                La suma de los pagos es
+                <strong>$${formatoMoneda.format(totalPagos)}</strong>
+                y no coincide con el total del carrito.
+            </div>
+        `
+        : '';
+
+    return `
+        <div style="
+            margin-top:4px;
+            padding:2px;
+            color:#334155;
+            font-family:inherit;
+            text-align:left;
+        ">
+            <div style="
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:8px;
+                margin-bottom:12px;
+            ">
+                <div style="
+                    padding:10px;
+                    background:#f8fafc;
+                    border:1px solid #e2e8f0;
+                    border-radius:9px;
+                ">
+                    <div style="
+                        margin-bottom:3px;
+                        color:#64748b;
+                        font-size:10px;
+                        font-weight:800;
+                        text-transform:uppercase;
+                    ">
+                        Documento
+                    </div>
+                    <strong style="color:#1e3a8a;font-size:13px;">
+                        ${escapar_html_resumen(documentoDetalle)}
+                    </strong>
+                </div>
+
+                <div style="
+                    padding:10px;
+                    background:#f8fafc;
+                    border:1px solid #e2e8f0;
+                    border-radius:9px;
+                ">
+                    <div style="
+                        margin-bottom:3px;
+                        color:#64748b;
+                        font-size:10px;
+                        font-weight:800;
+                        text-transform:uppercase;
+                    ">
+                        Modalidad
+                    </div>
+                    <strong style="color:#0f172a;font-size:13px;text-transform:capitalize;">
+                        ${escapar_html_resumen(modalidad)}
+                    </strong>
+                </div>
+
+                ${mostrarCliente
+                    ? `
+                        <div style="
+                            grid-column:1 / -1;
+                            padding:10px;
+                            background:#f8fafc;
+                            border:1px solid #e2e8f0;
+                            border-radius:9px;
+                        ">
+                            <div style="
+                                margin-bottom:3px;
+                                color:#64748b;
+                                font-size:10px;
+                                font-weight:800;
+                                text-transform:uppercase;
+                            ">
+                                Cliente
+                            </div>
+                            <strong style="color:#0f172a;font-size:13px;">
+                                ${escapar_html_resumen(clienteNombre)}
+                            </strong>
+                            ${clienteRut
+                                ? `<div style="margin-top:2px;color:#64748b;font-size:11px;">
+                                       RUT: ${escapar_html_resumen(clienteRut)}
+                                   </div>`
+                                : ''}
+                        </div>
+                    `
+                    : ''}
+            </div>
+
+            <div style="
+                display:grid;
+                grid-template-columns:repeat(3,1fr);
+                gap:8px;
+                margin-bottom:12px;
+            ">
+                <div style="
+                    padding:10px;
+                    background:#eff6ff;
+                    border-radius:9px;
+                    text-align:center;
+                ">
+                    <div style="color:#1d4ed8;font-size:10px;font-weight:800;text-transform:uppercase;">
+                        Productos
+                    </div>
+                    <strong style="display:block;margin-top:3px;color:#1e3a8a;font-size:18px;">
+                        ${cantidadItems}
+                    </strong>
+                </div>
+
+                <div style="
+                    padding:10px;
+                    background:#fefce8;
+                    border-radius:9px;
+                    text-align:center;
+                ">
+                    <div style="color:#a16207;font-size:10px;font-weight:800;text-transform:uppercase;">
+                        Descuento
+                    </div>
+                    <strong style="display:block;margin-top:3px;color:#854d0e;font-size:18px;">
+                        ${descuento}%
+                    </strong>
+                </div>
+
+                <div style="
+                    padding:10px;
+                    color:#fff;
+                    background:linear-gradient(135deg,#166534,#15803d);
+                    border-radius:9px;
+                    text-align:center;
+                ">
+                    <div style="font-size:10px;font-weight:800;text-transform:uppercase;opacity:.85;">
+                        Total
+                    </div>
+                    <strong style="display:block;margin-top:3px;font-size:18px;">
+                        $${formatoMoneda.format(totalCarrito)}
+                    </strong>
+                </div>
+            </div>
+
+            <div style="
+                margin-bottom:8px;
+                color:#334155;
+                font-size:12px;
+                font-weight:800;
+                text-transform:uppercase;
+            ">
+                Formas de pago
+            </div>
+
+            <div style="
+                max-height:190px;
+                overflow:auto;
+                padding:0 11px;
+                background:#fff;
+                border:1px solid #e2e8f0;
+                border-radius:9px;
+            ">
+                ${filasPagos}
+            </div>
+
+            ${vuelto > 0
+                ? `
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        margin-top:10px;
+                        padding:9px 11px;
+                        color:#075985;
+                        background:#e0f2fe;
+                        border-radius:8px;
+                        font-size:12px;
+                    ">
+                        <span>Vuelto</span>
+                        <strong>$${formatoMoneda.format(vuelto)}</strong>
+                    </div>
+                `
+                : ''}
+
+            ${alertaDiferencia}
+
+            <div style="
+                margin-top:12px;
+                padding:10px 12px;
+                color:#475569;
+                background:#f8fafc;
+                border-radius:8px;
+                font-size:11px;
+                text-align:center;
+            ">
+                Esta acción generará el documento y finalizará la venta.
+            </div>
+        </div>
+    `;
+}
+
+function confirmar_documento(){
+
+    oferta_confirmada_en_proceso = false;
+
+    const documentoSeleccionado = $('input[name="tipo_documento"]:checked');
+
+    if(documentoSeleccionado.length === 0){
+        Vue.swal({
+            icon: 'warning',
+            title: 'Documento no seleccionado',
+            text: 'Seleccione el tipo de documento antes de procesar.'
+        });
+        return false;
+    }
+
+    let docu = String(documentoSeleccionado.val() || '')
+        .trim()
+        .toUpperCase();
+
+    let numeroGiftcard = $('#numero_giftcard_cargado').val();
+    let mensaje = docu;
+
+    if(numeroGiftcard && numeroGiftcard.trim() !== ''){
+        mensaje = 'GIFTCARD';
+    }
+
+    const resumen = construir_resumen_confirmacion(docu, mensaje);
+
+    const nombresDocumento = {
+        BOLETA: 'BOLETA',
+        FACTURA: 'FACTURA',
+        COTIZACION: 'COTIZACIÓN',
+        CONSIGNACION: 'CONSIGNACIÓN',
+        GIFTCARD: 'GIFTCARD'
+    };
+
+    const nombreDocumento = nombresDocumento[mensaje.toUpperCase()]
+        || mensaje.toUpperCase();
+
+    Vue.swal({
+        title: '¿DESEA PROCESAR ESTA ' + nombreDocumento + '?',
+        html: resumen,
+        icon: 'warning',
+        width: 650,
+        showCancelButton: true,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        focusCancel: true,
+        confirmButtonColor: '#15803d',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fa-solid fa-circle-check mr-1"></i> PROCESAR ' + nombreDocumento,
+        cancelButtonText: '<i class="fa-solid fa-xmark mr-1"></i> CANCELAR',
+        buttonsStyling: true
+    }).then((result) => {
+
+        if(result.isConfirmed){
+
+            /*
+             * No se bloquea aquí. Cada proceso bloquea el botón recién en el
+             * beforeSend de su petición AJAX. Así, cualquier validación previa
+             * puede terminar sin dejar el botón inutilizable.
+             */
+
+            if(docu === 'COTIZACION'){
+                cotizar();
+                return;
+            }
+
+            if(docu === 'CONSIGNACION'){
+                consignar();
+                return;
+            }
+
+            if(docu === 'BOLETA' || docu === 'FACTURA'){
+                generar_xml();
+                return;
+            }
+
+            habilitar_boton_procesar_dte();
+        }
+
+    });
+
 }
 
 function que_documento(tipo_doc)
@@ -4417,48 +5504,448 @@ function que_documento(tipo_doc)
 
 }
 
+
+function normalizar_respuesta_json(respuesta){
+  if(respuesta === null || typeof respuesta === 'undefined'){
+    return {};
+  }
+
+  if(typeof respuesta === 'object'){
+    return respuesta;
+  }
+
+  if(typeof respuesta === 'string'){
+    const texto = respuesta.trim();
+
+    if(texto === ''){
+      return {};
+    }
+
+    try{
+      return JSON.parse(texto);
+    }catch(error){
+      console.error('Respuesta no válida recibida del servidor:', texto);
+      return {
+        estado: 'ERROR_RESPUESTA',
+        mensaje: texto.substring(0, 500)
+      };
+    }
+  }
+
+  return {
+    estado: 'ERROR_RESPUESTA',
+    mensaje: 'El servidor devolvió una respuesta no reconocida.'
+  };
+}
+
+function guardar_proceso_dte(proceso){
+  if(!proceso || typeof proceso !== 'object'){
+    return;
+  }
+
+  proceso_dte_actual = proceso;
+
+  try{
+    sessionStorage.setItem(
+      'ventas_proceso_dte_actual',
+      JSON.stringify(proceso)
+    );
+  }catch(error){
+    console.warn('No se pudo guardar el proceso DTE en sessionStorage:', error);
+  }
+}
+
+function obtener_proceso_dte(){
+  if(proceso_dte_actual && typeof proceso_dte_actual === 'object'){
+    return proceso_dte_actual;
+  }
+
+  try{
+    const guardado = sessionStorage.getItem('ventas_proceso_dte_actual');
+
+    if(guardado){
+      proceso_dte_actual = JSON.parse(guardado);
+      return proceso_dte_actual;
+    }
+  }catch(error){
+    console.warn('No se pudo recuperar el proceso DTE:', error);
+  }
+
+  return null;
+}
+
+function limpiar_proceso_dte(){
+  proceso_dte_actual = null;
+
+  try{
+    sessionStorage.removeItem('ventas_proceso_dte_actual');
+  }catch(error){
+    console.warn('No se pudo limpiar el proceso DTE:', error);
+  }
+}
+
+function bloquear_boton_procesar(texto = 'PROCESANDO...'){
+  const boton = $('#btn_procesar_');
+
+  if(!boton.length){
+    return;
+  }
+
+  if(!boton.data('texto-original')){
+    boton.data('texto-original', boton.html());
+  }
+
+  boton
+    .prop('disabled', true)
+    .attr('aria-disabled', 'true')
+    .attr('aria-busy', 'true')
+    .addClass('disabled')
+    .html('<i class="fa-solid fa-spinner fa-spin mr-1"></i>' + texto);
+}
+
+function habilitar_boton_procesar_dte(){
+  const boton = $('#btn_procesar_');
+
+  if(!boton.length){
+    return;
+  }
+
+  const textoOriginal = boton.data('texto-original');
+
+  boton
+    .prop('disabled', false)
+    .removeAttr('disabled')
+    .removeAttr('aria-disabled')
+    .removeAttr('aria-busy')
+    .removeClass('disabled');
+
+  if(textoOriginal){
+    boton.html(textoOriginal);
+  }else{
+    boton.html('<i class="fa-solid fa-circle-check mr-1"></i> PROCESAR VENTA');
+  }
+}
+
+function marcar_dte_pendiente_envio(){
+  const boton = $('#btn_procesar_');
+
+  if(!boton.length){
+    return;
+  }
+
+  boton
+    .prop('disabled', true)
+    .attr('aria-disabled', 'true')
+    .removeAttr('aria-busy')
+    .addClass('disabled')
+    .html('<i class="fa-solid fa-file-invoice mr-1"></i> PENDIENTE DE ENVÍO AL SII');
+}
+
+function manejar_error_sesion_dte(xhr, respuesta){
+  const datos = normalizar_respuesta_json(
+    respuesta || (xhr ? xhr.responseJSON : null) || (xhr ? xhr.responseText : null)
+  );
+
+  const estadoHttp = xhr ? Number(xhr.status || 0) : 0;
+
+  const sesionExpirada =
+    estadoHttp === 401 ||
+    estadoHttp === 419 ||
+    datos.estado === 'SESION_EXPIRADA';
+
+  if(!sesionExpirada){
+    return false;
+  }
+
+  habilitar_boton_procesar_dte();
+
+  if(alerta_sesion_dte_mostrada){
+    return true;
+  }
+
+  alerta_sesion_dte_mostrada = true;
+
+  Vue.swal({
+    icon: 'warning',
+    title: 'Sesión expirada',
+    html: `
+      <p>La sesión terminó por inactividad.</p>
+      <p><strong>El proceso fue detenido para evitar duplicar la venta.</strong></p>
+      <p>Debe iniciar sesión nuevamente.</p>
+    `,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    confirmButtonText: 'Ir al inicio de sesión'
+  }).then(() => {
+    const loginUrl = datos.login_url || "{{ route('login') }}";
+    window.location.href = loginUrl;
+  });
+
+  return true;
+}
+
+function mostrar_error_dte(respuesta, titulo='No fue posible procesar el documento'){
+  const datos = normalizar_respuesta_json(respuesta);
+
+  Vue.swal({
+    icon: 'error',
+    title: titulo,
+    text: datos.mensaje || datos.detalle || 'Ocurrió un error desconocido.'
+  });
+}
+
+
+/**
+ * Devuelve las formas de pago que no pueden utilizarse cuando se mantiene
+ * el precio de oferta. Se revisa tanto el checkbox como el monto ingresado.
+ */
+function obtener_pagos_no_permitidos_oferta()
+{
+  const formasNoPermitidas = [
+    { id: 2, nombre: 'Tarjeta de crédito' },
+    { id: 3, nombre: 'Cheque' },
+    { id: 5, nombre: 'Tarjeta de débito' },
+    { id: 6, nombre: 'Giftcard' },
+    { id: 7, nombre: 'Otro medio de pago' }
+  ];
+
+  return formasNoPermitidas.filter(function(forma){
+    const seleccionado = $('#formita-' + forma.id).is(':checked');
+    const monto = limpiar_monto($('#monto-' + forma.id).val());
+    return seleccionado || monto > 0;
+  });
+}
+
+function limpiar_pagos_no_permitidos_oferta()
+{
+  if($('#formita-6').length && (
+      $('#formita-6').is(':checked') ||
+      limpiar_monto($('#monto-6').val()) > 0
+  )){
+    limpiar_giftcard();
+  }
+
+  $('#formita-2,#formita-3,#formita-5,#formita-6,#formita-7')
+    .prop('checked', false)
+    .prop('disabled', true);
+
+  $('#monto-2,#monto-3,#monto-5,#monto-6,#monto-7')
+    .val('')
+    .prop('disabled', true);
+
+  $('#referencia-2,#referencia-3,#referencia-5,#referencia-6,#referencia-7')
+    .val('')
+    .prop('disabled', true);
+}
+
+function pago_oferta_valido()
+{
+  const noPermitidos = obtener_pagos_no_permitidos_oferta();
+
+  const efectivoSeleccionado = $('#formita-1').is(':checked') &&
+      limpiar_monto($('#monto-1').val()) > 0;
+
+  const transferenciaSeleccionada = $('#formita-4').is(':checked') &&
+      limpiar_monto($('#monto-4').val()) > 0;
+
+  return {
+    valido: noPermitidos.length === 0 &&
+      (efectivoSeleccionado || transferenciaSeleccionada),
+    noPermitidos: noPermitidos,
+    tienePagoPermitido: efectivoSeleccionado || transferenciaSeleccionada
+  };
+}
+
+function marcar_decision_oferta(elementoOferta, decision)
+{
+  oferta_confirmada_en_proceso = true;
+
+  if(elementoOferta && elementoOferta.length){
+    elementoOferta.val('0').text('0');
+  }
+
+  $('#es_oferta').val('0');
+  $('#confirmado').val(decision);
+}
+
+function aplicar_precio_normal_y_continuar(elementoOferta)
+{
+  const siCarritoTransferido = $('#es_transferido').val();
+
+  if(siCarritoTransferido == 1){
+    recargar_carrito_transferido();
+  }else{
+    recargar_carrito();
+  }
+
+  marcar_decision_oferta(elementoOferta, 'normal');
+
+  setTimeout(function(){
+    recalcular_montos_pago();
+    generar_xml();
+  }, 800);
+}
+
+function mantener_oferta_y_continuar(elementoOferta, cambiarSoloAEfectivo = false)
+{
+  limpiar_pagos_no_permitidos_oferta();
+
+  const totalCarrito = limpiar_monto($('#total_carrito').val());
+
+  /*
+   * Cuando el usuario pulsa "CAMBIAR A EFECTIVO", la acción debe reemplazar
+   * completamente la distribución anterior. No se conserva una transferencia
+   * parcial, porque eso dejaría efectivo + transferencia por encima del total
+   * o solamente la transferencia por debajo del total.
+   */
+  if(cambiarSoloAEfectivo){
+    $('#formita-4').prop('checked', false);
+    $('#monto-4').val('').prop('disabled', true);
+    $('#referencia-4').val('').prop('disabled', true);
+
+    $('#formita-1').prop('checked', true).prop('disabled', false);
+    $('#monto-1').prop('disabled', false).val(totalCarrito);
+    $('#referencia-1').prop('disabled', false).val('EFECTIVO');
+  }else{
+    const efectivoSeleccionado = $('#formita-1').is(':checked');
+    const transferenciaSeleccionada = $('#formita-4').is(':checked');
+
+    // Si todavía no existe un pago permitido, se utiliza efectivo por el total.
+    if(!efectivoSeleccionado && !transferenciaSeleccionada){
+      $('#formita-1').prop('checked', true).prop('disabled', false);
+      $('#monto-1').prop('disabled', false).val(totalCarrito);
+      $('#referencia-1').prop('disabled', false);
+
+      if(String($('#referencia-1').val() || '').trim() === ''){
+        $('#referencia-1').val('EFECTIVO');
+      }
+    }
+  }
+
+  calcular_sumatoria();
+  marcar_decision_oferta(elementoOferta, 'ofertado');
+
+  setTimeout(function(){
+    generar_xml();
+  }, 150);
+}
+
 function generar_xml()
 {
-  //Se crea un div con id es_oferta donde se guarda si tiene algun repuesto en oferta. 
-  let es_oferta = $('#es_oferta').val();
-  let id_cliente = $('#id_cliente').val();
-//Si es oferta se debe consultar si desea mantener la oferta o colocar el precio normal.
-  if(es_oferta == 1){
+  /*
+   * El indicador #es_oferta viene dentro del HTML dinámico del carrito.
+   * Se normaliza porque puede recibirse como 1, "1", true o "SI".
+   */
+  const elementoOferta = $('#carrito #es_oferta').first().length
+      ? $('#carrito #es_oferta').first()
+      : $('#es_oferta').first();
+
+  const valorOferta = elementoOferta.length
+      ? String(elementoOferta.val() ?? elementoOferta.text() ?? '').trim().toLowerCase()
+      : '';
+
+  const es_oferta = ['1', 'true', 'si', 'sí', 'oferta'].includes(valorOferta);
+  const id_cliente = Number($('#id_cliente').val() || 0);
+
+  console.log('Validación de oferta antes de procesar', {
+      existeIndicador: elementoOferta.length > 0,
+      valorOferta: valorOferta,
+      esOferta: es_oferta,
+      ofertaConfirmada: oferta_confirmada_en_proceso
+  });
+
+  // Solo se pregunta una vez por cada intento de procesamiento.
+  if(es_oferta && !oferta_confirmada_en_proceso){
           Vue.swal({
-                  title: 'Oferta, ¿Como desea Cancelar?',
-                  text: "¡Solo si paga con efectivo o transferencia se respeta el precio oferta!",
-                  icon: 'warning',
+                  title: '¿Desea mantener el precio de oferta?',
+                  html: `
+                    <div style="text-align:left;">
+                      <p style="margin-bottom:10px;">
+                        El carrito contiene uno o más productos con precio de oferta.
+                      </p>
+                      <div style="padding:10px 12px;border:1px solid #fde68a;border-radius:8px;background:#fffbeb;color:#92400e;">
+                        <strong>Importante:</strong> el precio de oferta solo se respeta pagando con
+                        <strong>efectivo</strong> o <strong>transferencia bancaria</strong>.
+                      </div>
+                    </div>
+                  `,
+                  icon: 'question',
+                  allowOutsideClick: false,
+                  allowEscapeKey: false,
                   showCancelButton: true,
                   confirmButtonColor: '#3085d6',
                   cancelButtonColor: '#d33',
-                  confirmButtonText: 'Precio Oferta',
-                  cancelButtonText: 'Precio Normal'
+                  confirmButtonText: '<i class="fa-solid fa-tag mr-1"></i> MANTENER OFERTA',
+                  cancelButtonText: '<i class="fa-solid fa-dollar-sign mr-1"></i> USAR PRECIO NORMAL'
                 }).then((result) => {
                   if (result.isConfirmed) {
-                    //Dejamos disabled las formas de pago que no sean efectivo o transferencia
-                    $('#formita-2').attr('disabled','disabled');
-                    $('#formita-3').attr('disabled','disabled');
-                    $('#formita-5').attr('disabled','disabled');
-                    $('#formita-6').attr('disabled','disabled');
-                    $('#es_oferta').val('0');
-                    $('#confirmado').val('ofertado');
-                    //Volvemos la oferta a 0 ya que se selecciono alguna opción.
-                    es_oferta = 0;
-                  }else{
-                    //Funcion creada para cambiarle el valor al carrito de compras y quitarle el precio oferta
-                    let si_carrito_transferido = $('#es_transferido').val();
-                    if(si_carrito_transferido == 1){
-                      recargar_carrito_transferido();
-                    }else{
-                      recargar_carrito();
-                    
+                    const pagosNoPermitidos = obtener_pagos_no_permitidos_oferta();
+
+                    if(pagosNoPermitidos.length > 0){
+                      const nombresPagos = pagosNoPermitidos
+                        .map(function(forma){ return forma.nombre; })
+                        .join(', ');
+
+                      Vue.swal({
+                        icon: 'warning',
+                        title: 'Forma de pago no válida para la oferta',
+                        html: `
+                          <div style="text-align:left;">
+                            <p>Actualmente tiene seleccionado o con monto ingresado:</p>
+                            <p style="font-weight:700;color:#b91c1c;">${nombresPagos}</p>
+                            <p>
+                              Para mantener el precio de oferta debe pagar únicamente con
+                              <strong>efectivo</strong> y/o <strong>transferencia bancaria</strong>.
+                            </p>
+                          </div>
+                        `,
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        confirmButtonColor: '#15803d',
+                        denyButtonColor: '#2563eb',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: '<i class="fa-solid fa-money-bill-wave mr-1"></i> CAMBIAR A EFECTIVO',
+                        denyButtonText: '<i class="fa-solid fa-dollar-sign mr-1"></i> USAR PRECIO NORMAL',
+                        cancelButtonText: '<i class="fa-solid fa-arrow-left mr-1"></i> VOLVER'
+                      }).then(function(decisionPago){
+                        if(decisionPago.isConfirmed){
+                          mantener_oferta_y_continuar(elementoOferta, true);
+                          return;
+                        }
+
+                        if(decisionPago.isDenied){
+                          aplicar_precio_normal_y_continuar(elementoOferta);
+                          return;
+                        }
+
+                        habilitar_boton_procesar_dte();
+                      });
+
+                      return;
                     }
-                    es_oferta = 0;
-                    $('#confirmado').val('normal');
-                      
+
+                    const validacionPago = pago_oferta_valido();
+
+                    if(!validacionPago.tienePagoPermitido){
+                      Vue.swal({
+                        icon: 'warning',
+                        title: 'Seleccione una forma de pago válida',
+                        text: 'Para mantener la oferta debe ingresar un monto en efectivo o transferencia bancaria.',
+                        confirmButtonText: 'ENTENDIDO'
+                      });
+                      habilitar_boton_procesar_dte();
+                      return;
+                    }
+
+                    mantener_oferta_y_continuar(elementoOferta);
+                  }else{
+                    aplicar_precio_normal_y_continuar(elementoOferta);
                   }
 
                 });
+          return false;
   }else{
     console.log('no tiene ofertas');
     
@@ -4477,6 +5964,7 @@ function generar_xml()
             showConfirmButton: false,
             timer: 3000,
         });
+      habilitar_boton_procesar_dte();
       return false;
     }
 
@@ -4493,6 +5981,7 @@ function generar_xml()
         showConfirmButton: false,
         timer: 3000,
         });
+      habilitar_boton_procesar_dte();
       return false;
     }
 
@@ -4513,6 +6002,7 @@ function generar_xml()
         showConfirmButton: false,
         timer: 3000,
         });
+      habilitar_boton_procesar_dte();
       return false;
     }
 
@@ -4541,7 +6031,8 @@ function generar_xml()
                 showConfirmButton: false,
                 timer: 3000,
                 });
-            return false;
+            habilitar_boton_procesar_dte();
+      return false;
         }
 
         //inicio paguitos
@@ -4571,7 +6062,8 @@ function generar_xml()
                     timer: 4000,
                     });
                 error=true;
-                return false; //sale del bucle jquery paguitos.each
+                habilitar_boton_procesar_dte();
+      return false; //sale del bucle jquery paguitos.each
             }
 
             r="referencia-"+$(this).val();
@@ -4587,7 +6079,8 @@ function generar_xml()
                     timer: 4000,
                     });
                 error=true;
-                return false; //sale del bucle jquery paguitos.each
+                habilitar_boton_procesar_dte();
+      return false; //sale del bucle jquery paguitos.each
             }
 
             id_forma_pago.push($(this).val());
@@ -4599,8 +6092,10 @@ function generar_xml()
             return false; //sale de la funcion...
         }
 
+        // Validar que el total pagado coincida con el total del carrito
+        // Esto aplica para todas las ventas, incluyendo las que usan giftcard
         var error_pago=total_pagado();
- 
+
         if(error_pago=="SI")
         {
             mensaje_error="Total a Pagar no coincide con Total Venta";
@@ -4612,7 +6107,8 @@ function generar_xml()
                 showConfirmButton: false,
                 timer: 5000,
                 });
-            return false;
+            habilitar_boton_procesar_dte();
+      return false;
         }
 
     //var parametros={idcliente:idc,docu:docu,venta:venta,forma_pago:id_forma_pago,monto:monto_forma_pago,referencia:referencia_forma_pago};
@@ -4631,6 +6127,33 @@ function generar_xml()
     //Verificamos si esta en oferta
     let o = $('#es_oferta').val();
     let confirmado = $('#confirmado').val();
+    let numero_giftcard = $('#numero_giftcard_cargado').val();
+
+    /*
+     * Última barrera antes de enviar la venta. Aunque algún evento reactive
+     * una tarjeta u otro medio, una oferta nunca se procesa con ellos.
+     */
+    if(confirmado === 'ofertado'){
+      const validacionFinalOferta = pago_oferta_valido();
+
+      if(!validacionFinalOferta.valido){
+        const nombresNoPermitidos = validacionFinalOferta.noPermitidos
+          .map(function(forma){ return forma.nombre; })
+          .join(', ');
+
+        Vue.swal({
+          icon: 'error',
+          title: 'No se puede procesar la oferta',
+          html: nombresNoPermitidos
+            ? 'Elimine estas formas de pago: <strong>' + nombresNoPermitidos + '</strong>.<br>Solo se permite efectivo y/o transferencia.'
+            : 'Debe ingresar el pago en <strong>efectivo</strong> y/o <strong>transferencia bancaria</strong>.',
+          confirmButtonText: 'REVISAR PAGO'
+        });
+
+        habilitar_boton_procesar_dte();
+        return false;
+      }
+    }
 
     let url="{{url('ventas/generarxml')}}";
     if((document.getElementById('vendedor_id')) !== null){
@@ -4644,7 +6167,8 @@ function generar_xml()
                     ref3:JSON.stringify(ref3),
                     dcto: descuento,
                     oferta:o,
-                    confirmado: confirmado
+                    confirmado: confirmado,
+                    numero_giftcard: numero_giftcard
                 };
     }else{
       var parametros={docu:docu,
@@ -4655,7 +6179,8 @@ function generar_xml()
                     ref3:JSON.stringify(ref3),
                     dcto: descuento,
                     oferta:o,
-                    confirmado: confirmado
+                    confirmado: confirmado,
+                    numero_giftcard: numero_giftcard
                 };
     }
 
@@ -4667,58 +6192,131 @@ function generar_xml()
     });
 
     $.ajax({
-        type:'POST',
-        beforeSend: function () {
-        $("#mensajes").html("<b>Generando XML...</b>");
-        $("#envio-txt").html("<b>Generando XML...</b>");
+        type: 'POST',
+        url: url,
+        data: parametros,
+        dataType: 'json',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
         },
-        url:url,
-        data:parametros,
-        success:function(rs){ //llega un JSON
-            console.log(rs);
-         
-            let rpta=JSON.parse(rs);
-            
-            if(rpta.estado=='GENERADO')
-            {
-                $("#mensajes").html("Generando XML...<b> Listo!!!</b>");
-                $("#envio-txt").html("<b>Generando XML...</b> Listo!!!");
-                documento_procesado=rpta.mensaje; //tiene el tipo y número de documento que se está procesando.
-                document.getElementById("dcmto_en_envio").value=documento_procesado;
-               
-                abrir_procesar_envio();
-                
-                // Vue.swal({
-                //     title: '<h3><i><strong>PROCESANDO '+documento_procesado.toUpperCase()+'</strong></i></h3>',
-                //     html:'<h3 id="envio-txt">Generando XML...</h3>'+
-                //             '<button  class="btn btn-info form-control-sm" onclick="enviar_sii()" id="btn-enviarsii"><small>Enviar al SII</small></button>'+
-                //             '<button  class="btn btn-warning form-control-sm" disabled onclick="ver_estadoUP()" id="btn-verestado"><small>Ver Estado</small></button>'+
-                //             '<button  class="btn btn-success form-control-sm" disabled onclick="imprimir()" id="btn-imprimir">Imprimir</button>',
-                //     allowOutsideClick:false,
-                //     allowEscapeKey:false,
-                //     showConfirmButton:false,
-                //     showCancelButton:true,
-                //     cancelButtonText:"CERRAR" //si apreta cancel, borrar todas las variables generadas en enviar_sii() y ver_estado()
-                //     });
+        beforeSend: function(){
+          bloquear_boton_procesar('GENERANDO XML...');
+          $("#mensajes").html("<b>Generando XML...</b>");
+          $("#envio-txt").html(
+            '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Generando XML...'
+          );
+        },
+        success: function(rs){
+          const rpta = normalizar_respuesta_json(rs);
 
+          console.log('Respuesta generar_xml:', rpta);
 
-                    
-                   
-            }else{
-                Vue.swal({
-                    title: rpta.estado,
-                    text: rpta.mensaje,
-                    icon: 'error',
-                    });
+          if(rpta.estado === 'SESION_EXPIRADA'){
+            manejar_error_sesion_dte(null, rpta);
+            return;
+          }
+
+          if(rpta.estado === 'GENERADO'){
+            const proceso = rpta.proceso_dte || {
+              xml: rpta.xml || null,
+              tipo_dte: rpta.tipo_dte || null,
+              tipo_dte_nombre: rpta.tipo_dte_nombre || docu,
+              folio_dte: rpta.folio_dte || null,
+              idcliente: rpta.idcliente || idc
+            };
+
+            guardar_proceso_dte(proceso);
+
+            $("#mensajes").html("Generando XML... <b>Listo</b>");
+            $("#envio-txt").html(
+              '<i class="fa-solid fa-circle-check text-success mr-1"></i>' +
+              'XML generado correctamente.'
+            );
+
+            documento_procesado =
+              rpta.mensaje ||
+              ((String(docu).toUpperCase()) +
+              (rpta.folio_dte ? ' N° ' + rpta.folio_dte : ''));
+
+            document.getElementById("dcmto_en_envio").value = documento_procesado;
+
+            abrir_procesar_envio();
+            $('#btn-enviarsii').prop('disabled', false);
+
+            /*
+             * El carrito ya generó un DTE. Se mantiene protegido contra una
+             * segunda generación, pero se informa claramente el motivo.
+             */
+            marcar_dte_pendiente_envio();
+            return;
+          }
+
+          if(rpta.estado === 'GIFTCARD_OK'){
+            limpiar_proceso_dte();
+
+            $("#mensajes").html("<b>Pago con giftcard procesado.</b>");
+            $("#envio-txt").html("<small>"+(rpta.mensaje || '')+"</small>");
+
+            const carrito_id = $('#carrito_id').val();
+            const cliente_id = $('#cliente_id').val();
+
+            Vue.swal({
+              icon: 'success',
+              title: 'Giftcard procesada',
+              html:
+                (rpta.mensaje || 'Pago procesado correctamente.') +
+                '<br><br><b>No se generó XML y no se enviará al SII.</b>',
+              allowOutsideClick: false,
+              allowEscapeKey: false
+            });
+
+            limpiar_cliente();
+
+            if(carrito_id && cliente_id){
+              borrar_carrito_transferido(cliente_id);
             }
+
+            borrar_carrito('actual');
+
+            if(document.getElementById("monto_efectivo")){
+              document.getElementById("monto_efectivo").value = '';
+            }
+
+            reiniciar_descuento();
+            limpiar_sesion();
+
+            documento_procesado = "Giftcard";
+            document.getElementById("dcmto_en_envio").value =
+              "Giftcard sin XML/SII";
+
+            habilitar_boton_procesar_dte();
+            return;
+          }
+
+          habilitar_boton_procesar_dte();
+          mostrar_error_dte(rpta, rpta.estado || 'Error al generar XML');
         },
-        error: function(error){
-          console.log(error.responseText);
-            // Vue.swal({
-            //     title: 'ERROR',
-            //     text: formatear_error(error.responseText),
-            //     icon: 'error',
-            //     });
+        error: function(xhr){
+          console.error('Error generar_xml:', xhr);
+
+          if(manejar_error_sesion_dte(xhr)){
+            return;
+          }
+
+          habilitar_boton_procesar_dte();
+
+          const rpta = normalizar_respuesta_json(
+            xhr.responseJSON || xhr.responseText
+          );
+
+          $("#envio-txt").html(
+            '<span class="text-danger">' +
+            (rpta.mensaje || 'No fue posible generar el XML.') +
+            '</span>'
+          );
+
+          mostrar_error_dte(rpta, 'Error al generar XML');
         }
     });
   }
@@ -4782,183 +6380,363 @@ function recargar_carrito(){
 
 function enviar_sii(){
 
-    let marca_credito=document.getElementById("formita-2").checked;
-    let marca_debito=document.getElementById("formita-5").checked;
-    let consignacion = $('#local_id_consignacion').val();
+    if(document.getElementById("formita-6") && document.getElementById("formita-6").checked){
+      Vue.swal({
+        icon: 'info',
+        title: 'Giftcard procesada',
+        text: 'Esta venta fue pagada con giftcard. No corresponde generar XML ni enviar al SII.'
+      });
+      return false;
+    }
 
-    var nfp_credito = 0;
-    var nfp_debito = 0;
+    const formitaCredito = document.getElementById("formita-2");
+    const formitaDebito = document.getElementById("formita-5");
+
+    let marca_credito = formitaCredito ? formitaCredito.checked : false;
+    let marca_debito = formitaDebito ? formitaDebito.checked : false;
+    let consignacion = $('#local_id_consignacion').val() || '';
+
+    let nfp_credito = 0;
+    let nfp_debito = 0;
+
     if(marca_credito){
-      nfp_credito = $('input:radio[name=flexRadioDefault_credito]:checked').val();
+      nfp_credito =
+        $('input:radio[name=flexRadioDefault_credito]:checked').val() || 0;
     }
 
     if(marca_debito){
-      nfp_debito = $('input:radio[name=flexRadioDefault_debito]:checked').val();
-    }
-    
-    if(nfp_credito == undefined) nfp_credito = 0;
-    if(nfp_debito == undefined)  nfp_debito = 0;
-
-    document.getElementById("btn-enviarsii").disabled=true;
-    let vendedor_id = $('#vendedor_id').val();
-    let carrito_id = $('#carrito_id').val();
-    let cliente_id = $('#cliente_id').val();
-    let num_abono = $('#input_num_abono').val();
-    
-    let docu = $('input[name="tipo_documento"]:checked').val().trim();
-   
-    if(docu!="cotizacion")
-    {
-      venta=$('input[name="tipo_venta"]:checked').val().trim();
+      nfp_debito =
+        $('input:radio[name=flexRadioDefault_debito]:checked').val() || 0;
     }
 
-    var id_forma_pago=[];
-    var monto_forma_pago=[];
-    var referencia_forma_pago=[];
-    var m="";
-    var r="";
-    var monto="";
-    var referencia_pago="";
-    let error=false;
-    let parametros={};
-    if(venta=='contado'){
-      var paguitos=$('input[name="forma_pago"]:checked');
-      paguitos.each(function() {
-          //Si los checks seleccionados no tienen monto ni referencia??
-          var texto_seleccionado=$(this)[0].nextSibling.nodeValue.toUpperCase().trim();
-          m="monto-"+$(this).val();
-          monto=document.getElementById(m).value;
+    let vendedor_id = $('#vendedor_id').val() || '';
+    let carrito_id = $('#carrito_id').val() || '';
+    let cliente_id = $('#cliente_id').val() || '';
+    let num_abono = $('#input_num_abono').val() || '';
 
-          //console.log("monto: "+monto);
-  //console.log("Checkbox " + $(this).prop("id") +  " (" + $(this).val() + ") Seleccionado MONTO-m: "+m+" TEXTO: "+texto_seleccionado+" monto-valor: "+Number(monto));
-          if(isNaN(monto) || Number(monto)<=0)
-          {
-              Vue.swal({
-                  text: texto_seleccionado+": Monto vacio, cero o no es un número válido.",
-                  position: 'top-end',
-                  icon: 'error',
-                  toast: true,
-                  showConfirmButton: false,
-                  timer: 4000,
-                  });
-              error=true;
-              return false; //sale del bucle jquery paguitos.each
-          }
+    const documentoSeleccionado =
+      $('input[name="tipo_documento"]:checked');
 
-          r="referencia-"+$(this).val();
-          referencia_pago=document.getElementById(r).value.toUpperCase().trim();
-          if(referencia_pago.length==0)
-          {
-              Vue.swal({
-                  text: texto_seleccionado+": Referencia vacia, cero o no es un número válido.",
-                  position: 'top-end',
-                  icon: 'error',
-                  toast: true,
-                  showConfirmButton: false,
-                  timer: 4000,
-                  });
-              error=true;
-              return false; //sale del bucle jquery paguitos.each
-          }
+    if(documentoSeleccionado.length === 0){
+      Vue.swal({
+        icon: 'warning',
+        title: 'Documento no seleccionado',
+        text: 'Debe seleccionar el documento antes de enviar al SII.'
+      });
+      return false;
+    }
 
-          id_forma_pago.push($(this).val());
-          monto_forma_pago.push(monto);
-          referencia_forma_pago.push(referencia_pago);
-      }); // fin de paguitos
+    let docu = String(documentoSeleccionado.val() || '').trim();
+    let venta = '';
 
-      let descuento = $('#formita-descuento').val();
+    if(docu !== 'cotizacion'){
+      const ventaSeleccionada = $('input[name="tipo_venta"]:checked');
 
-      if(!vendedor_id){
-        parametros={
-          idcliente:cliente['id'],
-          docu:docu,venta:venta,
-          forma_pago:id_forma_pago,
-          nfp_credito: 2,
-          nfp_debito: 2,
-          monto:monto_forma_pago,
-          referencia:referencia_forma_pago,
-          num_abono:num_abono,
-          dcto: descuento,
-          consignacion: consignacion};
-      }else{
-        parametros={
-          idcliente:cliente['id'],
-          docu:docu,venta:venta,
-          forma_pago:id_forma_pago,
-          nfp_credito: 2,
-          nfp_debito: 2,
-          monto:monto_forma_pago,
-          referencia:referencia_forma_pago,
-          vendedor_id: vendedor_id, 
-          carrito_id: carrito_id, 
-          cliente_id: cliente_id,
-          dcto: descuento};
+      if(ventaSeleccionada.length === 0){
+        Vue.swal({
+          icon: 'warning',
+          title: 'Modalidad no seleccionada',
+          text: 'Debe seleccionar la modalidad de venta.'
+        });
+        return false;
       }
-        
-    }else{ //es crédito o delivery
-        parametros={idcliente:cliente['id'],docu:docu,venta:venta};
+
+      venta = String(ventaSeleccionada.val() || '').trim();
     }
 
-    let url='{{url("ventas/enviarsii")}}';
-    $.ajaxSetup({
-    headers: {
-      'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-     }
-    });
+    let id_forma_pago = [];
+    let monto_forma_pago = [];
+    let referencia_forma_pago = [];
+    let error = false;
+    let parametros = {};
+
+    if(venta === 'contado'){
+      const paguitos = $('input[name="forma_pago"]:checked');
+
+      paguitos.each(function(){
+        const idForma = String($(this).val() || '');
+        const inputMonto = document.getElementById('monto-' + idForma);
+        const inputReferencia = document.getElementById('referencia-' + idForma);
+
+        const monto = inputMonto ? limpiar_monto(inputMonto.value) : 0;
+        const referencia = inputReferencia
+          ? String(inputReferencia.value || '').toUpperCase().trim()
+          : '';
+
+        let textoSeleccionado = 'FORMA DE PAGO';
+
+        try{
+          textoSeleccionado = nombre_forma_pago_resumen(this).toUpperCase();
+        }catch(e){
+          // Mantiene nombre genérico.
+        }
+
+        if(monto <= 0){
+          Vue.swal({
+            text: textoSeleccionado + ': monto vacío, cero o inválido.',
+            position: 'top-end',
+            icon: 'error',
+            toast: true,
+            showConfirmButton: false,
+            timer: 4000
+          });
+
+          error = true;
+          return false;
+        }
+
+        if(referencia.length === 0){
+          Vue.swal({
+            text: textoSeleccionado + ': debe ingresar una referencia.',
+            position: 'top-end',
+            icon: 'error',
+            toast: true,
+            showConfirmButton: false,
+            timer: 4000
+          });
+
+          error = true;
+          return false;
+        }
+
+        id_forma_pago.push(idForma);
+        monto_forma_pago.push(monto);
+        referencia_forma_pago.push(referencia);
+      });
+
+      if(error){
+        return false;
+      }
+
+      const descuento = limpiar_monto($('#formita-descuento').val());
+
+      parametros = {
+        idcliente: $('#id_cliente').val() || cliente['id'] || 0,
+        docu: docu,
+        venta: venta,
+        forma_pago: id_forma_pago,
+        nfp_credito: nfp_credito,
+        nfp_debito: nfp_debito,
+        monto: monto_forma_pago,
+        referencia: referencia_forma_pago,
+        num_abono: num_abono,
+        dcto: descuento,
+        consignacion: consignacion
+      };
+
+      if(vendedor_id){
+        parametros.vendedor_id = vendedor_id;
+        parametros.carrito_id = carrito_id;
+        parametros.cliente_id = cliente_id;
+      }
+    }else{
+      parametros = {
+        idcliente: $('#id_cliente').val() || cliente['id'] || 0,
+        cliente_id: cliente_id,
+        docu: docu,
+        venta: venta,
+        vendedor_id: vendedor_id
+      };
+    }
+
+    /*
+     * Se anexan los metadatos devueltos por generar_xml().
+     * El controlador puede reconstruir el proceso si la sesión interna del
+     * documento fue regenerada entre generar y enviar.
+     */
+    const proceso = obtener_proceso_dte();
+
+    if(proceso){
+      parametros.xml = proceso.xml || '';
+      parametros.tipo_dte = proceso.tipo_dte || '';
+      parametros.tipo_dte_nombre = proceso.tipo_dte_nombre || docu;
+      parametros.folio_dte = proceso.folio_dte || '';
+      parametros.idcliente = proceso.idcliente || parametros.idcliente;
+    }
+
+    let url = '{{url("ventas/enviarsii")}}';
 
     $.ajax({
-        type:'POST',
-        beforeSend: function () {
-            $("#mensajes").html("<b>Enviando al SII...</b>");
-            $("#envio-txt").html("<small>Enviando al SII...</small>");
+      type: 'POST',
+      url: url,
+      data: parametros,
+      dataType: 'json',
+      headers: {
+        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      beforeSend: function(){
+        $('#btn-enviarsii').prop('disabled', true);
+        $("#mensajes").html("<b>Enviando al SII...</b>");
+        $("#envio-txt").html(
+          '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Enviando al SII...'
+        );
+      },
+      success: function(rs){
+        const rpta = normalizar_respuesta_json(rs);
 
-        },
-        url:url,
-        data:parametros,
-        success:function(rs){
-          console.log(rs);
-           let carrito_id = $('#carrito_id').val();
-           let cliente_id = $('#cliente_id').val();
-           let consignacion = $('#local_id_consignacion').val();
-            let rpta=JSON.parse(rs);
-           
-            if(rpta.estado=='OK')
-            {
-                $("#mensajes").html("Enviando al SII...<b>Recibido !!!</b>");
-                $("#envio-txt").html("<small>"+rpta.mensaje+" TrackID: "+rpta.trackid+"</small>");
-                document.getElementById("btn-enviarsii").disabled=true;
-                document.getElementById("btn-verestado").disabled=false;
-                document.getElementById("btn-imprimir").disabled=false;
-                
-                TrackID=rpta.trackid;
-                
-                borrar_carrito_transferido(cliente_id);
-                //limpiar_todo();
-                borrar_carrito('actual');
-                // Limpiamos el input de monto_efectivo
-                document.getElementById("monto_efectivo").value='';
-                reiniciar_descuento();
-                if(consignacion !== ''){
-                  //console.log('eliminando consignacion');
-                  eliminar_consignacion_numero(consignacion);
-                }
-                //Limpiamos el parametro que indica si es consignación
-                document.getElementById("local_id_consignacion").value='';
-            }else{
-                document.getElementById("btn-enviarsii").disabled=false;
-                $("#mensajes").html("Enviando al SII...<b>No recibido !!! Reintente el envío</b>");
-                $("#envio-txt").html("<small>"+rpta.estado+". "+rpta.mensaje+"</small>");
-                TrackID=0;
-            }
-            
-        },
-        error: function(error){
-            console.log(error.responseText);
-            $('#envio-txt').html(error.responseText);
+        console.log('Respuesta enviar_sii:', rpta);
+
+        if(rpta.estado === 'SESION_EXPIRADA'){
+          manejar_error_sesion_dte(null, rpta);
+          return;
         }
+
+        if(rpta.estado === 'PROCESO_DTE_EXPIRADO'){
+          $('#btn-enviarsii').prop('disabled', false);
+
+          Vue.swal({
+            icon: 'warning',
+            title: 'Proceso DTE no disponible',
+            html:
+              '<p>'+(rpta.mensaje || 'No fue posible recuperar el XML generado.')+'</p>' +
+              '<p><strong>No vuelva a enviar sin revisar si el folio ya fue utilizado.</strong></p>',
+            confirmButtonText: 'Entendido'
+          });
+
+          $("#envio-txt").html(
+            '<span class="text-warning">' +
+            (rpta.mensaje || 'Proceso DTE expirado.') +
+            '</span>'
+          );
+          return;
+        }
+
+        if(rpta.estado === 'OK'){
+          $("#mensajes").html("Enviando al SII... <b>Recibido</b>");
+          $("#envio-txt").html(
+            "<small>" +
+            (rpta.mensaje || 'Documento recibido por el SII.') +
+            (rpta.trackid ? " TrackID: " + rpta.trackid : '') +
+            "</small>"
+          );
+
+          const btnEstado = document.getElementById("btn-verestado");
+          const btnImprimir = document.getElementById("btn-imprimir");
+
+          if(btnEstado){
+            btnEstado.disabled = false;
+          }
+
+          if(btnImprimir){
+            btnImprimir.disabled = false;
+          }
+
+          TrackID = rpta.trackid || 0;
+          limpiar_proceso_dte();
+          limpiar_cliente();
+
+          if(cliente_id){
+            borrar_carrito_transferido(cliente_id);
+          }
+
+          borrar_carrito('actual');
+
+          const efectivo = document.getElementById("monto_efectivo");
+
+          if(efectivo){
+            efectivo.value = '';
+          }
+
+          reiniciar_descuento();
+          habilitar_boton_procesar_dte();
+
+          if(consignacion !== ''){
+            eliminar_consignacion_numero(consignacion);
+          }
+
+          const localConsignacion =
+            document.getElementById("local_id_consignacion");
+
+          if(localConsignacion){
+            localConsignacion.value = '';
+          }
+
+          return;
+        }
+
+        $('#btn-enviarsii').prop('disabled', false);
+        $("#mensajes").html(
+          "Enviando al SII... <b>No recibido. Puede reintentar.</b>"
+        );
+        $("#envio-txt").html(
+          "<small>" +
+          (rpta.estado || 'ERROR') +
+          ". " +
+          (rpta.mensaje || 'No fue posible enviar el documento.') +
+          "</small>"
+        );
+
+        TrackID = 0;
+      },
+      error: function(xhr){
+        console.error('Error enviar_sii:', xhr);
+
+        if(manejar_error_sesion_dte(xhr)){
+          return;
+        }
+
+        $('#btn-enviarsii').prop('disabled', false);
+
+        const rpta = normalizar_respuesta_json(
+          xhr.responseJSON || xhr.responseText
+        );
+
+        $("#envio-txt").html(
+          '<span class="text-danger">' +
+          (rpta.mensaje || 'No fue posible enviar el documento al SII.') +
+          '</span>'
+        );
+
+        mostrar_error_dte(rpta, 'Error al enviar al SII');
+      }
     });
+}
 
+function limpiar_cliente(){
+  $('#id_cliente').val(0);
+  actualizar_visibilidad_cliente();
+  $('#cliente_nombre').val('');
+  $('#cliente_rut').val('');
+  $('#cliente_direccion').val('');
+  $('#cliente_giro').val('');
+  limpiar_giftcard();
+  limpiar_formas_pago();
+}
 
+function limpiar_giftcard(){
+  $('#numero_giftcard_cargado').val('');
+  $('#input_saldo_giftcard').val('');
+  $('#input_codigo_giftcard').val('');
+  $('#saldo_giftcard_valor').text('0');
+  $('#div_saldo_giftcard').hide();
+  $('#div_saldo_giftcard').removeClass('d-inline');
+  // Limpiar forma de pago giftcard
+  $('#formita-6').prop('checked', false);
+  $('#monto-6').val('');
+  $('#monto-6').prop('readonly', false);
+  $('#monto-6').prop('disabled', true); // Deshabilitar cuando se limpia
+  $('#referencia-6').val('');
+  $('#referencia-6').prop('readonly', false);
+  $('#referencia-6').prop('disabled', true); // Deshabilitar referencia también
+  // Limpiar forma de pago efectivo también
+  $('#formita-1').prop('checked', false);
+  $('#monto-1').val('');
+  // Ocultar botón de recalcular pagos giftcard y mostrar botón Sumar
+  $('#btn_recalcular_giftcard').hide();
+  $('#btn_sumar').show();
+}
+
+function limpiar_formas_pago(){
+  // Limpiar todos los checks y montos de formas de pago
+  $('input[name="forma_pago"]').each(function(){
+    $(this).prop('checked', false);
+    let id_forma = $(this).val();
+    $('#monto-'+id_forma).val('');
+    $('#monto-'+id_forma).prop('readonly', false);
+    $('#referencia-'+id_forma).val('');
+  });
 }
 
 function reiniciar_descuento(){
@@ -5068,7 +6846,7 @@ function ver_estado(){
             rs=JSON.parse(rs);
             if(rs.estado=='ACEPTADO'){
                 $("#envio-txt").html("<small>Envío ACEPTADO... puede imprimir</small>");
-                document.getElementById("btn-enviarsii").disabled=true;
+                // document.getElementById("btn-enviarsii").disabled=true;
                 document.getElementById("btn-verestado").disabled=true;
                 document.getElementById("btn-imprimir").disabled=false;
                 let doc=""
@@ -5108,7 +6886,7 @@ function ver_estadoUP()
             rs=JSON.parse(rs);
             if(rs.estado=='ACEPTADO'){
                 $("#envio-txt").html("<small>Envío ACEPTADO... puede imprimir</small>");
-                document.getElementById("btn-enviarsii").disabled=true;
+                // document.getElementById("btn-enviarsii").disabled=true;
                 document.getElementById("btn-verestado").disabled=true;
                 document.getElementById("btn-imprimir").disabled=false;
                 let doc="";
@@ -5316,6 +7094,119 @@ function guardar_venta()
     });
   }
 
+  function dame_saldo_giftcard(){
+      let codigo_giftcard = $('#input_codigo_giftcard').val();
+      if(codigo_giftcard.trim() == 0 || codigo_giftcard == ''){
+          Vue.swal({
+              icon:'error',
+              text:'Debe ingresar un código de giftcard'
+          });
+          return false;
+      }
+
+      let url = '/ventas/dame_saldo_giftcard/'+codigo_giftcard;
+      $.ajax({
+          type:'get',
+          url: url,
+          beforeSend: function(){
+              espere('Cargando giftcard al carrito ...');
+          },
+          success: function(resp){
+              console.log(resp);
+              Vue.swal.close();
+
+              if(typeof(resp) === 'string'){
+                  Vue.swal({icon:'error', text:resp});
+                  return false;
+              }
+
+              if(resp.success){
+                  // Guardar el número del giftcard
+                  $('#numero_giftcard_cargado').val(codigo_giftcard);
+
+                  // Saldo real disponible de la giftcard
+                  let saldo_disponible = limpiar_monto(resp.saldo_disponible);
+                  let saldo_formateado = commaSeparateNumber(saldo_disponible);
+
+                  // Total actual del carrito
+                  let total_carrito = 0;
+                  if($('#total_carrito').length){
+                      total_carrito = limpiar_monto($('#total_carrito').val());
+                  }
+
+                  if(total_carrito <= 0){
+                      Vue.swal({
+                          icon:'error',
+                          title:'Carrito vacío',
+                          text:'Debe agregar productos al carrito antes de aplicar una giftcard.'
+                      });
+                      return false;
+                  }
+
+                  // Monto que realmente se aplicará: nunca debe superar el total de la venta
+                  let monto_aplicado = saldo_disponible;
+                  if(saldo_disponible > total_carrito){
+                      monto_aplicado = total_carrito;
+                  }
+
+                  // Saldo restante estimado después de aplicar la giftcard
+                  let saldo_restante = saldo_disponible - monto_aplicado;
+                  if(saldo_restante < 0) saldo_restante = 0;
+
+                  let monto_aplicado_formateado = commaSeparateNumber(monto_aplicado);
+                  let saldo_restante_formateado = commaSeparateNumber(saldo_restante);
+
+                  // Guardar y mostrar saldo disponible del vale de mercadería de forma permanente
+                  $('#input_saldo_giftcard').val(saldo_disponible);
+                  $('#saldo_giftcard_valor').text(saldo_formateado);
+                  $('#div_saldo_giftcard').show();
+                  $('#div_saldo_giftcard').addClass('d-inline');
+
+                  // Activar forma de pago Giftcard (ID=6) y rellenar solo el monto aplicado a esta venta
+                  $('#formita-6').prop('checked', true);
+                  $('#monto-6').val(monto_aplicado);
+                  $('#monto-6').prop('readonly', true); // No permitir editar el monto
+                  $('#monto-6').prop('disabled', false); // Pero sí debe estar habilitado para enviar
+
+                  // Habilitar referencia/descripción de la giftcard para que el cajero pueda editarla.
+                  $('#referencia-6').prop('readonly', false);
+                  $('#referencia-6').prop('disabled', false);
+                  $('#referencia-6').val('Giftcard ' + codigo_giftcard);
+
+                  // Diferencia a pagar en efectivo, si corresponde
+                  let diferencia_efectivo = total_carrito - monto_aplicado;
+                  if(diferencia_efectivo < 0) diferencia_efectivo = 0;
+
+                  $('#monto-1').val(diferencia_efectivo);
+                  $('#formita-1').prop('checked', diferencia_efectivo > 0);
+
+                  // Mostrar botón de recalcular pagos giftcard y ocultar botón Sumar
+                  $('#btn_sumar').hide();
+                  $('#btn_recalcular_giftcard').show();
+
+                  Vue.swal({
+                      icon:'success',
+                      title:'Giftcard cargada',
+                      html:'<b>Saldo giftcard:</b> $'+saldo_formateado+
+                           '<br><b>Total venta:</b> $'+commaSeparateNumber(total_carrito)+
+                           '<br><b>Monto aplicado:</b> $'+monto_aplicado_formateado+
+                           '<br><b>Saldo restante estimado:</b> $'+saldo_restante_formateado
+                  });
+
+                  $('#input_codigo_giftcard').val('');
+              } else {
+                  Vue.swal({icon:'error', text:'Error al cargar el vale'});
+              }
+          },
+          error: function(error){
+              Vue.swal.close();
+              Vue.swal({
+                  icon:'error',
+                  text: error.responseText
+              });
+          }
+      })
+  }
   
     
   function agregar_consignacion_carrito(){
@@ -5368,6 +7259,127 @@ function guardar_venta()
       }
     });
     }
+
+  function crear_vale_mercaderia(){
+    // Limpiar el formulario
+    $('#rut_cliente').val('');
+    $('#nombre_cliente').val('');
+    $('#telefono_cliente').val('');
+    $('#descripcion').val('');
+    $('#numero_documento').val('');
+    $('#valor').val('');
+    $('#vale_boleta').prop('checked', true);
+    $('#vale_factura').prop('checked', false);
+    
+    // Abrir el modal
+    $('#crear-vale-mercaderia-modal').modal('show');
+  }
+
+   function guardar_vale_mercaderia(){
+    let rut = $('#rut_cliente').val().trim();
+    let nombre = $('#nombre_cliente').val().trim();
+    let telefono = $('#telefono_cliente').val().trim();
+    let descripcion = $('#descripcion').val().trim();
+    let tipo_doc = $('input[name="tipo_documento"]:checked').val();
+    let numero_doc = $('#numero_documento').val().trim();
+    let valor = $('#valor').val().trim();
+
+    // Validar campos
+    if(rut == ''){
+      Vue.swal({icon:'error', text:'Ingrese RUT del cliente'});
+      return false;
+    }
+    if(nombre == ''){
+      Vue.swal({icon:'error', text:'Ingrese nombre del cliente'});
+      return false;
+    }
+    if(descripcion == ''){
+      Vue.swal({icon:'error', text:'Ingrese descripción del repuesto'});
+      return false;
+    }
+    if(numero_doc == ''){
+      Vue.swal({icon:'error', text:'Ingrese número de documento'});
+      return false;
+    }
+    if(valor == '' || isNaN(valor) || Number(valor) <= 0){
+      Vue.swal({icon:'error', text:'Ingrese un valor válido'});
+      return false;
+    }
+
+    // Hacer la petición AJAX para guardar
+    let url = '{{url("ventas/guardar_vale_mercaderia")}}';
+    let parametros = {
+      rut: rut,
+      nombre: nombre,
+      telefono: telefono,
+      descripcion: descripcion,
+      tipo_documento: tipo_doc,
+      numero_documento: numero_doc,
+      valor: valor
+    };
+
+    $.ajaxSetup({
+      headers: {
+        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+      }
+    });
+
+    $.ajax({
+      type:'POST',
+      url: url,
+      data: parametros,
+      beforeSend: function(){
+        espere('Guardando vale de mercadería...');
+      },
+      success: function(resp){
+        Vue.swal.close();
+        console.log(resp);
+        if(typeof(resp) === 'string'){
+          Vue.swal({icon:'error', text:resp});
+          return false;
+        }
+        if(resp.success){
+          Vue.swal({
+            icon:'success',
+            title:'Éxito',
+            text:'Vale de mercadería creado: '+resp.numero_boucher
+          });
+          $('#crear-vale-mercaderia-modal').modal('hide');
+        } else {
+          Vue.swal({icon:'error', text:resp.mensaje || 'Error al guardar'});
+        }
+      },
+      error: function(error){
+        Vue.swal.close();
+        Vue.swal({icon:'error', text: error.responseText});
+      }
+    });
+  }
+
+  function imprimir_boucher(){
+    let numero_boucher = $('#numero_documento').val().trim();
+    if(numero_boucher == ''){
+      Vue.swal({icon:'error', text:'Primero debe guardar el vale para imprimirlo'});
+      return false;
+    }
+    // Aquí iría la lógica para imprimir el boucher
+    Vue.swal({icon:'info', text:'Imprimiendo boucher '+numero_boucher});
+  }
+
+  function ver_historial_vales(){
+    // Aquí iría la lógica para ver el historial de vales
+    let url = '{{url("ventas/historial_vales")}}';
+    $.ajax({
+      type:'GET',
+      url: url,
+      success: function(resp){
+        console.log(resp);
+      },
+      error: function(error){
+        console.log(error);
+      }
+    });
+  }
 
   //Mostrar Ocultar Filtros
   function filtros()
@@ -5448,6 +7460,52 @@ console.log(valor2);
   }, 5000);
 
 }
+
+  // ===== Mejoras UX: atajos y foco de trabajo =====
+  function enfocarIngresoCodigo(){
+    const input = document.getElementById('input_codigo');
+    if(input && !input.disabled){
+      input.focus();
+      input.select();
+    }else{
+      $('#buscar-xpress-modal').modal('show');
+    }
+  }
+
+  function abrirMasOpcionesVenta(){
+    const panel = document.getElementById('acciones-secundarias-venta');
+    if(!panel) return;
+    panel.classList.toggle('d-none');
+  }
+
+  document.addEventListener('keydown', function(e){
+    const tag = (e.target.tagName || '').toLowerCase();
+    const escribiendo = ['input','textarea','select'].includes(tag);
+
+    if(e.key === 'Escape'){
+      $('.modal.show').modal('hide');
+      return;
+    }
+    if(escribiendo) return;
+
+    if(e.key === 'F2'){ e.preventDefault(); buscar_cliente(); }
+    if(e.key === 'F3'){ e.preventDefault(); enfocarIngresoCodigo(); }
+    if(e.key === 'F4'){ e.preventDefault(); $('#buscar-xpress-modal').modal('show'); }
+    if(e.key === 'F5'){ e.preventDefault(); poner_nombre_carrito(); }
+    if(e.key === 'F6'){ e.preventDefault(); confirmar_documento(); }
+    if(e.key === 'F7'){ e.preventDefault(); nueva_venta(); }
+  });
+
+  $(document).ready(function(){
+    // Ayuda contextual sin interrumpir el flujo.
+    $('[data-toggle="tooltip"]').tooltip();
+
+    // Foco inicial para vendedores que trabajan con teclado/lector de código.
+    setTimeout(function(){
+      const codigo = document.getElementById('input_codigo');
+      if(codigo && !codigo.disabled) codigo.focus();
+    }, 350);
+  });
 </script>
 @endsection
 @section('style')
@@ -5591,30 +7649,1291 @@ label {
 }
 
 
+
+/* ===== Rediseño UX de la venta principal ===== */
+:root{
+  --venta-bg:#f4f6f9;
+  --venta-card:#ffffff;
+  --venta-border:#dfe3e8;
+  --venta-primary:#2563eb;
+  --venta-success:#15803d;
+  --venta-warning:#f59e0b;
+  --venta-text:#1f2937;
+  --venta-muted:#6b7280;
+}
+
+body{ background:var(--venta-bg); }
+
+.venta-shell{ padding:12px; }
+.venta-toolbar{
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  margin-bottom:12px; padding:10px; background:var(--venta-card);
+  border:1px solid var(--venta-border); border-radius:12px;
+  box-shadow:0 2px 8px rgba(15,23,42,.06);
+}
+.venta-toolbar .btn{ margin:0; border-radius:8px !important; border-width:1px !important; }
+.venta-toolbar .acciones-principales, .venta-toolbar .acciones-secundarias{
+  display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+}
+.venta-toolbar .acciones-secundarias{ margin-left:auto; }
+.venta-layout{ align-items:flex-start; }
+.venta-sidebar, .venta-main{ padding-left:6px; padding-right:6px; }
+.venta-panel{
+  background:var(--venta-card) !important; border:1px solid var(--venta-border) !important;
+  border-radius:12px !important; box-shadow:0 2px 8px rgba(15,23,42,.05);
+}
+.venta-sidebar-panel{
+  position:sticky;
+  top:8px;
+  display:flex;
+  flex-direction:column;
+  height:var(--venta-sidebar-height, calc(100vh - 90px));
+  max-height:var(--venta-sidebar-height, calc(100vh - 90px));
+  min-height:520px;
+  padding:10px !important;
+  overflow:hidden;
+}
+.cliente-resumen{ margin-bottom:10px; padding:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
+.cliente-resumen .table{ margin:0; background:transparent; }
+.cliente-resumen th{ color:var(--venta-muted); font-size:10px; text-transform:uppercase; border:0; }
+.cliente-resumen td{ color:var(--venta-text); font-size:11px !important; font-weight:600; border:0; }
+.documento-selector{ padding:10px; margin-bottom:10px; border:1px solid var(--venta-border); border-radius:10px; }
+#zona_formas_pago{ display:block; padding-top:6px; }
+#total_forma_pago{ font-size:1.55rem; font-weight:800; color:var(--venta-success); text-align:right; }
+#btn_procesar_{ width:100%; min-height:46px; font-size:1rem; font-weight:700; border-radius:10px; }
+#carrito{
+  background:var(--venta-card) !important; min-height:430px !important; border:1px solid var(--venta-border) !important;
+  border-radius:12px !important; padding:10px !important; box-shadow:0 2px 8px rgba(15,23,42,.05);
+}
+#carrito table tbody tr{ transition:background-color .15s ease, box-shadow .15s ease; }
+#carrito table tbody tr:hover{ background:#eff6ff; box-shadow:inset 3px 0 var(--venta-primary); }
+.accesos-rapidos{ background:transparent !important; border:0 !important; padding:0 !important; }
+.accesos-rapidos .card{ background:var(--venta-card) !important; border:1px solid var(--venta-border) !important; border-radius:12px !important; }
+.accesos-rapidos .form-control{ min-height:38px; background:#fff !important; border-color:#cbd5e1 !important; }
+.accesos-rapidos .form-control:focus{ border-color:var(--venta-primary) !important; box-shadow:0 0 0 .18rem rgba(37,99,235,.15); }
+.atajos-venta{ font-size:11px; color:var(--venta-muted); }
+.atajos-venta kbd{ margin-right:3px; background:#334155; border-radius:4px; }
+.modal-content{ border:0; border-radius:12px; overflow:hidden; }
+.modal-header-80, .modal-header-40{ background:#1e40af; }
+#zona_grilla{ background:#fff; overflow:auto; }
+#panel-buscar{ background:#f8fafc !important; border-right:1px solid var(--venta-border); }
+
+@media(max-width:991.98px){
+  .venta-sidebar-panel{
+    position:static;
+    height:auto;
+    max-height:none;
+    min-height:0;
+    overflow:visible;
+    margin-bottom:12px;
+  }
+  .venta-toolbar .acciones-secundarias{ margin-left:0; }
+}
+
+
+/* ===== Sidebar de venta V2 ===== */
+.venta-sidebar-panel{
+  padding:10px !important;
+  background:#f8fafc !important;
+}
+
+.venta-v2-stack{
+  display:flex;
+  flex:1 1 auto;
+  min-height:0;
+  flex-direction:column;
+  gap:10px;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:5px;
+  padding-bottom:4px;
+  scrollbar-gutter:stable;
+}
+
+.venta-v2-stack::-webkit-scrollbar{
+  width:7px;
+}
+
+.venta-v2-stack::-webkit-scrollbar-track{
+  background:#e2e8f0;
+  border-radius:10px;
+}
+
+.venta-v2-stack::-webkit-scrollbar-thumb{
+  background:#94a3b8;
+  border-radius:10px;
+}
+
+.venta-v2-stack::-webkit-scrollbar-thumb:hover{
+  background:#64748b;
+}
+
+.venta-sidebar-footer{
+  flex:0 0 auto;
+  margin-top:10px;
+  padding:10px;
+  background:#fff;
+  border:1px solid #dce3eb;
+  border-radius:12px;
+  box-shadow:0 -3px 12px rgba(15,23,42,.08);
+}
+
+.venta-sidebar-footer .venta-v2-total{
+  margin-top:0;
+}
+
+.venta-sidebar-footer .venta-v2-process{
+  margin-top:9px;
+}
+
+.venta-v2-card{
+  flex:0 0 auto;
+  background:#fff;
+  border:1px solid #dce3eb;
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 2px 7px rgba(15,23,42,.05);
+}
+
+.venta-v2-card-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:10px 12px;
+  background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%);
+  border-bottom:1px solid #e2e8f0;
+  color:#1e293b;
+  font-size:14px;
+  font-weight:800;
+}
+
+.venta-v2-card-header i{
+  width:18px;
+  color:#2563eb;
+  text-align:center;
+}
+
+.venta-v2-card-body{
+  padding:11px;
+}
+
+.venta-v2-client-grid{
+  display:grid;
+  grid-template-columns:minmax(105px,.85fr) minmax(0,1.6fr);
+  gap:8px;
+}
+
+.venta-v2-client-item{
+  min-width:0;
+  padding:8px 9px;
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+}
+
+.venta-v2-client-item.wide{
+  grid-column:1 / -1;
+}
+
+.venta-v2-client-label{
+  display:block;
+  margin-bottom:3px;
+  color:#64748b;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.venta-v2-client-value{
+  display:block;
+  min-height:17px;
+  color:#172033;
+  font-size:12px !important;
+  font-weight:700;
+  line-height:1.35;
+  text-transform:uppercase;
+  overflow-wrap:anywhere;
+}
+
+.venta-v2-options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+
+.venta-v2-option{
+  position:relative;
+  margin:0;
+}
+
+.venta-v2-option input[type="radio"]{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.venta-v2-option label{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:39px;
+  margin:0;
+  padding:7px 8px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  background:#fff;
+  color:#334155;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:600;
+  text-align:center;
+  transition:.16s ease;
+}
+
+.venta-v2-option label:hover{
+  border-color:#60a5fa;
+  background:#f8fbff;
+}
+
+.venta-v2-option input[type="radio"]:checked + label{
+  color:#1d4ed8;
+  border-color:#3b82f6;
+  background:#eff6ff;
+  box-shadow:0 0 0 2px rgba(59,130,246,.11);
+}
+
+.venta-v2-option input[type="radio"]:disabled + label{
+  opacity:.5;
+  cursor:not-allowed;
+  background:#f1f5f9;
+}
+
+.venta-v2-option.full{
+  grid-column:1 / -1;
+}
+
+.venta-v2-extra{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:7px;
+  margin-top:8px;
+}
+
+.venta-v2-extra input{
+  width:100% !important;
+  min-height:37px;
+  padding:6px 9px;
+  border:1px solid #cbd5e1;
+  border-radius:7px;
+  background:#fff;
+}
+
+.venta-v2-extra input:focus{
+  border-color:#3b82f6;
+  outline:0;
+  box-shadow:0 0 0 2px rgba(59,130,246,.12);
+}
+
+.venta-v2-payment-scroll{
+  max-height:none;
+  overflow:visible;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+}
+
+#formas_pago{
+  margin:0 !important;
+}
+
+#formas_pago table{
+  margin:0 !important;
+  width:100%;
+  background:#fff;
+}
+
+#formas_pago thead th,
+#formas_pago > .col-12 > table thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  padding:8px 5px !important;
+  background:#d9f7ef !important;
+  color:#123b34;
+  border-top:0 !important;
+  font-size:11px;
+  font-weight:800;
+  text-align:center;
+}
+
+#formas_pago td{
+  padding:4px 3px !important;
+  vertical-align:middle;
+  font-size:12px;
+}
+
+#formas_pago input[type="text"],
+#formas_pago input[type="number"]{
+  max-width:100%;
+  height:32px;
+  padding:4px 6px;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+}
+
+.venta-v2-discount-row{
+  display:grid;
+  grid-template-columns:minmax(110px,1fr) 82px auto;
+  gap:6px;
+  align-items:center;
+}
+
+.venta-v2-discount-row label{
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+}
+
+.venta-v2-discount-row input[type="text"]{
+  width:100% !important;
+  height:34px;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  text-align:center;
+}
+
+.venta-v2-change{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:6px;
+  align-items:center;
+  margin-top:9px;
+  padding:8px;
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+}
+
+.venta-v2-change input{
+  width:100% !important;
+  height:34px;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:4px 7px;
+}
+
+.venta-v2-actions{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:6px;
+  margin-top:9px;
+}
+
+.venta-v2-total{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:9px;
+  padding:11px 12px;
+  color:#fff;
+  background:linear-gradient(135deg,#166534,#15803d);
+  border-radius:10px;
+  box-shadow:0 4px 12px rgba(21,128,61,.18);
+}
+
+.venta-v2-total-label{
+  font-size:12px;
+  font-weight:700;
+  opacity:.9;
+  text-transform:uppercase;
+}
+
+.venta-v2-total #total_forma_pago{
+  color:#fff !important;
+  font-size:1.55rem !important;
+  line-height:1;
+}
+
+.venta-v2-references{
+  margin-top:8px;
+  padding:8px 9px;
+  background:#fffbeb;
+  border:1px solid #fde68a;
+  border-radius:8px;
+  color:#854d0e;
+  font-size:11px;
+}
+
+.venta-v2-process{
+  margin-top:9px;
+}
+
+.venta-v2-process #btn_procesar_{
+  min-height:46px;
+  border:0;
+  color:#111827;
+  background:linear-gradient(135deg,#facc15,#f59e0b);
+  box-shadow:0 4px 12px rgba(245,158,11,.22);
+}
+
+@media(max-width:1199.98px){
+  .venta-v2-client-grid{
+    grid-template-columns:1fr;
+  }
+  .venta-v2-client-item.wide{
+    grid-column:auto;
+  }
+}
+
+@media(max-width:991.98px){
+  .venta-v2-stack{
+    overflow:visible;
+    padding-right:0;
+  }
+
+  .venta-sidebar-footer{
+    margin-top:0;
+  }
+
+  .venta-v2-client-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .venta-v2-client-item.wide{
+    grid-column:1 / -1;
+  }
+}
+
+@media(max-width:575.98px){
+  .venta-v2-options,
+  .venta-v2-client-grid{
+    grid-template-columns:1fr;
+  }
+  .venta-v2-client-item.wide,
+  .venta-v2-option.full{
+    grid-column:auto;
+  }
+  .venta-v2-discount-row{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* ==========================================================
+   HISTORIALES PROFESIONALES: COTIZACIONES Y CONSIGNACIONES
+   ========================================================== */
+.historial-modal .modal-dialog{
+  max-width:1180px;
+}
+
+.historial-modal .modal-content{
+  border:0;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 24px 65px rgba(15,23,42,.22);
+}
+
+.historial-modal .modal-header{
+  padding:18px 22px;
+  color:#fff;
+  border-bottom:0;
+  background:linear-gradient(135deg,#0f172a,#1e3a8a);
+}
+
+.historial-modal.historial-consignaciones .modal-header{
+  background:linear-gradient(135deg,#0f172a,#047857);
+}
+
+.historial-modal .modal-title{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  margin:0;
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+
+.historial-modal .modal-title-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border-radius:10px;
+  background:rgba(255,255,255,.15);
+}
+
+.historial-modal .close{
+  color:#fff;
+  opacity:.8;
+  text-shadow:none;
+}
+
+.historial-modal .close:hover{
+  color:#fff;
+  opacity:1;
+}
+
+.historial-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:15px 20px;
+  background:#f8fafc;
+  border-bottom:1px solid #e2e8f0;
+}
+
+.historial-toolbar-info{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:#475569;
+  font-size:13px;
+}
+
+.historial-counter{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:33px;
+  height:28px;
+  padding:0 10px;
+  color:#1d4ed8;
+  background:#dbeafe;
+  border-radius:999px;
+  font-weight:800;
+}
+
+.historial-consignaciones .historial-counter{
+  color:#047857;
+  background:#d1fae5;
+}
+
+.historial-search{
+  position:relative;
+  width:min(100%,390px);
+}
+
+.historial-search i{
+  position:absolute;
+  left:13px;
+  top:50%;
+  color:#94a3b8;
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+
+.historial-search input{
+  width:100%;
+  height:39px;
+  padding:7px 38px 7px 38px;
+  border:1px solid #cbd5e1;
+  border-radius:9px;
+  background:#fff;
+  font-size:13px;
+  transition:.18s ease;
+}
+
+.historial-search input:focus{
+  border-color:#3b82f6;
+  outline:0;
+  box-shadow:0 0 0 3px rgba(59,130,246,.12);
+}
+
+.historial-search-clear{
+  position:absolute;
+  top:50%;
+  right:9px;
+  border:0;
+  color:#64748b;
+  background:transparent;
+  transform:translateY(-50%);
+  cursor:pointer;
+}
+
+.historial-table-wrap{
+  max-height:62vh;
+  overflow:auto;
+  background:#fff;
+}
+
+.historial-table{
+  width:100%;
+  margin:0;
+  table-layout:fixed;
+  border-collapse:separate;
+  border-spacing:0;
+}
+
+.historial-table thead th{
+  position:sticky;
+  top:0;
+  z-index:3;
+  padding:11px 12px;
+  color:#334155;
+  background:#eef2ff;
+  border-top:0;
+  border-bottom:1px solid #cbd5e1;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.historial-consignaciones .historial-table thead th{
+  background:#ecfdf5;
+}
+
+.historial-table tbody td{
+  padding:11px 12px;
+  color:#334155;
+  border-top:0;
+  border-bottom:1px solid #e2e8f0;
+  vertical-align:middle;
+  font-size:13px;
+}
+
+.historial-table tbody tr{
+  transition:background .15s ease, box-shadow .15s ease;
+}
+
+.historial-table tbody tr:hover{
+  background:#f8fafc;
+  box-shadow:inset 3px 0 #3b82f6;
+}
+
+.historial-consignaciones .historial-table tbody tr:hover{
+  box-shadow:inset 3px 0 #10b981;
+}
+
+.historial-number-link{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  color:#2563eb;
+  font-weight:800;
+  text-decoration:none;
+}
+
+.historial-number-link:hover{
+  color:#1d4ed8;
+  text-decoration:none;
+}
+
+.historial-date{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
+  color:#475569;
+  font-variant-numeric:tabular-nums;
+}
+
+.historial-name{
+  display:block;
+  overflow:hidden;
+  color:#172033;
+  font-weight:750;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.historial-client{
+  display:block;
+  overflow:hidden;
+  color:#64748b;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.historial-status{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.historial-status::before{
+  content:'';
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:currentColor;
+}
+
+.historial-status.confirmado{
+  color:#15803d;
+  background:#dcfce7;
+}
+
+.historial-status.esperando,
+.historial-status.pendiente{
+  color:#b45309;
+  background:#fef3c7;
+}
+
+.historial-status.rechazado{
+  color:#b91c1c;
+  background:#fee2e2;
+}
+
+.historial-status.procesado{
+  color:#475569;
+  background:#e2e8f0;
+}
+
+.historial-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  white-space:nowrap;
+}
+
+.historial-action-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:34px;
+  height:34px;
+  padding:0;
+  border:0;
+  border-radius:8px;
+  color:#fff;
+  transition:transform .14s ease, filter .14s ease;
+}
+
+.historial-action-btn:hover{
+  color:#fff;
+  filter:brightness(.94);
+  transform:translateY(-1px);
+}
+
+.historial-action-load{ background:#2563eb; }
+.historial-action-print{ background:#16a34a; }
+.historial-action-delete{ background:#dc2626; }
+
+.historial-empty{
+  padding:42px 15px !important;
+  color:#64748b !important;
+  text-align:center;
+}
+
+.historial-empty i{
+  display:block;
+  margin-bottom:10px;
+  color:#94a3b8;
+  font-size:28px;
+}
+
+.historial-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px 20px;
+  color:#64748b;
+  background:#f8fafc;
+  border-top:1px solid #e2e8f0;
+  font-size:12px;
+}
+
+.historial-detail{
+  max-height:32vh;
+  overflow:auto;
+  padding:0 20px 14px;
+  background:#fff;
+}
+
+.historial-detail:empty{
+  display:none;
+}
+
+@media(max-width:767.98px){
+  .historial-modal .modal-dialog{
+    max-width:none;
+    margin:8px;
+  }
+
+  .historial-toolbar{
+    align-items:stretch;
+  }
+
+  .historial-search{
+    width:100%;
+  }
+
+  .historial-table{
+    min-width:850px;
+  }
+
+  .historial-table-wrap{
+    max-height:68vh;
+  }
+}
+
+
+/* ==========================================================
+   MODAL BUSCAR REPUESTO XPRESS
+   ========================================================== */
+#buscar-xpress-modal .modal-dialog{
+  max-width:1320px;
+  width:calc(100% - 30px);
+}
+
+#buscar-xpress-modal .modal-content{
+  border:0;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 24px 65px rgba(15,23,42,.24);
+}
+
+#buscar-xpress-modal .modal-header{
+  padding:18px 22px;
+  color:#fff;
+  border-bottom:0;
+  background:linear-gradient(135deg,#0f172a,#1d4ed8);
+}
+
+#buscar-xpress-modal .modal-title{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  margin:0;
+  font-size:20px;
+  font-weight:800;
+}
+
+.buscar-xpress-title-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:40px;
+  height:40px;
+  border-radius:11px;
+  background:rgba(255,255,255,.15);
+}
+
+#buscar-xpress-modal .close{
+  color:#fff;
+  opacity:.85;
+  text-shadow:none;
+}
+
+#buscar-xpress-modal .close:hover{
+  color:#fff;
+  opacity:1;
+}
+
+.buscar-xpress-search{
+  padding:18px 20px;
+  background:#f8fafc;
+  border-bottom:1px solid #e2e8f0;
+}
+
+.buscar-xpress-search-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:end;
+}
+
+.buscar-xpress-label{
+  display:block;
+  margin-bottom:7px;
+  color:#334155;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.buscar-xpress-input-wrap{
+  position:relative;
+}
+
+.buscar-xpress-input-wrap > i{
+  position:absolute;
+  top:50%;
+  left:14px;
+  color:#94a3b8;
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+
+#repuesto-xpress-codigo{
+  width:100%;
+  min-height:44px;
+  padding:9px 13px 9px 42px;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  background:#fff;
+  font-size:15px;
+  font-weight:650;
+  transition:.18s ease;
+}
+
+#repuesto-xpress-codigo:focus{
+  border-color:#3b82f6;
+  outline:0;
+  box-shadow:0 0 0 3px rgba(59,130,246,.13);
+}
+
+.buscar-xpress-btn{
+  min-height:44px;
+  padding:0 20px;
+  border:0;
+  border-radius:10px;
+  color:#fff;
+  background:linear-gradient(135deg,#2563eb,#1d4ed8);
+  font-weight:800;
+  box-shadow:0 4px 12px rgba(37,99,235,.2);
+}
+
+.buscar-xpress-btn:hover{
+  color:#fff;
+  filter:brightness(.96);
+}
+
+#mensaje_modal{
+  min-height:20px;
+  margin:8px 0 0;
+  color:#64748b;
+  font-size:12px;
+}
+
+.buscar-xpress-results{
+  padding:18px 20px;
+  background:#fff;
+}
+
+.buscar-xpress-table-card{
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  overflow:hidden;
+}
+
+.buscar-xpress-table{
+  width:100%;
+  min-width:980px;
+  margin:0;
+  table-layout:fixed;
+}
+
+.buscar-xpress-table thead th{
+  padding:10px 8px;
+  border-top:0;
+  border-bottom:1px solid #cbd5e1;
+  background:#d9f7ef;
+  color:#134e4a;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.03em;
+  text-align:center;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.buscar-xpress-table tbody td{
+  padding:10px 8px;
+  border-top:0;
+  border-bottom:1px solid #e2e8f0;
+  color:#334155;
+  font-size:12px;
+  vertical-align:middle;
+}
+
+.buscar-xpress-table tbody tr:hover{
+  background:#f8fafc;
+}
+
+
+/* Ubicaciones agrupadas para evitar columnas apretadas */
+.xpress-location-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.xpress-location-item{
+  display:grid;
+  grid-template-columns:minmax(74px,.75fr) minmax(0,1.5fr) auto;
+  align-items:center;
+  gap:8px;
+  min-height:34px;
+  padding:6px 8px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  background:#f8fafc;
+}
+
+.xpress-location-name{
+  color:#1e293b;
+  font-size:11px;
+  font-weight:800;
+  line-height:1.2;
+}
+
+.xpress-location-detail{
+  min-width:0;
+  color:#64748b;
+  font-size:11px;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+
+.xpress-location-stock{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:38px;
+  padding:3px 7px;
+  border-radius:999px;
+  color:#166534;
+  background:#dcfce7;
+  font-size:10px;
+  font-weight:850;
+  white-space:nowrap;
+}
+
+.xpress-location-stock.sin-stock{
+  color:#991b1b;
+  background:#fee2e2;
+}
+
+.xpress-location-stock.stock-bajo{
+  color:#92400e;
+  background:#fef3c7;
+}
+
+.buscar-xpress-description{
+  color:#1e293b;
+  font-weight:700;
+  line-height:1.35;
+}
+
+.buscar-xpress-price{
+  color:#0f172a;
+  font-size:14px;
+  font-weight:850;
+  white-space:nowrap;
+}
+
+.buscar-xpress-table input,
+.buscar-xpress-table select{
+  width:100%;
+  min-height:36px;
+  padding:6px 8px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  background:#fff;
+}
+
+.buscar-xpress-table input:focus,
+.buscar-xpress-table select:focus{
+  border-color:#3b82f6;
+  outline:0;
+  box-shadow:0 0 0 2px rgba(59,130,246,.12);
+}
+
+.buscar-xpress-empty{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:210px;
+  padding:30px 20px;
+  color:#64748b;
+  text-align:center;
+}
+
+.buscar-xpress-empty-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:60px;
+  height:60px;
+  margin-bottom:12px;
+  border-radius:50%;
+  color:#2563eb;
+  background:#dbeafe;
+  font-size:25px;
+}
+
+.buscar-xpress-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 20px;
+  background:#f8fafc;
+  border-top:1px solid #e2e8f0;
+}
+
+.buscar-xpress-help{
+  color:#64748b;
+  font-size:12px;
+}
+
+#btn_agregar_repuesto_buscado{
+  min-width:165px;
+  min-height:40px;
+  border:0;
+  border-radius:9px;
+  color:#fff;
+  background:linear-gradient(135deg,#16a34a,#15803d);
+  font-weight:800;
+  box-shadow:0 4px 12px rgba(22,163,74,.18);
+}
+
+#btn_agregar_repuesto_buscado:disabled{
+  cursor:not-allowed;
+  opacity:.55;
+  box-shadow:none;
+}
+
+@media(max-width:767.98px){
+  #buscar-xpress-modal .modal-dialog{
+    max-width:none;
+    margin:8px;
+  }
+
+  .buscar-xpress-search-grid{
+    grid-template-columns:1fr;
+  }
+
+  .buscar-xpress-btn{
+    width:100%;
+  }
+
+
+  .buscar-xpress-results{
+    padding:12px;
+  }
+
+  .xpress-location-item{
+    grid-template-columns:68px minmax(0,1fr) auto;
+  }
+
+  .buscar-xpress-footer{
+    align-items:stretch;
+    flex-direction:column;
+  }
+
+  .buscar-xpress-footer-actions{
+    display:grid !important;
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+
+
+  .venta-carrito-vacio{
+    min-height:310px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:45px 20px;
+    border:1px dashed #cbd5e1;
+    border-radius:16px;
+    background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+  }
+
+  .venta-carrito-vacio__icono{
+    width:78px;
+    height:78px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:18px;
+    border-radius:50%;
+    background:#eff6ff;
+    color:#2563eb;
+    font-size:32px;
+    box-shadow:0 8px 22px rgba(37,99,235,.12);
+  }
+
+  .venta-carrito-vacio__titulo{
+    margin:0 0 8px;
+    color:#1e293b;
+    font-size:1.55rem;
+    font-weight:800;
+  }
+
+  .venta-v2-client-search{
+    min-height:46px;
+    border-radius:10px;
+    font-weight:700;
+    box-shadow:0 5px 14px rgba(37,99,235,.16);
+  }
+
+  #cliente_seleccionado{
+    animation:ventaClienteEntrada .18s ease-out;
+  }
+
+  @keyframes ventaClienteEntrada{
+    from{opacity:0;transform:translateY(-4px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+
+  .venta-carrito-vacio__texto{
+    max-width:480px;
+    margin:0;
+    color:#64748b;
+    font-size:.98rem;
+  }
+
+  .venta-carrito-vacio__ayuda{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:10px 18px;
+    margin-top:20px;
+    color:#64748b;
+    font-size:.86rem;
+  }
+
+  .venta-carrito-vacio__ayuda kbd{
+    padding:3px 7px;
+    border-radius:5px;
+    background:#334155;
+    color:#fff;
+    box-shadow:none;
+  }
 </style>
 @endsection
 
 @section('contenido_titulo_pagina')
   <div class="row titulazo" style="width: 100%;">
-  <div class="col-sm-11" style="width:95%"><center><h4>VENTAS</h4></center></div>
+  <div class="col-sm-11" style="width:95%"><center><h4 class="mb-0"><i class="fas fa-cash-register mr-2"></i>VENTAS</h4></center></div>
   <div class="col-sm-1" style="width:5%"><abbr title="Agregar Sugerencias" style="border-bottom:none" id="campana"><img src="{{asset('storage/imagenes/foco-idea-web.png')}}" width="30px"/></abbr></div>
   </div>
 @endsection
 
-  @section('mensajes')
+  {{-- @section('mensajes')
     @include('fragm.mensajes')
-  @endsection
+  @endsection --}}
   @section('contenido_ingresa_datos')
-<div class="container-fluid">
-    <div class="btn-toolbar" role="toolbar" style="margin-bottom:3px;background-color:peachpuff;
-    border: 1px solid black;
-    padding: 5px;
-    border-radius: 10px;">
-        <div class="btn-group btn-group-sm mr-10" role="group">
+<div class="container-fluid venta-shell">
+    <div class="btn-toolbar venta-toolbar" role="toolbar">
+        <div class="btn-group btn-group-sm acciones-principales" role="group">
           
             
             <button class="btn btn-danger" style="border: 1px solid black;border-radius: 10px;" onclick="nueva_venta()">Nueva Venta</button> 
-            @if($value_busqueda_cliente == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-primary btn-sm" style="border: 1px solid black;border-radius: 10px;" onclick="buscar_cliente()">Buscar Cliente</button>@endif
             @if($value_cotizar == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-warning btn-sm" onclick="historial_cotizaciones()" style="border: 1px solid black;border-radius: 10px;"><small>Cotizaciones</small></button>@endif
             @if($value_consignar == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-secondary btn-sm" onclick="historial_consignaciones()" style="border: 1px solid black;border-radius: 10px;"><small>Consignaciones</small></button>@endif
             @if($value_busqueda == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#buscar-xpress-modal" style="border: 1px solid black;border-radius: 10px;">Busqueda Express <i class="fa-solid fa-magnifying-glass"></i></button>@endif
@@ -5630,7 +8949,7 @@ label {
             {{-- @if(Auth::user()->rol->nombrerol !== "vendedor" && Auth::user()->rol->nombrerol !== "bodega-venta") <button type="button" class="btn btn-warning btn-sm" onclick="abrir_referencias()">Referencias</button> @endif --}}
             @if($value_referencias == 1 || Auth::user()->rol->nombrerol === "Administrador") <button type="button" class="btn btn-warning btn-sm" style="border: 1px solid black;border-radius: 10px;" onclick="abrir_referencias()">Referencias</button> @endif
         </div>
-        <div class="btn-group btn-group-sm ml-auto" role="group">
+        <div class="btn-group btn-group-sm acciones-secundarias" role="group">
             @if($value_transferir_carrito == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-success" onclick="transferir_carrito()" style="border: 1px solid black;border-radius: 10px;"><small>Transferir Carrito</small></button>@endif
             @if($value_borrar_carrito == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-danger"  onclick="borrar_carritos_guardados()" style="border: 1px solid black;border-radius: 10px;"><small>Borrar Carritos Guardados</small></button>@endif
             @if($value_recuperar_carrito == 0 || Auth::user()->rol->nombrerol == "Administrador")<button type="button" class="btn btn-info" onclick="mostrar_nombres_carrito()" style="border: 1px solid black;border-radius: 10px;" >Recuperar Carrito</button>@endif
@@ -5640,173 +8959,449 @@ label {
         
     </div>
 
-<div class="row">
-    <div class="col-sm-3" style="background-color: #f2f4a9;;height:60%; padding-bottom: 30px; border: 1px solid black; border-radius: 10px;">
-        <div class="row row-15" id="el_cliente">
-            <div id="mensaje-cliente"></div>
-                <div class="col-sm-12" style="margin:0px; padding:0px;">
-                    <input type="hidden" id="id_cliente" value="0">
-                    {{-- <p id="cliente_rut" class="font-weight-bold font-italic" style="margin-bottom:1px">RUT: </p>
-                    <p id="cliente_nombres" class="font-weight-bold font-italic" style="margin-bottom:1px">Cliente:</p>
-                    <p id="cliente_direccion" class="font-weight-bold font-italic" style="margin-bottom: 1px">Dirección:</p>
-                    <p id="cliente_giro" class="font-weight-bold font-italic" style="margin-bottom: 1px">Giro:</p> --}}
-                    <table class="table">
-                      <tr>
-                        <th>Rut</th>
-                        <th>Nombre</th>
-                        <th>Direccion</th>
-                        <th>Giro</th>
-                      </tr>
-                      <tr>
-                        <td id="cliente_rut" style="font-size: 10px; width: 50px; text-transform: uppercase;"></td>
-                        <td id="cliente_nombres" style="font-size: 10px; width: 50px;text-transform: uppercase;"></td>
-                        <td id="cliente_direccion" style="font-size: 10px; width: 50px;text-transform: uppercase;"></td>
-                        <td id="cliente_giro" style="font-size: 10px; width: 50px;text-transform: uppercase;"></td>
-                      </tr>
-                      
-                    </table>
+<div class="row venta-layout">
+    <div class="col-lg-4 col-xl-3 venta-sidebar">
+      <div class="venta-panel venta-sidebar-panel">
+        <div class="venta-v2-stack">
+
+          {{-- CLIENTE --}}
+          <section class="venta-v2-card">
+            <div class="venta-v2-card-header">
+              <span><i class="fa-solid fa-user"></i> Cliente</span>
+              <small class="text-muted">Datos de facturación</small>
+            </div>
+
+            <div class="venta-v2-card-body">
+              <div id="mensaje-cliente"></div>
+              <input type="hidden" id="id_cliente" value="0">
+
+              @if($value_busqueda_cliente == 0 || Auth::user()->rol->nombrerol == "Administrador")
+                <div id="cliente_sin_seleccionar">
+                  <button type="button"
+                          class="btn btn-primary btn-block venta-v2-client-search"
+                          onclick="buscar_cliente()">
+                    <i class="fa-solid fa-user-plus mr-1"></i>
+                    Buscar y seleccionar cliente
+                  </button>
+                  <small class="d-block text-center text-muted mt-2">
+                    Opcional para boleta y requerido para factura.
+                  </small>
                 </div>
+              @endif
+
+              <div id="cliente_seleccionado" style="display:none;">
+                <div class="venta-v2-client-grid" id="el_cliente">
+                  <div class="venta-v2-client-item">
+                    <span class="venta-v2-client-label">RUT</span>
+                    <span class="venta-v2-client-value" id="cliente_rut">Sin cliente</span>
+                  </div>
+
+                  <div class="venta-v2-client-item">
+                    <span class="venta-v2-client-label">Nombre</span>
+                    <span class="venta-v2-client-value" id="cliente_nombres">Seleccione un cliente</span>
+                  </div>
+
+                  <div class="venta-v2-client-item wide">
+                    <span class="venta-v2-client-label">Dirección</span>
+                    <span class="venta-v2-client-value" id="cliente_direccion">Sin dirección</span>
+                  </div>
+
+                  <div class="venta-v2-client-item wide">
+                    <span class="venta-v2-client-label">Giro</span>
+                    <span class="venta-v2-client-value" id="cliente_giro">Sin giro</span>
+                  </div>
+                </div>
+
+                @if($value_busqueda_cliente == 0 || Auth::user()->rol->nombrerol == "Administrador")
+                  <button type="button"
+                          class="btn btn-outline-primary btn-sm btn-block mt-3"
+                          onclick="buscar_cliente()">
+                    <i class="fa-solid fa-user-pen mr-1"></i> Cambiar cliente
+                  </button>
+                @endif
+              </div>
+            </div>
+          </section>
+
+          {{-- DOCUMENTO --}}
+          <section class="venta-v2-card">
+            <div class="venta-v2-card-header">
+              <span><i class="fa-solid fa-file-invoice"></i> Tipo de documento</span>
+            </div>
+
+            <div class="venta-v2-card-body">
+              <div class="venta-v2-options">
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_documento" id="radio_boleta" value="boleta"
+                         onclick="que_documento('boleta')" checked>
+                  <label for="radio_boleta">
+                    <i class="fa-solid fa-receipt"></i> Boleta
+                  </label>
+                </div>
+
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_documento" id="radio_factura" value="factura"
+                         onclick="que_documento('factura')">
+                  <label for="radio_factura">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> Factura
+                  </label>
+                </div>
+
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_documento" id="radio_cotizacion" value="cotizacion"
+                         onclick="que_documento('cotizacion')">
+                  <label for="radio_cotizacion">
+                    <i class="fa-solid fa-file-signature"></i> Cotización
+                  </label>
+                </div>
+
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_documento" id="radio_consignacion" value="consignacion"
+                         onclick="que_documento('consignacion')">
+                  <label for="radio_consignacion">
+                    <i class="fa-solid fa-boxes-stacked"></i> Consignación
+                  </label>
+                </div>
+              </div>
+
+              <div class="venta-v2-extra">
+                <input type="text" name="nombre_cotizacion" value="" id="nombre_cotizacion"
+                       maxlength="100" placeholder="Nombre de la cotización" disabled>
+
+                <input type="text" name="dias_expira" value="7" id="dias_expira"
+                       maxlength="2" style="display:none;" disabled>
+
+                <input type="text" name="nombre_consignacion" value="" id="nombre_consignacion"
+                       maxlength="100" placeholder="Nombre de la consignación" disabled>
+
+                <input type="text" name="dias_expira_consignacion" value="7"
+                       id="dias_expira_consignacion" maxlength="2" style="display:none;" disabled>
+              </div>
+            </div>
+          </section>
+
+          {{-- MODALIDAD --}}
+          <section class="venta-v2-card">
+            <div class="venta-v2-card-header">
+              <span><i class="fa-solid fa-store"></i> Modalidad de venta</span>
+            </div>
+
+            <div class="venta-v2-card-body">
+              <div class="venta-v2-options">
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_venta" value="contado" id="contado"
+                         onclick="contado_credito(1)" checked>
+                  <label for="contado">
+                    <i class="fa-solid fa-money-bill-wave"></i> Contado
+                  </label>
+                </div>
+
+                <div class="venta-v2-option">
+                  <input type="radio" name="tipo_venta" value="credito" id="credito"
+                         onclick="contado_credito(2)" disabled>
+                  <label for="credito">
+                    <i class="fa-solid fa-calendar-check"></i> Crédito
+                  </label>
+                </div>
+
+                @if(Auth::user()->name == "Matias Alfaro" || Auth::user()->rol->nombrerol === "Administrador")
+                <div class="venta-v2-option full">
+                  <input type="radio" name="tipo_venta" value="delivery" id="delivery"
+                         onclick="contado_credito(3)">
+                  <label for="delivery">
+                    <i class="fa-solid fa-truck"></i> Delivery
+                  </label>
+                </div>
+                @endif
+              </div>
+            </div>
+          </section>
+
+          {{-- FORMAS DE PAGO --}}
+          <section class="venta-v2-card">
+            <div class="venta-v2-card-header">
+              <span><i class="fa-solid fa-wallet"></i> Formas de pago</span>
+              <small class="text-muted">Monto y referencia</small>
+            </div>
+
+            <div class="venta-v2-card-body">
+              <fieldset id="zona_formas_pago">
+                <div class="venta-v2-payment-scroll">
+                  <div class="row row-15" id="formas_pago"></div>
+                </div>
+              </fieldset>
+            </div>
+          </section>
+
+          {{-- DESCUENTO Y VUELTO --}}
+          <section class="venta-v2-card">
+            <div class="venta-v2-card-header">
+              <span><i class="fa-solid fa-percent"></i> Ajustes de pago</span>
+            </div>
+
+            <div class="venta-v2-card-body">
+              <fieldset id="zona_descuento">
+                <div class="venta-v2-discount-row" id="zona_descuento_input">
+                  <label for="forma_descuento">
+                    <input type="checkbox" name="forma_descuento" id="forma_descuento"
+                           onclick="activar_forma_pago(999)">
+                    Aplicar descuento
+                  </label>
+
+                  <input type="text" id="formita-descuento" value="0"
+                         placeholder="% DCTO" onkeypress="return soloNumeros(event)" disabled>
+
+                  <button type="button" class="btn btn-primary btn-sm"
+                          id="btn_aplicar_dcto" onclick="calcular_sumatoria()" disabled>
+                    Aplicar
+                  </button>
+                </div>
+
+                <input type="hidden" name="forma_descuento" id="total_venta_vuelto"
+                       placeholder="Monto efectivo" readonly>
+
+                <div class="venta-v2-change" id="zona_vuelto_efectivo">
+                  <input type="text" name="monto_efectivo" id="monto_efectivo"
+                         placeholder="Efectivo recibido"
+                         onkeypress="return soloNumeros(event)">
+
+                  <button type="button" class="btn btn-success btn-sm" onclick="dame_vuelto()">
+                    Calcular vuelto
+                  </button>
+                </div>
+
+                <div id="div_vuelto" style="display:none;"></div>
+
+                <div class="venta-v2-actions">
+                  <button type="button" class="btn btn-success btn-sm"
+                          id="btn_sumar" onclick="calcular_sumatoria()">
+                    <i class="fa-solid fa-calculator mr-1"></i>
+                    Sumar formas de pago
+                  </button>
+
+                  <button type="button" class="btn btn-info btn-sm"
+                          id="btn_recalcular_giftcard"
+                          onclick="recalcular_pagos_giftcard()"
+                          style="display:none;">
+                    Recalcular pagos Giftcard
+                  </button>
+                </div>
+
+                <div class="venta-v2-references" id="referencias">
+                  <strong>Referencias:</strong> Ninguna
+                </div>
+              </fieldset>
+            </div>
+          </section>
+
         </div>
 
-        <div class="row">
-            <div class="col-sm-4" style="padding-left:2px"><strong>Documento:</strong></div>
-            <div class="col-sm-4" class="form-check form-check-inline" style="padding-left:2px">
-                <input type="radio" class="form-check-input" name="tipo_documento" id="radio_boleta" value="boleta" onclick="que_documento('boleta')" checked>
-                <label for="radio_boleta" class="form-check-label">Boleta</label>
-            </div>
-            <div class="col-sm-4" class="form-check form-check-inline" style="padding-left:2px">
-                <input type="radio" class="form-check-input" name="tipo_documento" id="radio_factura" value="factura" onclick="que_documento('factura')">
-                <label for="radio_factura" class="form-check-label">Factura</label>
-            </div>
-        </div>
-        <hr>
-        <div class="row row-cero-margen">
-            <div class="col-sm-4" class="form-check form-check-inline">
-                <input type="radio" class="form-check-input" name="tipo_documento" id="radio_cotizacion" value="cotizacion" onclick="que_documento('cotizacion')">
-                <label for="radio_cotizacion" class="form-check-label">Cotización</label>
-            </div>
-            <div class="col-sm-8" style="padding-left:2px">
-            <input type="text" name="nombre_cotizacion" value="" id="nombre_cotizacion" maxlength="100" class="form-control-sm" style="width:90%" placeholder="Nombre Cotización" disabled>
-            <input type="text" name="dias_expira" value="7" id="dias_expira" maxlength="2" class="form-control-sm" style="width:15%;display:none;" disabled>
-            </div>
-        </div>
-        <hr>
-        <div class="row row-cero-margen">
-          <div class="col-sm-4" class="form-check form-check-inline">
-              <input type="radio" class="form-check-input" name="tipo_documento" id="radio_consignacion" value="consignacion" onclick="que_documento('consignacion')">
-              <label for="radio_consignacion" class="form-check-label">Consignación</label>
+        <div class="venta-sidebar-footer">
+          <div class="venta-v2-total">
+            <span class="venta-v2-total-label">Total a pagar</span>
+            <span id="total_forma_pago">0</span>
           </div>
-          <div class="col-sm-8" style="padding-left:2px">
-          <input type="text" name="nombre_consignacion" value="" id="nombre_consignacion" maxlength="100" class="form-control-sm" style="width:90%" placeholder="Nombre Consignación" disabled>
-          <input type="text" name="dias_expira" value="7" id="dias_expira" maxlength="2" class="form-control-sm" style="width:15%;display:none;" disabled>
+
+          @if($value_solo_transferir == 1)
+          <div class="venta-v2-process btn_procesar">
+            <button type="button" class="btn btn-warning form-control-sm d-block"
+                    onclick="confirmar_documento()" id="btn_procesar_">
+              <i class="fa-solid fa-circle-check mr-1"></i>
+              PROCESAR VENTA
+            </button>
           </div>
+          <input type="hidden" name="procesar" id="procesar" value="1">
+          @else
+          <div class="venta-v2-process btn_procesar">
+            <button type="button" class="btn btn-warning form-control-sm d-none"
+                    onclick="confirmar_documento()" id="btn_procesar_">
+              <i class="fa-solid fa-circle-check mr-1"></i>
+              PROCESAR VENTA
+            </button>
+          </div>
+          <input type="hidden" name="procesar" id="procesar" value="0">
+          @endif
+        </div>
       </div>
-      <hr>
-        <div class="row">
-            <div class="col-sm-3 text-center" style="padding-left:1px;padding-right:2px"><strong>Venta:</strong></div>
-            <div class="col-sm-3 text-center" style="padding-left:1px;padding-right:2px"><input type="radio" name="tipo_venta" value="contado" id="contado" onclick="contado_credito(1)" checked><small>Contado</small></div>
-            <div class="col-sm-3 text-center" style="padding-left:1px;padding-right:2px"><input type="radio" name="tipo_venta" value="credito" id="credito" onclick="contado_credito(2)" disabled><small>Crédito</small></div>
-            @if(Auth::user()->name == "Matias Alfaro" || Auth::user()->rol->nombrerol === "Administrador") <div class="col-sm-3 text-center" style="padding-left:1px;padding-right:2px"><input type="radio" name="tipo_venta" value="delivery" id="delivery" onclick="contado_credito(3)"><small>Delivery</small></div> @endif
-        </div>
-        <fieldset id="zona_formas_pago">
-            <div class="row row-15" id="formas_pago"> </div>
-        </fieldset>
-
-        </fieldset>
-<hr>
-
-        <fieldset id="zona_descuento" class="my-2">
-          
-            <div class="row row-15" id="zona_descuento_input"> 
-              <div class="col-md-5">
-                <input type="checkbox" name="forma_descuento" id="forma_descuento" onclick="activar_forma_pago(999)" > Descuento
-              </div>
-              <div class="col-md-4">
-                <input type="text" name="" id="formita-descuento" class="" style="width: 100%;" value="0" placeholder="% DCTO" onkeypress="return soloNumeros(event)" disabled>
-              </div>
-              <div class="col-md-3">
-                <button class="btn btn-primary btn-sm" id="btn_aplicar_dcto" onclick="calcular_sumatoria()" disabled>Aplicar</button>
-              </div>
-              
-              
-            </div>
-            <div class="row row-15 p-2 text-center" id="zona_vuelto_efectivo" style="margin-top: 10px; margin-bottom: 10px; border: 1px solid black;"> 
-              
-          
-                <input type="hidden" style="width: 70px" name="forma_descuento" id="total_venta_vuelto"  placeholder="Monto efectivo" readonly> 
-            
-          
-              <div class="col-md-12">
-                <input type="text" name="monto_efectivo" id="monto_efectivo" style="width: 70px;" onKeyPress="return soloNumeros(event)">
-                <button class="btn btn-success btn-sm" onclick="dame_vuelto()">Vuelto efectivo</button>
-              </div>
-              
-              
-            </div>
-            <div class="row" style="display: none;" id="div_vuelto">
-              
-            </div>
-        <div class="row">
-            <div class="col-sm-2"><button class="btn btn-success btn-sm form-control-sm" onclick="calcular_sumatoria()">Sumar</button></div>
-            <div class="col-sm-8">
-                <table border="0" class="table table-sm letra-chica">
-                <tr><td width="50%" style="text-align:right;color:blue"><b>Total a Pagar:</b></td><td id="total_forma_pago">0</td></tr>
-                </table>
-            </div>
-        </div>
-
-        <div class="row" id="referencias">
-            <b>REFERENCIAS:</b> Ninguna
-        </div>
-        @if($value_solo_transferir == 1)
-        <div class="btn_procesar">
-            <button  class="btn btn-warning form-control-sm d-block" onclick="confirmar_documento()" id="btn_procesar_">PROCESAR</button>
-        </div>
-        <input type="hidden" name="procesar" id="procesar" value="1">
-        @else
-        <div class="btn_procesar">
-          <button  class="btn btn-warning form-control-sm d-none" onclick="confirmar_documento()" id="btn_procesar_">PROCESAR</button>
-      </div>
-      <input type="hidden" name="procesar" id="procesar" value="0">
-        @endif
-
     </div>
 
-    <div class="col-sm-9">
-        <div  id="carrito" style="background-color: #f2f4a9;min-height: 400px; border: 1px solid black; border-radius: 10px; padding: 4px;">
+    <div class="col-lg-8 col-xl-9 venta-main">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0"><i class="fas fa-shopping-cart mr-2"></i>Carrito de venta</h5>
+          <div class="atajos-venta d-none d-md-block">
+            <kbd>F2</kbd> Cliente&nbsp; <kbd>F3</kbd> Código&nbsp; <kbd>F4</kbd> Buscar&nbsp; <kbd>F6</kbd> Procesar&nbsp; <kbd>F7</kbd> Nueva
+          </div>
+        </div>
+        <div id="carrito" style="background-color: #f2f4a9;min-height: 400px; border: 1px solid black; border-radius: 10px; padding: 4px;">
             <p class="d-flex justify-content-center">Obteniendo carritoooo...</p>
             <hr>
         </div>
-        <fieldset style="background-color: #f2f4a9; padding: 10px; border: 1px solid black; border-radius: 10px; margin-top: 10px;" >
-            <div class="mt-3" style="display:inline">
-                Ingreso por Código:
-                <input type="text" id="input_codigo" placeholder="Código" style="width:100px" onkeyup="enter_codigo(event)" disabled>
-                <input type="text" id="input_cantidad_footer" placeholder="Cant." style="width:50px" onKeyPress="return soloNumeros(event)" onKeyup="enter_cant(event)" disabled>
-                <button class="btn btn-primary btn-sm" onclick="agregar_carrito(id_repuesto_codigo,3)" disabled>AGREGAR</button>
-                <span id="input_descripcion"></span>
-                Consignación: &nbsp;&nbsp;
-                <input type="text" id="input_id_consignacion" placeholder="Código de consignación" style="width:155px" onKeyPress="return soloNumeros(event)" onkeyup="soloNumeros(event)" disabled>
-                
-                <button class="btn btn-primary btn-sm" onclick="agregar_consignacion_carrito()" disabled>AGREGAR</button>
-                <span id="input_descripcion"></span>
-                <input type="hidden" name="local_id_consignacion" id="local_id_consignacion">
-                <input type="hidden" name="cantidad_consignacion" id="cantidad_consignacion">
+        <fieldset class="mt-3 p-3 accesos-rapidos">
+            <legend class="w-auto px-2 mb-3" style="font-size:1rem; font-weight:600; color:#202020;">
+                Accesos rápidos de venta
+            </legend>
+
+            <div class="row w-100">
+                <div class="col-xl-6 col-lg-12 mb-3">
+                    <div class="card h-100 shadow-sm" style="background-color:#ffffd6; border:1px solid #d6d68a !important; border-radius:10px;">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3 pb-2" style="color:#1f2937; border-bottom:1px solid #dddd9a; font-weight:600;">
+                                <i class="fas fa-barcode mr-2"></i>Ingreso por código
+                            </h6>
+
+                            <div class="form-row align-items-end">
+                                <div class="col-md-6 mb-2">
+                                    <label for="input_codigo" class="small font-weight-bold mb-1">Código</label>
+                                    <input type="text"
+                                           id="input_codigo"
+                                           class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;"
+                                           placeholder="Código interno"
+                                           onkeyup="enter_codigo(event)"
+                                           disabled>
+                                </div>
+
+                                <div class="col-md-3 mb-2">
+                                    <label for="input_cantidad_footer" class="small font-weight-bold mb-1">Cantidad</label>
+                                    <input type="text"
+                                           id="input_cantidad_footer"
+                                           class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;"
+                                           placeholder="Cant."
+                                           onKeyPress="return soloNumeros(event)"
+                                           onKeyup="enter_cant(event)"
+                                           disabled>
+                                </div>
+
+                                <div class="col-md-3 mb-2">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-block"
+                                            onclick="agregar_carrito(id_repuesto_codigo,3)"
+                                            disabled>
+                                        <i class="fas fa-plus mr-1"></i>Agregar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="input_descripcion" class="small text-muted mt-1"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 col-lg-12 mb-3">
+                    <div class="card h-100 shadow-sm" style="background-color:#ffffd6; border:1px solid #d6d68a !important; border-radius:10px;">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3 pb-2" style="color:#1f2937; border-bottom:1px solid #dddd9a; font-weight:600;">
+                                <i class="fas fa-box-open mr-2"></i>Consignación
+                            </h6>
+
+                            <div class="form-row align-items-end">
+                                <div class="col-md-8 mb-2">
+                                    <label for="input_id_consignacion" class="small font-weight-bold mb-1">Código de consignación</label>
+                                    <input type="text"
+                                           id="input_id_consignacion"
+                                           class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;"
+                                           placeholder="Código de consignación"
+                                           onKeyPress="return soloNumeros(event)"
+                                           onkeyup="soloNumeros(event)"
+                                           disabled>
+                                </div>
+
+                                <div class="col-md-4 mb-2">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-block"
+                                            onclick="agregar_consignacion_carrito()"
+                                            disabled>
+                                        <i class="fas fa-plus mr-1"></i>Agregar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="local_id_consignacion" id="local_id_consignacion">
+                            <input type="hidden" name="cantidad_consignacion" id="cantidad_consignacion">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 col-lg-12 mb-3">
+                    <div class="card h-100 shadow-sm" style="background-color:#ffffd6; border:1px solid #d6d68a !important; border-radius:10px;">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3 pb-2" style="color:#1f2937; border-bottom:1px solid #dddd9a; font-weight:600;">
+                                <i class="fas fa-gift mr-2"></i>Giftcard
+                            </h6>
+
+                            <div class="form-row align-items-end">
+                                <div class="col-md-6 mb-2">
+                                    <label for="input_codigo_giftcard" class="small font-weight-bold mb-1">Código de giftcard</label>
+                                    <input type="text"
+                                           id="input_codigo_giftcard"
+                                           class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;"
+                                           placeholder="Código de giftcard">
+                                </div>
+
+                                <div class="col-md-3 mb-2">
+                                    <button type="button"
+                                            class="btn btn-success btn-sm btn-block"
+                                            onclick="dame_saldo_giftcard()">
+                                        <i class="fas fa-check mr-1"></i>Cargar
+                                    </button>
+                                </div>
+
+                                <div class="col-md-3 mb-2">
+                                    <button type="button"
+                                            class="btn btn-success btn-sm btn-block"
+                                            onclick="crear_vale_mercaderia()">
+                                        <i class="fas fa-plus-circle mr-1"></i>Crear vale
+                                    </button>
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="numero_giftcard_cargado" id="numero_giftcard_cargado" value="">
+                            <input type="hidden" name="input_saldo_giftcard" id="input_saldo_giftcard" value="">
+
+                            <div id="div_saldo_giftcard" class="mt-2" style="display:none;">
+                                <span class="badge badge-success px-3 py-2" style="font-size:13px;">
+                                    <i class="fas fa-wallet mr-1"></i>
+                                    Saldo Giftcard: $<span id="saldo_giftcard_valor">0</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 col-lg-12 mb-3">
+                    <div class="card h-100 shadow-sm" style="background-color:#ffffd6; border:1px solid #d6d68a !important; border-radius:10px;">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3 pb-2" style="color:#1f2937; border-bottom:1px solid #dddd9a; font-weight:600;">
+                                <i class="fas fa-receipt mr-2"></i>Abono
+                            </h6>
+
+                            <div class="form-row align-items-end">
+                                <div class="col-md-8 mb-2">
+                                    <label for="input_num_abono" class="small font-weight-bold mb-1">Código de abono</label>
+                                    <input type="text"
+                                           id="input_num_abono"
+                                           class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;"
+                                           placeholder="Código de abono"
+                                           onKeyPress="return soloNumeros(event)"
+                                           onkeyup="soloNumeros(event)">
+                                </div>
+
+                                <div class="col-md-4 mb-2">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-block"
+                                            onclick="agregar_abono_carrito()">
+                                        <i class="fas fa-plus mr-1"></i>Agregar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="input_cantidad_pedido" id="input_cantidad_pedido">
+                            <input type="hidden" name="input_saldopendiente_pedido" id="input_saldopendiente_pedido">
+                            <input type="hidden" name="input_total_pedido" id="input_total_pedido">
+                            <input type="hidden" name="input_repuesto_pedido" id="input_repuesto_pedido">
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="mt-3" style="display:block">
-              Código de abono: &nbsp;&nbsp;
-              <input type="text" id="input_num_abono" placeholder="Código de giftcard" style="width:155px" onKeyPress="return soloNumeros(event)" onkeyup="soloNumeros(event)">
-              
-              <button class="btn btn-primary btn-sm" onclick="agregar_abono_carrito()">AGREGAR</button>
-              <span id="input_descripcion"></span>
-              <input type="hidden" name="input_cantidad_pedido" id="input_cantidad_pedido">
-              <input type="hidden" name="input_saldopendiente_pedido" id="input_saldopendiente_pedido">
-              <input type="hidden" name="input_total_pedido" id="input_total_pedido">
-              <input type="hidden" name="input_repuesto_pedido" id="input_repuesto_pedido">
-          </div>
-          <div class="mt-3" style="display:block">
-            
-            
-        </div>
         </fieldset>
 
 
@@ -5828,10 +9423,10 @@ label {
             <div class="col-9"><p class="d-flex justify-content-center" id="buscar-repuesto-modal-titulo" style="color:white;font-weight:bold">BUSCAR REPUESTO</p></div>
             <div class="col-1" style="padding-right: 1px"><button type="button" class="close" data-dismiss="modal" aria-label="Close" style="padding-right: 1px"><span aria-hidden="true">×</span></button></div>
         </div>
-        <div class="row" style="width:90%">
-            <div class="col-2 alin-der" style="padding-right:2px;color:white">Buscar:</div>
-            <div class="col-10" style="margin-bottom:5px;padding-left:2px">
-                <input type="search" class="form-control" style="height:25px;" name="txtDescripcion" id="buscar_por_descripcion" placeholder="¿Qué desea encontrar?" onkeyup="enter_press(event,'d')" onclick="clic_en(1)">
+        <div class="row align-items-center" style="width:100%; padding:4px 14px 12px; margin:0;">
+            <div class="col-2 alin-der" style="padding-right:10px;color:white">Buscar:</div>
+            <div class="col-10" style="padding:0 8px;">
+                <input type="search" class="form-control" style="height:38px;padding:6px 14px;" name="txtDescripcion" id="buscar_por_descripcion" placeholder="¿Qué desea encontrar?" onkeyup="enter_press(event,'d')" onclick="clic_en(1)">
             </div>
         </div>
        </div> <!-- FIN CABECERA -->
@@ -6104,119 +9699,433 @@ label {
 </div> <!-- FIN VENTANA MODAL MOSTRAR COTIZACIONES"-->
 
 <!-- VENTANA MODAL MOSTRAR COTIZACIONES"-->
-<div role="dialog" tabindex="-1" class="modal fade" id="mostrar-cotizaciones-modal_historial">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+<div role="dialog" tabindex="-1"
+     class="modal fade historial-modal historial-cotizaciones"
+     id="mostrar-cotizaciones-modal_historial">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
     <div class="modal-content">
-      <div class="modal-body"> <!-- CONTENIDO -->
-       <div id="mostrar_cotizaciones">
-          <h4 style="text-align: center; color:blue"><strong><p id="titulo-listado-cotizaciones">COTIZACIONES VIGENTES</p></strong></h4>
-          <h5 style="text-align: center; color:slategrey "><strong><p id="subtitulo-listado-cotizaciones"></p></strong></h5>
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">N° Cotizacion</th>
-                <th scope="col">Fecha</th>
-                <th scope="col">Nombre</th>
-                <th scope="col">Cliente</th>
-                <th scope="col">Estado</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
-            <tbody id="listado_cotizaciones_historial">
-              
-            </tbody>
-          </table>
-       </div>
-     </div> <!-- FIN DE modal-body -->
-    </div> <!-- modal-content -->
-  </div> <!-- modal-dialog -->
-</div> <!-- FIN VENTANA MODAL MOSTRAR COTIZACIONES"-->
 
-<!-- Busqueda Repuesto Xpress MOdal -->
-<div class="modal fade bd-example-modal-xl" tabindex="-1" role="dialog" id="buscar-xpress-modal">
-  <div class="modal-dialog modal-xl" role="document">
-    <div class="modal-content">
-      <div class="modal-header" style="background: #000; color: white;">
-        <h5 class="modal-title">Busqueda de Repuestos Xpress</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <span class="modal-title-icon">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+          </span>
+          Historial de cotizaciones
+        </h5>
+
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
-      <div class="modal-body" style="background: rgb(242, 244, 169)">
-          <div class="row form-group-sm">
-              <div class="col-md-6">
-                  <input type="text" class="form-control" name="" onkeyup="enter_buscar_repuesto_xpress(event)" id="repuesto-xpress-codigo" placeholder="Cód. Ref." style="width:100%">&nbsp;
-              </div>
-              <div class="col-md-6">
-                <input type="button" value="Buscar" class="btn btn-warning btn-sm" onclick="buscar_repuesto_xpress()">
-                <div id="fecha_actualizacion_precio"></div>
-              </div>
-          </div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Descripción</th>
-                <th scope="col">Actualización Precio</th>
-                <th scope="col">Ubicación</th>
-                
-                <th scope="col">Ubicación</th>
-                
-                <th scope="col">Ubicación</th>
-                <th scope="col">Cantidad</th>
-                <th scope="col">Procedencia</th>
-                <th scope="col">Precio Venta</th>
-              </tr>
-            </thead>
-            <tbody id="informacion_repuesto">
-              
-            </tbody>
-          </table>
-          
-      </div>
-      <div class="modal-footer" style="background: #000;">
-        
-        <button type="button" id="btn_agregar_repuesto_buscado" class="btn btn-primary" >Agregar</button>
-        <button type="button" class="btn btn-danger" data-dismiss="modal">Cancelar</button>
-      </div>
-      <hr>
-      <p id="mensaje_modal" class="ml-3" >Esperando ...</p>
-    </div>
-  </div>
-</div> <!-- FIN Repuesto Xpress MOdal -->
 
-<!-- Repuesto Xpress MOdal -->
-<div class="modal fade" tabindex="-1" role="dialog" id="repuesto-xpress-modal">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Repuesto Xpress</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
+      <div class="historial-toolbar">
+        <div class="historial-toolbar-info">
+          <span class="historial-counter" id="contador_cotizaciones_visible">0</span>
+          <span>
+            de <strong id="contador_cotizaciones_total">0</strong> cotizaciones visibles
+          </span>
+        </div>
+
+        <div class="historial-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text"
+                 id="buscar_historial_cotizaciones"
+                 placeholder="Buscar por número, fecha, nombre, cliente o estado..."
+                 autocomplete="off"
+                 oninput="filtrar_historial('cotizaciones')">
+
+          <button type="button"
+                  class="historial-search-clear"
+                  onclick="limpiar_filtro_historial('cotizaciones')"
+                  title="Limpiar búsqueda">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-        <div class="modal-body">
-            <div class="form-group-sm">
-                <div class="col-6">
-                    <input type="text" name="" id="xpress-codigo" placeholder="Cód. Ref." style="width:50%">&nbsp;<p style="display:inline;color:blue;font-style:italic;font-size:12px">opcional</p>
-                </div>
-                <div class="col-12">
-                    <input type="text" name="" id="xpress-descripcion" placeholder="Descripción" style="width:100%">
-                </div>
-                <div class="col-3">
-                    <input type="text" name="" id="xpress-cantidad" placeholder="Cantidad" style="width:100%">
-                </div>
-                <div class="col-6">
-                    <input type="text" name="" id="xpress-precio" placeholder="Precio Unitario" style="width:50%" data-toggle="tooltip" title="Sin puntos ni comas, sólo números">&nbsp;<p style="display:inline;color:blue;font-style:italic;font-size:12px">incluye IVA</p>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-primary" onclick="agregar_repuesto_xpress()">Agregar</button>
-          <button type="button" class="btn btn-danger" data-dismiss="modal">Cancelar</button>
+      </div>
+
+      <div class="modal-body p-0">
+        <div class="historial-table-wrap">
+          <table class="table historial-table">
+            <colgroup>
+              <col style="width:11%">
+              <col style="width:15%">
+              <col style="width:29%">
+              <col style="width:20%">
+              <col style="width:13%">
+              <col style="width:12%">
+            </colgroup>
+
+            <thead>
+              <tr>
+                <th>N° cotización</th>
+                <th>Fecha</th>
+                <th>Nombre</th>
+                <th>Cliente</th>
+                <th>Estado</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+
+            <tbody id="listado_cotizaciones_historial"></tbody>
+          </table>
         </div>
       </div>
+
+      <div class="historial-footer">
+        <span>
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          Seleccione el número o el carrito para recuperar una cotización.
+        </span>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">
+          Cerrar
+        </button>
+      </div>
+
     </div>
-  </div> <!-- FIN Repuesto Xpress MOdal -->
+  </div>
+</div>
+
+<!-- Busqueda Repuesto Xpress MOdal -->
+<div class="modal fade"
+     tabindex="-1"
+     role="dialog"
+     id="buscar-xpress-modal"
+     aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <span class="buscar-xpress-title-icon">
+            <i class="fa-solid fa-bolt"></i>
+          </span>
+          Búsqueda rápida de repuestos
+        </h5>
+
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <div class="buscar-xpress-search">
+        <div class="buscar-xpress-search-grid">
+          <div>
+            <label for="repuesto-xpress-codigo" class="buscar-xpress-label">
+              Código interno del repuesto
+            </label>
+
+            <div class="buscar-xpress-input-wrap">
+              <i class="fa-solid fa-barcode"></i>
+
+              <input
+                type="text"
+                id="repuesto-xpress-codigo"
+                placeholder="Ingrese o escanee el código interno"
+                autocomplete="off"
+                onkeyup="enter_buscar_repuesto_xpress(event)">
+            </div>
+
+            <p id="mensaje_modal">
+              Ingrese un código para consultar descripción, stock y precio.
+            </p>
+
+            <div id="fecha_actualizacion_precio"></div>
+          </div>
+
+          <button
+            type="button"
+            class="buscar-xpress-btn"
+            onclick="buscar_repuesto_xpress()">
+            <i class="fa-solid fa-magnifying-glass mr-1"></i>
+            Buscar repuesto
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-body buscar-xpress-results">
+        <div class="buscar-xpress-table-card">
+          <div class="table-responsive">
+            <table class="table buscar-xpress-table">
+              <colgroup>
+                <col style="width:22%">
+                <col style="width:9%">
+                <col style="width:37%">
+                <col style="width:10%">
+                <col style="width:13%">
+                <col style="width:9%">
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Descripción</th>
+                  <th>Actualización</th>
+                  <th>Stock por ubicación</th>
+                  <th>Cantidad</th>
+                  <th>Procedencia</th>
+                  <th>Precio venta</th>
+                </tr>
+              </thead>
+
+              <tbody id="informacion_repuesto">
+                <tr>
+                  <td colspan="6">
+                    <div class="buscar-xpress-empty">
+                      <div class="buscar-xpress-empty-icon">
+                        <i class="fa-solid fa-box-open"></i>
+                      </div>
+
+                      <strong>Sin resultados todavía</strong>
+                      <span>Ingrese un código para mostrar la información del repuesto.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="buscar-xpress-footer">
+        <span class="buscar-xpress-help">
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          Seleccione el local, ingrese la cantidad y agregue el producto.
+        </span>
+
+        <div class="d-flex buscar-xpress-footer-actions" style="gap:8px;">
+          <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            id="btn_agregar_repuesto_buscado"
+            disabled>
+            <i class="fa-solid fa-cart-plus mr-1"></i>
+            Agregar al carrito
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- FIN Busqueda Repuesto Xpress MOdal -->
+
+<!-- Repuesto Xpress Modal -->
+<div class="modal fade"
+     tabindex="-1"
+     role="dialog"
+     id="repuesto-xpress-modal"
+     aria-labelledby="repuesto-xpress-modal-title"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content"
+         style="border:0;border-radius:16px;overflow:hidden;box-shadow:0 22px 60px rgba(15,23,42,.28);">
+
+      <div class="modal-header"
+           style="padding:18px 22px;border-bottom:1px solid #dbeafe;background:linear-gradient(135deg,#eff6ff,#f8fafc);">
+
+        <div class="d-flex align-items-center" style="gap:12px;">
+          <div class="d-flex align-items-center justify-content-center"
+               style="width:46px;height:46px;flex:0 0 46px;border-radius:13px;color:#fff;background:linear-gradient(135deg,#2563eb,#0ea5e9);box-shadow:0 7px 18px rgba(37,99,235,.25);font-size:20px;">
+            <i class="fa-solid fa-box-open"></i>
+          </div>
+
+          <div>
+            <h5 class="modal-title mb-0"
+                id="repuesto-xpress-modal-title"
+                style="color:#172033;font-size:19px;font-weight:800;">
+              Crear repuesto Xpress
+            </h5>
+
+            <small style="display:block;margin-top:3px;color:#64748b;font-size:12px;">
+              Registro rápido para agregar un producto directamente al carrito.
+            </small>
+          </div>
+        </div>
+
+        <button type="button"
+                class="close"
+                data-dismiss="modal"
+                aria-label="Cerrar"
+                style="width:38px;height:38px;margin:0;padding:0;border:1px solid #cbd5e1;border-radius:10px;color:#475569;background:#fff;opacity:1;">
+          <span aria-hidden="true" style="font-size:24px;line-height:1;">&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding:22px;background:#fff;">
+
+        <div class="alert alert-primary d-flex align-items-start mb-4"
+             style="gap:10px;padding:11px 13px;border-radius:11px;font-size:12px;">
+          <i class="fa-solid fa-circle-info mt-1"></i>
+          <span>
+            Complete la descripción, cantidad y precio unitario.
+            El código de referencia es opcional.
+          </span>
+        </div>
+
+        <div class="form-row">
+
+          <div class="form-group col-md-8">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label for="xpress-codigo"
+                     class="mb-0"
+                     style="color:#334155;font-size:12px;font-weight:800;">
+                Código de referencia
+              </label>
+
+              <span class="badge badge-light"
+                    style="padding:4px 8px;border:1px solid #e2e8f0;color:#64748b;font-size:9px;">
+                OPCIONAL
+              </span>
+            </div>
+
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text"
+                      style="border-color:#cbd5e1;background:#f8fafc;color:#64748b;">
+                  <i class="fa-solid fa-barcode"></i>
+                </span>
+              </div>
+
+              <input type="text"
+                     id="xpress-codigo"
+                     class="form-control"
+                     placeholder="Ej.: XP-001"
+                     autocomplete="off"
+                     maxlength="50"
+                     style="height:44px;border-color:#cbd5e1;">
+            </div>
+
+            <small class="form-text text-muted">
+              Puede utilizar el código informado por el proveedor.
+            </small>
+          </div>
+
+          <div class="form-group col-md-4">
+            <label for="xpress-cantidad"
+                   class="mb-2"
+                   style="color:#334155;font-size:12px;font-weight:800;">
+              Cantidad
+            </label>
+
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text"
+                      style="border-color:#cbd5e1;background:#f8fafc;color:#64748b;">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </span>
+              </div>
+
+              <input type="number"
+                     id="xpress-cantidad"
+                     class="form-control"
+                     placeholder="1"
+                     min="1"
+                     step="1"
+                     inputmode="numeric"
+                     autocomplete="off"
+                     style="height:44px;border-color:#cbd5e1;">
+            </div>
+
+            <small class="form-text text-muted">
+              Unidades a agregar.
+            </small>
+          </div>
+
+          <div class="form-group col-12">
+            <label for="xpress-descripcion"
+                   class="mb-2"
+                   style="color:#334155;font-size:12px;font-weight:800;">
+              Descripción del repuesto
+            </label>
+
+            <textarea id="xpress-descripcion"
+                      class="form-control"
+                      rows="3"
+                      placeholder="Escriba una descripción clara del producto..."
+                      autocomplete="off"
+                      maxlength="255"
+                      style="min-height:96px;border-color:#cbd5e1;border-radius:10px;resize:vertical;"></textarea>
+
+            <small class="form-text text-muted">
+              Incluya marca, modelo, medida u otra información útil para identificarlo.
+            </small>
+          </div>
+
+          <div class="form-group col-12 mb-0">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label for="xpress-precio"
+                     class="mb-0"
+                     style="color:#334155;font-size:12px;font-weight:800;">
+                Precio unitario
+              </label>
+
+              <span class="badge badge-success"
+                    style="padding:4px 8px;font-size:9px;">
+                IVA INCLUIDO
+              </span>
+            </div>
+
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text"
+                      style="min-width:44px;justify-content:center;border-color:#86efac;background:#f0fdf4;color:#166534;font-weight:900;">
+                  $
+                </span>
+              </div>
+
+              <input type="text"
+                     id="xpress-precio"
+                     class="form-control"
+                     placeholder="0"
+                     inputmode="numeric"
+                     autocomplete="off"
+                     data-toggle="tooltip"
+                     title="Ingrese solamente números, sin puntos ni comas"
+                     style="height:46px;border-color:#86efac;color:#166534;font-size:17px;font-weight:800;">
+            </div>
+
+            <small class="form-text text-muted">
+              Ingrese el valor final de venta por cada unidad.
+            </small>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer d-flex align-items-center justify-content-between"
+           style="padding:15px 22px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+
+        <small class="text-muted d-none d-md-flex align-items-center" style="gap:7px;">
+          <i class="fa-solid fa-shield-halved"></i>
+          Los campos obligatorios serán validados antes de guardar.
+        </small>
+
+        <div class="d-flex ml-auto" style="gap:9px;">
+          <button type="button"
+                  class="btn btn-outline-secondary"
+                  data-dismiss="modal"
+                  style="min-width:110px;border-radius:9px;font-weight:700;">
+            <i class="fa-solid fa-arrow-left mr-1"></i>
+            Cancelar
+          </button>
+
+          <button type="button"
+                  class="btn btn-success"
+                  onclick="agregar_repuesto_xpress()"
+                  style="min-width:165px;border-radius:9px;font-weight:800;box-shadow:0 5px 14px rgba(21,128,61,.18);">
+            <i class="fa-solid fa-cart-plus mr-1"></i>
+            Crear y agregar
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- FIN Repuesto Xpress Modal -->
 
 <!-- MODAL CLIENTE XPRESS -->
 <div class="modal" tabindex="-1" id="cliente-xpress-modal" data-backdrop="static" data-keyboard="false" style="position:relative">
@@ -6229,7 +10138,7 @@ label {
             <!-- ESTE MISMO CODIGO ESTA EN EL MODAL DE PROCESAR ENVIO MAS ABAJO -->
           <div class="form-group">
             <label for="dcmto">Documento:</label>
-            <input class="form-control form-control-sm" type="text" id="dcmto" style="width:150px" maxlength="20">
+            <input class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;" type="text" id="dcmto" style="width:150px" maxlength="20">
           </div>
           <fieldset class="form-group referencia1" id="cliente_xpress" >
               <input class="form-control form-control-sm ref_razon" style="width:100px" type="text" id="cliente_xpress_rut" placeholder="rut">
@@ -6266,7 +10175,7 @@ label {
                 <h4>CLIENTE XPRESS</h4>
                 <div class="form-group referencia1">
                     <label for="dcmto">Documento:</label>
-                    <input class="form-control form-control-sm" type="text" id="dcmto_en_envio" style="width:150px" maxlength="20" disabled>
+                    <input class="form-control form-control-sm" style="background-color:#fffef0; border-color:#bfc0a0;" type="text" id="dcmto_en_envio" style="width:150px" maxlength="20" disabled>
                     <button type="button" class="btn btn-primary form-control-sm" onclick="cliente_xpress_guardar()">Guardar Cliente Xpress</button>
                 </div>
                 <fieldset class="form-group referencia1" id="cliente_xpress" >
@@ -6432,37 +10341,90 @@ label {
   </div>
 </div>
 <!-- Modal -->
-<div class="modal fade bd-example-modal-lg" id="modalHistorialConsignaciones" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document">
+<div class="modal fade historial-modal historial-consignaciones"
+     id="modalHistorialConsignaciones"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
     <div class="modal-content">
+
       <div class="modal-header">
-        <h5 class="modal-title" id="exampleModalLabel">Historial Consignaciones Vigentes</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <h5 class="modal-title">
+          <span class="modal-title-icon">
+            <i class="fa-solid fa-boxes-stacked"></i>
+          </span>
+          Historial de consignaciones
+        </h5>
+
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
-      <div class="modal-body">
-        <table class="table">
-          <thead>
-            <tr>
-              <th scope="col">N°</th>
-              <th scope="col">Fecha</th>
-              <th scope="col">Descripción</th>
-              <th scope="col">Imprimir</th>
-              <th scope="col">Eliminar</th>
-            </tr>
-          </thead>
-          <tbody id="tbody_vales">
-          </tbody>
-        </table>
-      </div>
-      <hr>
-      <div id="detalle_consignacion" class="container-fluid">
 
+      <div class="historial-toolbar">
+        <div class="historial-toolbar-info">
+          <span class="historial-counter" id="contador_consignaciones_visible">0</span>
+          <span>
+            de <strong id="contador_consignaciones_total">0</strong> consignaciones visibles
+          </span>
+        </div>
+
+        <div class="historial-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text"
+                 id="buscar_historial_consignaciones"
+                 placeholder="Buscar por número, fecha, descripción o estado..."
+                 autocomplete="off"
+                 oninput="filtrar_historial('consignaciones')">
+
+          <button type="button"
+                  class="historial-search-clear"
+                  onclick="limpiar_filtro_historial('consignaciones')"
+                  title="Limpiar búsqueda">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal">Cerrar</button>
+
+      <div class="modal-body p-0">
+        <div class="historial-table-wrap">
+          <table class="table historial-table">
+            <colgroup>
+              <col style="width:13%">
+              <col style="width:18%">
+              <col style="width:45%">
+              <col style="width:12%">
+              <col style="width:12%">
+            </colgroup>
+
+            <thead>
+              <tr>
+                <th>N° vale</th>
+                <th>Fecha</th>
+                <th>Descripción y estado</th>
+                <th colspan="2" class="text-right">Acciones</th>
+              </tr>
+            </thead>
+
+            <tbody id="tbody_vales"></tbody>
+          </table>
+        </div>
+
+        <div id="detalle_consignacion" class="historial-detail"></div>
       </div>
+
+      <div class="historial-footer">
+        <span>
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          Puede cargar, imprimir o eliminar una consignación desde sus acciones.
+        </span>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">
+          Cerrar
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -6487,7 +10449,104 @@ label {
     </div>
   </div>
 </div>
+<!-- VENTANA MODAL CREAR VALE DE MERCADERIA -->
+<div role="dialog" tabindex="-1" class="modal fade" id="crear-vale-mercaderia-modal">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: #5b60e9; color: white;">
+        <h5 class="modal-title">CREAR VALE DE MERCADERÍA</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="formulario_ingreso">
+          <img src="{{asset('storage/imagenes/logo_pos.png')}}" alt="" class="logo_" style="max-width: 100px; display: block; margin: 0 auto 15px;">
+          
+          <div class="form-group">
+            <label for="rut_cliente">Rut</label>
+            <input type="text" class="form-control" id="rut_cliente" name="rut_cliente">
+          </div>
+          
+          <div class="form-group">
+            <label for="nombre_cliente">Nombre</label>
+            <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente">
+          </div>
+          
+          <div class="form-group">
+            <label for="telefono_cliente">Teléfono</label>
+            <input type="text" class="form-control" id="telefono_cliente" name="telefono_cliente">
+          </div>
+          
+          <div class="form-group">
+            <label for="descripcion">Descripción del repuesto</label>
+            <input type="text" class="form-control" id="descripcion" name="descripcion">
+          </div>
+          
+          <div class="form-group">
+            <div class="row">
+              <div class="col-md-4 d-flex mt-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="tipo_documento" id="vale_boleta" value="bo" checked>
+                  <label class="form-check-label" for="vale_boleta">
+                    Boleta
+                  </label>
+                </div>
+                <div class="form-check ml-3">
+                  <input class="form-check-input" type="radio" name="tipo_documento" id="vale_factura" value="fa">
+                  <label class="form-check-label" for="vale_factura">
+                    Factura
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-8">
+                <label for="numero_documento">N° de Boleta / N° de Factura</label>
+                <input type="text" class="form-control" id="numero_documento" name="numero_documento" onKeyPress="return soloNumeros(event)">
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="valor">Valor</label>
+            <input type="text" class="form-control" id="valor" name="valor" onKeyPress="return soloNumeros(event)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-warning btn-sm" onclick="imprimir_boucher()">Imprimir</button>
+        <button class="btn btn-success btn-sm" onclick="guardar_vale_mercaderia()">Guardar Vale</button>
+        <button class="btn btn-secondary btn-sm" data-dismiss="modal">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div> <!-- FIN VENTANA MODAL CREAR VALE DE MERCADERIA -->
+
 <input type="hidden" name="oferta" id="oferta" value="0">
 <input type="hidden" name="cliente_carrito_transferido" id="cliente_carrito_transferido">
 </div> <!-- fin container-fluid -->
 @endsection
+
+<script>
+(function () {
+    function ajustarAlturaSidebarVenta() {
+        var panel = document.querySelector('.venta-sidebar-panel');
+
+        if (!panel || window.innerWidth < 992) {
+            if (panel) {
+                panel.style.removeProperty('--venta-sidebar-height');
+            }
+            return;
+        }
+
+        var posicionSuperior = panel.getBoundingClientRect().top;
+        var margenInferior = 12;
+        var alturaDisponible = Math.max(520, window.innerHeight - posicionSuperior - margenInferior);
+
+        panel.style.setProperty('--venta-sidebar-height', alturaDisponible + 'px');
+    }
+
+    window.addEventListener('load', ajustarAlturaSidebarVenta);
+    window.addEventListener('resize', ajustarAlturaSidebarVenta);
+    document.addEventListener('DOMContentLoaded', ajustarAlturaSidebarVenta);
+})();
+</script>

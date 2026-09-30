@@ -380,12 +380,13 @@ function cargar_cliente(idc)
      let id_abono = document.getElementById('id_abono').value;
      let cantidad = $('#cantidad').val();
      let descripcion = $('#descripcion').val();
+     let proveedor = $('#proveedor').val();
      let precio_unitario = $('#precio_unitario').val();
         
         // let id_abono = $('#id_abono').val();
       total = cantidad * precio_unitario;
 
-      if(cantidad === '' || cantidad > 10 || cantidad < 0){
+      if(cantidad === '' || cantidad > 10 || cantidad < 0 || isNaN(cantidad)){
         Vue.swal({
                 text: 'Ingrese una cantidad correcta',
                 position: 'top-end',
@@ -411,6 +412,19 @@ function cargar_cliente(idc)
         return false;
       }
 
+      if(proveedor === ''){
+        Vue.swal({
+                text: 'Ingrese un proveedor correcto',
+                position: 'top-end',
+                icon: 'warning',
+                toast: true,
+                showConfirmButton: false,
+                timer: 3000,
+            });
+        $('#proveedor').focus();
+        return false;
+      }
+
       if(precio_unitario === '' || precio_unitario < 0){
         Vue.swal({
                 text: 'Ingrese un valor unitario correcto',
@@ -428,6 +442,7 @@ function cargar_cliente(idc)
           id_abono: id_abono, 
           cantidad: cantidad, 
           descripcion: descripcion, 
+          proveedor: proveedor,
           precio_unitario: precio_unitario,
           total: total
     };

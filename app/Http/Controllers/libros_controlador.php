@@ -10,6 +10,7 @@ use App\factura;
 use App\nota_de_credito;
 use App\nota_de_debito;
 use App\pago;
+use App\permissions_detail;
 use App\servicios_sii\LibroCompraVenta;
 use App\servicios_sii\FirmaElectronica;
 use App\servicios_sii\Dte;
@@ -20,7 +21,24 @@ use Illuminate\Support\Facades\Auth;
 class libros_controlador extends Controller
 {
     public function libro_ventas(){
+        
         $user = Auth::user();
+        try {
+            $permisos_detalles = permissions_detail::all();
+            foreach($permisos_detalles as $permiso_detalle){
+                if($permiso_detalle->permission_id == 7 && $permiso_detalle->usuarios_id == Auth::user()->id && $permiso_detalle->path_ruta == '/libro/ventas'){
+                    try {
+                        return view('libros.ventas');
+                    }
+                    catch (\Exception $e) {
+                        return redirect('home');
+                    }
+                }
+            }
+        }catch (\Exception $e) {
+            return redirect('home');
+        }
+
         if($user->rol->nombrerol !== "Cajer@"){
             return view('libros.ventas');
         }else{

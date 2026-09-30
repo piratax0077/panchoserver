@@ -56,9 +56,7 @@
 
     <title>@yield('titulo','Default') | {{config('app.name')}}</title>
 
-    <section>
-
-        @yield('javascript')
+    @yield('javascript')
 
         <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
         <script>
@@ -120,10 +118,7 @@
                 })
             }
         </script>
-    </section>
-
-    <section>
-        <style>
+    <style>
             .back-to-top {
                     position: fixed;
                     bottom: 30px;
@@ -147,12 +142,9 @@
                     width: 100%;
                     margin-top: 30px;
                 }
-        </style>
-        @yield('style')
+    </style>
 
-        
-
-    </section>
+    @yield('style')
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta2/css/all.min.css" integrity="sha512-YWzhKL2whUzgiheMoBFwW8CKV4qpHQAEuvilg9FAn5VJUDwKZZxkJNuGM4XkWuk94WCrrwslk8yWNGmY1EduTA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 

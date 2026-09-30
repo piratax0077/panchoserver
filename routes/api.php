@@ -29,7 +29,7 @@ Route::get('{id}/damemodelos','api_controlador@damemodelos');
 Route::get('{id}/dameaniosvehiculo','api_controlador@dameaniosvehiculo');
 Route::get('/buscar_modelo/{idmodelo}/{idfamilia}','api_controlador@buscar_por_modelo');
 
-
+Route::get('/buscardescripcion/{descripcion}','api_controlador@buscar_por_descripcion');
 
 Route::get('/dameofertas','api_controlador@dame_ofertas');
 
@@ -92,11 +92,27 @@ Route::get('/dameproveedoresdemo','api_controlador@dameproveedores_demo');
 Route::get('/damepormarca_demo/{id}','api_controlador@damepormarca_demo');
 Route::get('/dameroles_demo','api_controlador@dameroles_demo');
 
+// RUTAS PARA EL TOTEM
+Route::get('/revisar_carrito_totem','api_controlador@revisar_carrito_totem');
+Route::post('/agregar_carrito_totem','api_controlador@agregar_carrito_totem');
+Route::get('/eliminar_item_carrito_totem/{idrep}/{numero_carrito}','api_controlador@eliminar_item_carrito_totem');
+Route::get('{id}/repuesto_totem','api_controlador@damerepuestototem');
+Route::get('/transferir_carrito_completo_totem/{cliente_id}/{numero_carrito}/{nombre_cliente?}/{rut?}/{telefono?}','api_controlador@transferir_carrito_completo_totem');
+Route::get('/borrar_carrito_totem/{cual}/{numero_carrito}','api_controlador@borrar_carrito_totem');
+Route::get('/imprimir_ticket_totem/{numero_carrito}','api_controlador@imprimir_ticket_totem');
+Route::get('/damemodelos_por_marca_totem/{idmarca}','api_controlador@damemodelos_pormarca_totem');
+Route::get('/damemodelo_por_marca_totem/{idmodelo}','api_controlador@damemodelo_pormarca_totem');
+Route::get('/buscar_por_oem_totem/{oem}','api_controlador@buscar_por_oem_totem');
+Route::get('/formas_pago_totem','api_controlador@formas_pago_totem');
+Route::get('/damerepuestosfamilia/{idmodelo}/{familia}','api_controlador@damerepuestosfamilia_totem');
+ Route::post('/actualizar_cantidad_carrito_totem','api_controlador@actualizar_cantidad_carrito_totem');
+
 Route::group(['middleware' => ['jwt.verify']], function() {
     //Todo lo que este dentro de este grupo requiere verificación de usuario.
     Route::post('get-user', 'api_controlador@getAuthenticatedUser');
     Route::get('ruta_prueba_get','api_controlador@prueba');
     Route::get('/revisar_carrito','api_controlador@revisar_carrito_virtual');
+   
     Route::post('/agregar_carrito_virtual','api_controlador@agregar_carrito_virtual');
     Route::get('/eliminar_item_carrito/{idrep}/{numero_carrito}','api_controlador@eliminar_item_carrito');
     
@@ -115,6 +131,7 @@ Route::group(['middleware' => ['jwt.verify']], function() {
     Route::get('{tag}/buscador','api_controlador@buscador_completo');
     Route::get('/buscar_por_medida/{medida}','api_controlador@buscar_por_medida');
     Route::get('/buscar_por_oem/{oem}','api_controlador@buscar_por_oem');
+
     Route::get('{id}/repuesto','api_controlador@damerepuesto');
     Route::get('{familia}/buscar_medida_familia/{medida}','api_controlador@buscar_medida_familia');
     Route::get('/familias_medidas','api_controlador@familias_medidas');

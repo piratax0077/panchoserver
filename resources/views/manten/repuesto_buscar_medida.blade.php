@@ -57,6 +57,7 @@ function espere(mensaje)
           });
         },
         success: function(html){
+        console.log(html);
           Vue.swal.close();
           $('#resultado').empty();
           $('#resultado').append(html);
@@ -330,7 +331,7 @@ function espere(mensaje)
     }
 
     function edicion_repuesto(id_rep){
-     
+      console.log(id_rep);
       let url = '{{url("/repuesto/buscaridrep_html")}}'+'/'+id_rep;
       $.ajax({
         type:'get',
@@ -444,7 +445,7 @@ function espere(mensaje)
                     <select name="familia" id="familia" class="form-control" onchange="buscar_medida(this.value)">
                       <option value="0">Seleccione familia</option>
                       @foreach($familias as $familia)
-                        <option value="{{$familia->id}}">{{$familia->nombrefamilia}}</option>
+                        <option value="{{$familia->id}}">{{strtoupper($familia->nombrefamilia)}}</option>
                       @endforeach
                     </select>
                     <div id="edicion_repuesto">

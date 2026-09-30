@@ -11,6 +11,7 @@
         },
         url:url,
         success:function(resp){
+          console.log(resp);
             $("#listar_clientes").html(resp);
             Vue.swal.close();
           Vue.swal({

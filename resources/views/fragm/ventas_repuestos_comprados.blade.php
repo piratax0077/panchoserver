@@ -10,6 +10,19 @@
         <th width="10%" scope="col" class="letra_pequeña">CANTIDAD</th>
     </thead>
     <tbody>
+        @if(!$mostrarDetalleCompras)
+        @foreach($compras as $item)
+            <tr>
+                <td class="letra_pequeña">{!!\Carbon\Carbon::parse($item->fecha)->format("d-m-Y")!!}</td>
+                <td class="letra_pequeña">---</td>
+                <td class="letra_pequeña">{{ $permisoCompras ? $item->numero : '---' }}</td>
+                <td class="letra_pequeña">---</td>
+                <td class="letra_pequeña">---</td>
+                <td class="letra_pequeña">---</td>
+                <td class="letra_pequeña">{!!number_format($item->cantidad,0,',','.')!!}</td>
+            </tr>
+        @endforeach
+        @else
         @foreach($compras as $item)
             <tr>
                 <td class="letra_pequeña">{!!\Carbon\Carbon::parse($item->fecha)->format("d-m-Y")!!}</td>
@@ -21,6 +34,8 @@
                 <td class="letra_pequeña">{!!number_format($item->cantidad,0,',','.')!!}</td>
             </tr>
         @endforeach
+        @endif
+        
     </tbody>
 </table>
 @else

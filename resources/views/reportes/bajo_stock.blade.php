@@ -3,6 +3,15 @@
 @section('javascript')
 <script>
 
+    // Funcionalidad de búsqueda avanzada para stock mínimo preparada, pero no visible en la vista.
+    // Para activarla, mostrar los bloques HTML marcados como BUSCADOR_STOCK_MINIMO_OCULTO.
+
+    window.onload = function(){
+        // el select con id periodo_mes se cargue con el mes actual
+        let mes_actual = new Date().getMonth() + 1;
+        $('#periodo_mes').val(mes_actual);
+        dameRepuestosPorEstado();
+    }
     function espere(){
         Vue.swal({
             title: 'Espere por favor',
@@ -70,8 +79,12 @@
         var estado = document.getElementById("estados_pedidos").value;
         let periodo_mes = $('#periodo_mes').val();
         let periodo_año = $('#periodo_año').val();
+        if(estado == 999){
+            estado = 'todos';
+        }
         var url = "{{url('/proveedor/dame_stock_minimo_estado')}}"+"/"+estado+"/"+periodo_mes+"/"+periodo_año;
         console.log(estado);
+        
 
         $.ajax({
             type:'get',
@@ -188,15 +201,25 @@
                     if(idProveedor !== "0"){
                         console.log("entro a proveedor")
                         dameRepuestosPorProveedor();
+                        repuestos_stock_minimo();
+                        repuestos_sin_stock_proveedor();
                     }else if(idFamilia !== '0'){
                         console.log("entro a familia")
                         dameRepuestosPorFamilia();
+                        repuestos_stock_minimo();
+                        repuestos_sin_stock_proveedor();
                     }else if(estado_pedido !== "0"){
                         console.log("entro a estado");
                         dameRepuestosPorEstado();
+                        repuestos_stock_minimo();
+                        repuestos_sin_stock_proveedor();
                     }else{
                         console.log("entro a else")
-                        dameRepuestosPorEvento();
+                        // dameRepuestosPorEvento();
+                        dameRepuestosPorEstado();
+                        // funcion que viene de plantillas.app para actualizar el stock mínimo
+                        repuestos_stock_minimo();
+                        repuestos_sin_stock_proveedor();
                     }
                 }
                 
@@ -207,27 +230,6 @@
         });
     }
 
-    function repuestos_stock_minimo(){
-                let url = '/repuesto/revisar_stock_minimo';
-                $.ajax({
-                    type:'get',
-                    url: url,
-                    success: function(resp){
-                        if(resp > 0){
-                            $('#cantidad_stock_minimo').removeClass('d-none');
-                            $('#cantidad_stock_minimo').addClass('d-block');
-                            $('#cantidad_stock_minimo').html(resp);
-                        }else{
-                            $('#cantidad_stock_minimo').removeClass('d-block');
-                            $('#cantidad_stock_minimo').addClass('d-none');
-                        }
-                        
-                    },
-                    error: function(error){
-                        console.log(error.responseText);
-                    }
-                });
-            }
 
     function buscar_por_fecha(){
         let url = '/repuesto/dame_stock_minimo_fecha';
@@ -244,6 +246,14 @@
                 console.log(error.responseText);
             }
         });
+    }
+
+    function abrirModalExcel(){
+        $('#modalExcel').modal('show');
+    }
+
+    function importarModalExcel(){
+        $('#modalImportarExcel').modal('show');
     }
 
     function dameRepuestosPorEvento(){
@@ -342,7 +352,7 @@
             return false;
         }
         // validar que el codigo interno del proveedor no sea vacío
-        if(cod_prov == ""){
+        if(cod_rep_prov == ""){
             Vue.swal({
                 title: 'Error',
                 text: 'Debe ingresar el código interno del proveedor',
@@ -374,14 +384,15 @@
                     });
                     $('#modalDetalle').modal('hide');
                     // dameRepuestosPorEvento();
-                    if(idProveedor !== "0"){
-                        console.log("entro a proveedor")
+                    var idProveedorFiltro = document.getElementById("proveedores").value;
+                    var idFamiliaFiltro = document.getElementById("familias").value;
+                    var estadoPedidoFiltro = document.getElementById("estados_pedidos").value;
+
+                    if(idProveedorFiltro !== "0"){
                         dameRepuestosPorProveedor();
-                    }else if(idFamilia !== '0'){
-                        console.log("entro a familia")
+                    }else if(idFamiliaFiltro !== '0'){
                         dameRepuestosPorFamilia();
-                    }else if(estado_pedido !== "0"){
-                        console.log("entro a estado");
+                    }else if(estadoPedidoFiltro !== "0"){
                         dameRepuestosPorEstado();
                     }
                 }else{
@@ -448,6 +459,286 @@
             }
         });
     }
+
+
+
+    function normalizarTextoBusquedaStockMinimo(texto){
+        texto = (texto || '').trim();
+        texto = texto.replace(/\//g, '_&_');
+        return encodeURIComponent(texto);
+    }
+
+    function enter_buscar_stock_minimo(e){
+        if(e.key === 'Enter'){
+            buscarRepuestoStockMinimo();
+        }
+    }
+
+    function limpiarBusquedaStockMinimo(){
+        $('#buscar_repuesto_stock_minimo').val('');
+        $('#resultado_busqueda_stock_minimo').html(`
+            <div class="alert alert-info mb-0">
+                Ingrese un código interno, código proveedor, OEM, fabricante o descripción para buscar productos.
+            </div>
+        `);
+        $('#proveedores').val('0');
+        $('#familias').val('0');
+    }
+
+    function buscarRepuestoStockMinimo(){
+        let texto = $('#buscar_repuesto_stock_minimo').val();
+
+        if(!texto || texto.trim().length < 2){
+            Vue.swal({
+                title: 'Búsqueda requerida',
+                text: 'Ingrese al menos 2 caracteres para buscar un producto',
+                icon: 'warning',
+                confirmButtonText: 'Aceptar'
+            });
+            return false;
+        }
+
+        let dato = normalizarTextoBusquedaStockMinimo(texto);
+        let url = '{{url("/repuesto/buscar-stock-minimo")}}' + '/' + dato;
+
+        $.ajax({
+            type: 'GET',
+            url: url,
+            beforeSend: function(){
+                espere();
+                $('#resultado_busqueda_stock_minimo').html(`
+                    <div class="alert alert-info mb-0">
+                        Buscando productos...
+                    </div>
+                `);
+            },
+            success: function(resp){
+                Vue.swal.close();
+
+                // Si el backend devuelve HTML parcial, lo mostramos directo.
+                if(typeof resp === 'string'){
+                    $('#resultado_busqueda_stock_minimo').html(resp);
+                    return;
+                }
+
+                // Si el backend devuelve JSON, armamos la tabla desde esta vista.
+                if(resp && resp.estado === 'OK'){
+                    renderTablaBusquedaStockMinimo(resp.repuestos || []);
+                    return;
+                }
+
+                $('#resultado_busqueda_stock_minimo').html(`
+                    <div class="alert alert-warning mb-0">
+                        No se encontraron productos para la búsqueda ingresada.
+                    </div>
+                `);
+            },
+            error: function(error){
+                Vue.swal.close();
+                console.log(error.responseText);
+                $('#resultado_busqueda_stock_minimo').html(`
+                    <div class="alert alert-danger mb-0">
+                        Ocurrió un error al buscar los productos.
+                    </div>
+                `);
+            }
+        });
+    }
+
+    function renderTablaBusquedaStockMinimo(repuestos){
+        if(!repuestos || repuestos.length === 0){
+            $('#resultado_busqueda_stock_minimo').html(`
+                <div class="alert alert-warning mb-0">
+                    No se encontraron productos para la búsqueda ingresada.
+                </div>
+            `);
+            return;
+        }
+
+        let estados = @json($estados ?? []);
+        let filas = '';
+
+        repuestos.forEach(function(r){
+            let stockUno = Number(r.stock_actual || 0);
+            let stockDos = Number(r.stock_actual_dos || 0);
+            let stockTres = Number(r.stock_actual_tres || 0);
+            let stockTotal = stockUno + stockDos + stockTres;
+            let estadoActual = r.estado || r.estado_stock_minimo || 'Sin estado';
+
+            let options = `<option value="0">Sin estado</option>`;
+            estados.forEach(function(estado){
+                let selected = estado === estadoActual ? 'selected' : '';
+                options += `<option value="${estado}" ${selected}>${estado}</option>`;
+            });
+
+            filas += `
+                <tr id="fila_busqueda_stock_${r.id}">
+                    <td>
+                        <a href="javascript:void(0)" data-target="#modalDetalleRepuesto" data-toggle="modal" onclick="detalle_repuesto(${r.id})">
+                            ${r.codigo_interno || ''}
+                        </a>
+                    </td>
+                    <td>${r.descripcion || ''}</td>
+                    <td>${r.empresa_nombre_corto || 'N/A'}</td>
+                    <td class="text-center">${stockTotal}</td>
+                    <td class="text-center">${r.stock_minimo || 0}</td>
+                    <td>
+                        <select class="form-control form-control-sm" onchange="cambiarEstadoStockMinimo(${r.id}, this.value)">
+                            ${options}
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        <a class="btn btn-secondary btn-sm" href="javascript:void(0)" onclick="damerepuesto(${r.id})" data-target="#modalNuevoStockMinimo" data-toggle="modal">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </a>
+                    </td>
+                </tr>
+            `;
+        });
+
+        let tabla = `
+            <div class="table-responsive tabla-scroll-y-300">
+                <table class="table table-sm table-bordered table-hover mb-0" style="font-size:13px;">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Cod Int</th>
+                            <th>Descripción</th>
+                            <th>Proveedor</th>
+                            <th class="text-center">Stock</th>
+                            <th class="text-center">Stock mín.</th>
+                            <th>Estado</th>
+                            <th class="text-center">Stock mín.</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+        `;
+
+        $('#resultado_busqueda_stock_minimo').html(tabla);
+    }
+
+    function cambiarEstadoStockMinimo(idRepuesto, estado){
+        if(!idRepuesto){
+            return false;
+        }
+
+        let estadoFinal = estado || '0';
+        let url = '{{url("/repuesto/cambiar-estado-stock-minimo")}}' + '/' + idRepuesto + '/' + encodeURIComponent(estadoFinal);
+
+        $.ajax({
+            type: 'GET',
+            url: url,
+            beforeSend: function(){
+                $('#fila_busqueda_stock_' + idRepuesto).addClass('table-warning');
+            },
+            success: function(resp){
+                $('#fila_busqueda_stock_' + idRepuesto).removeClass('table-warning').addClass('table-success');
+
+                Vue.swal({
+                    text: 'Estado actualizado correctamente',
+                    position: 'top-end',
+                    icon: 'success',
+                    toast: true,
+                    showConfirmButton: false,
+                    timer: 2500,
+                });
+
+                dameRepuestosPorEstado();
+                repuestos_stock_minimo();
+                repuestos_sin_stock_proveedor();
+            },
+            error: function(error){
+                $('#fila_busqueda_stock_' + idRepuesto).removeClass('table-warning');
+                console.log(error.responseText);
+
+                Vue.swal({
+                    title: 'Error',
+                    text: 'No se pudo actualizar el estado del producto',
+                    icon: 'error',
+                    confirmButtonText: 'Aceptar'
+                });
+            }
+        });
+    }
+
+    function importar_excel_stock_minimo(){
+        var archivo_excel = document.getElementById("archivo_excel").files[0];
+        var id_proveedor = document.getElementById("proveedor_importar").value;
+        if(!archivo_excel){
+            Vue.swal({
+                title: 'Error',
+                text: 'Debe seleccionar un archivo Excel',
+                icon: 'error',
+                showCancelButton: false,
+                confirmButtonText: 'Aceptar',
+                allowOutsideClick: false,
+            });
+            return false;
+        }
+        if(id_proveedor == 0){
+            Vue.swal({
+                title: 'Error',
+                text: 'Debe seleccionar un proveedor',
+                icon: 'error',
+                showCancelButton: false,
+                confirmButtonText: 'Aceptar',
+                allowOutsideClick: false,
+            });
+            return false;
+        }
+        var formData = new FormData();
+        formData.append('archivo_excel', archivo_excel);
+        formData.append('proveedor_id', id_proveedor);
+
+        $.ajaxSetup({
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+
+        $.ajax({
+            url: '{{url("/factuprodu/importar_excel_stock_minimo")}}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            beforeSend: function(){
+                espere();
+            },
+            success: function(resp){
+                Vue.swal.close();
+                console.log(resp);
+                if(resp.estado == 'OK'){
+                    Vue.swal({
+                        title: 'Importación exitosa',
+                        text: 'El archivo Excel se importó correctamente',
+                        icon: 'success',
+                        showCancelButton: false,
+                        confirmButtonText: 'Aceptar',
+                        allowOutsideClick: false,
+                    });
+                    $('#modalImportarExcel').modal('hide');
+                    // dameRepuestosPorEvento();
+                    repuestos_stock_minimo();
+                        repuestos_sin_stock_proveedor();
+                }else{
+                    Vue.swal({
+                        title: 'Error en la importación',
+                        text: resp.mensaje,
+                        icon: 'error',
+                        showCancelButton: false,
+                        confirmButtonText: 'Aceptar',
+                        allowOutsideClick: false,
+                    });
+                }
+                
+            },
+            error: function(error){
+                console.log(error.responseText);
+            }
+        });
+    }
 </script>
 @endsection
 
@@ -477,9 +768,68 @@
             $año_actual=date("Y");
 @endphp
 <div class="container-fluid">
+    <!-- seccion de mensajes desde el backend  -->
+    @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
+    @if(session('errores_excel'))
+        <div class="alert alert-danger">
+            <strong>Errores encontrados:</strong>
+            <ul>
+                @foreach(session('errores_excel') as $error)
+                    <li>
+                        Fila {{ $error['fila'] }} - 
+                        Campo {{ $error['columna'] }}: 
+                        {{ implode(', ', $error['errores']) }}
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+@endif
     <div class="row">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <h4>Filtros</h4>
+
+            {{-- BUSCADOR_STOCK_MINIMO_OCULTO
+            <hr>
+            <div class="card mb-3">
+                <div class="card-header py-2">
+                    <strong>Buscar producto</strong>
+                </div>
+                <div class="card-body p-2">
+                    <label for="buscar_repuesto_stock_minimo" class="form-label mb-1">Producto</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text"
+                               id="buscar_repuesto_stock_minimo"
+                               class="form-control"
+                               placeholder="Código, OEM, proveedor o descripción"
+                               onkeypress="enter_buscar_stock_minimo(event)">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-primary" onclick="buscarRepuestoStockMinimo()">
+                                Buscar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limpiarBusquedaStockMinimo()">
+                                Limpiar
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Busca productos del inventario para agregarlos o cambiar su estado en stock mínimo.
+                    </small>
+                </div>
+            </div>
+            --}}
             <div class="form-group">
                 <label for="proveedores" class="form-label">Proveedores</label>
                 <select name="proveedores" id="proveedores" class="form-select form-control" onchange="dameRepuestosPorProveedor()">
@@ -528,6 +878,8 @@
                         @endfor
                     </select>
                 </div>
+                <button type="button" class="btn btn-success btn-sm w-100" onclick="abrirModalExcel()">Excel</button>
+                <button type="button" class="btn btn-warning btn-sm w-100 my-2" onclick="importarModalExcel()">Importar Excel</button>
             </div>
             <hr>
             <div id="filtros">
@@ -543,7 +895,7 @@
             </div>
             <hr>
             
-            <button class="btn btn-success btn-sm w-100" onclick="buscar_mes()">Buscar</button>
+            {{-- <button class="btn btn-success btn-sm w-100" onclick="buscar_mes()">Buscar</button> --}}
             <hr>
             <div id="tabla_todos_repuestos" class="tabla-scroll-y-300" style="font-size: 13px;">
                 <table class="table">
@@ -553,13 +905,15 @@
                         <th scope="col">Fecha</th>
                         <th scope="col">Estado</th>
                         <th scope="col"></th>
+                        <th scope="col"></th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      @foreach($repuestos_todos as $r)
+                      {{-- @foreach($repuestos_todos as $r)
                       @php
                             $r->estado == 'Pedido' ? $clase = 'bg-success text-white' : $clase = 'bg-light';
+                            $r->id_modifica_estado == 5 ? $clase = 'bg-primary text-white' :  '';
                       @endphp
                         <tr class="{{$clase}}">
                             <td><a href="javascript:void(0)" style="color: black" data-toggle="modal" data-target="#modalDetalleRepuesto" onclick="detalle_repuesto({{$r->id}})">{{$r->codigo_interno}}</a> </td>
@@ -567,8 +921,9 @@
                             <td>{{$r->estado}}</td>
                             <td><a class="btn btn-secondary btn-sm" href="javascript:void(0)" onclick="damerepuesto({{$r->id_repuesto}})" data-target="#modalNuevoStockMinimo" data-toggle="modal"><i class="fa-solid fa-arrows-rotate"></i></a></td>
                             @if($r->estado == 'Pedido')<td><a href="javascript:void(0)" onclick="detalle_pedido({{$r->id_repuesto}})" class="btn btn-warning btn-sm">D</a></td>@endif
+                            <td></td>
                         </tr>
-                      @endforeach
+                      @endforeach --}}
                     </tbody>
                 </table>
             </div>
@@ -603,9 +958,47 @@
             </div> --}}
             
         </div>
-        <div class="col-md-9">
+        <div class="col-md-8">
+            {{-- BUSCADOR_STOCK_MINIMO_OCULTO_RESULTADOS
+            <div class="card mb-3">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <strong>Resultado búsqueda de productos</strong>
+                    <small class="text-muted">Cambio de estado rápido</small>
+                </div>
+                <div class="card-body p-2" id="resultado_busqueda_stock_minimo">
+                    <div class="alert alert-info mb-0">
+                        Ingrese un código interno, código proveedor, OEM, fabricante o descripción para buscar productos.
+                    </div>
+                </div>
+            </div>
+            --}}
             <div id="resultado">
-
+                <table class="table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Cod Int</th>
+                        <th scope="col">Fecha</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col"></th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach($repuestos_ as $r)
+                        @php
+                            $r->estado == 'Pedido' ? $clase = 'bg-success text-white' : $clase = 'bg-light';
+                            $r->id_modifica_estado == 5 ? $clase = 'bg-primary text-white' :  '';
+                        @endphp
+                        <tr class="{{$clase}}">
+                            <td><a href="javascript:void(0)" style="color: black;" data-target="#modalDetalleRepuesto" data-toggle="modal" onclick="detalle_repuesto({{$r->id}})">{{$r->codigo_interno}}</a> </td>
+                            <td>{{$r->ultima_fecha_emision}}</td>
+                            <td>{{$r->estado}}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="javascript:void(0)" onclick="damerepuesto({{$r->id}})" data-target="#modalNuevoStockMinimo" data-toggle="modal"><i class="fa-solid fa-arrows-rotate"></i></a></td>
+                            @if($r->estado == 'Pedido')<td><a href="javascript:void(0)" onclick="detalle_pedido({{$r->id}})" class="btn btn-warning btn-sm">D</a></td>@endif
+                        </tr>
+                        @endforeach
+                    </tbody>
+                  </table>
             </div>
         </div>
     </div>
@@ -723,7 +1116,129 @@
       </div>
     </div>
 </div>
+<!-- MODAL EXCEL -->
+<div class="modal fade" id="modalExcel" tabindex="-1" role="dialog" aria-labelledby="modalExcelLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalExcelLabel">Exportar a Excel</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <form action="{{ url('/repuesto/descargar-repuestos-stock-minimo') }}" method="GET">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="fecha_inicial_excel">Fecha Inicial</label>
+                    <input type="date" name="fecha_inicial_excel" id="fecha_inicial_excel" class="form-control" value="{{ date('Y-m-d') }}">
+                </div>
+                <div class="form-group">
+                    <label for="fecha_final_excel">Fecha Final</label>
+                    <input type="date" name="fecha_final_excel" id="fecha_final_excel" class="form-control" value="{{ date('Y-m-d') }}">
+                </div>
+                <div class="form-group">
+                    <label for="id_proveedor_excel">Proveedor</label>
+                    <select name="id_proveedor_excel" id="id_proveedor_excel" class="form-control">
+                        <option value="0">Todos</option>
+                        @foreach($proveedores as $proveedor)
+                            <option value="{{ $proveedor->id }}">{{ $proveedor->empresa_nombre_corto }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <p>¿Desea exportar el reporte de bajo stock mínimo a Excel?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success btn-sm">Exportar</button>
+            </div>
+        </form>
+        
+      </div>
+    </div>
+</div>
+<!-- CERRAR MODAL EXCEL -->
+<!-- MODAL IMPORTAR EXCEL -->
+<div class="modal fade" id="modalImportarExcel" tabindex="-1" role="dialog" aria-labelledby="modalImportarExcelLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalImportarExcelLabel">Importar Excel</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="form-group">
+                        <label for="proveedor_importar">Proveedor</label>
+                        <select name="proveedor_importar" id="proveedor_importar" class="form-control">
+                            <option value="0">Seleccione</option>
+                            @foreach($proveedores as $proveedor)
+                                <option value="{{ $proveedor->id }}">{{ $proveedor->empresa_nombre_corto }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group"> 
+                        <label for="archivo_excel">Seleccione el archivo Excel</label>
+                        <input type="file" name="archivo_excel" id="archivo_excel" class="form-control">
+                    </div>
+                    <p>El archivo Excel debe tener el siguiente formato:</p>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>proveedor</th>
+                                <th>codigo_interno</th>
+                                <th>respuesta_proveedor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Proveedor A</td>
+                                <td>REP001 (CODIGO PROVEEDOR)</td>
+                                <td>OK</td>
+                            </tr>
+                            <tr>
+                                <td>Proveedor A</td>
+                                <td>REP002 (CODIGO PROVEEDOR)</td>
+                                <td>OK</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button type="button" class="btn btn-success btn-sm w-100 my-2" onclick="importar_excel_stock_minimo()">Importar</button>
+                </div>
+                <div class="col-md-4">
+                    <!-- MOSTRAMOS LAS IMPORTACIONES EXCEL -->
+                    <h5>Últimas importaciones</h5>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>Fecha</th>
+                                <th>Responsable</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($importaciones_excel as $importacion)
+                                <tr>
+                                    <td>{{ $importacion->proveedor ? $importacion->proveedor->empresa_nombre_corto : 'N/A' }}</td>
+                                    <td>{{ $importacion->created_at }}</td>
+                                    <td>{{ $importacion->usuario ? $importacion->usuario->name : 'N/A' }}</td>
+                                    <td>{{ $importacion->estado }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
+        </div>
+        
+      </div>
+    </div>
+</div>
+<!-- fin modal importar excel -->
 <!-- Se guarda el id del repuesto en un campo hidden -->
 <input type="hidden" id="id_repuesto">
 @endsection

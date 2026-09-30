@@ -22,6 +22,7 @@
                     
                 },
                 success: function(resp){
+                    console.log(resp);
                     // validar 
                     if(resp.length > 0){
                         let pedidos_terrestre = resp[0];
@@ -31,11 +32,12 @@
                         pedidos_terrestre.forEach( pedido => {
                             $('#tbody_revision_pedidos_terrestres').append(`
                             <tr> 
-                                <td>`+pedido.num_abono+` </td>
+                                <td><a href="javascript:void(0)" onclick="cargar_pedido_modal(`+pedido.id+`)">`+pedido.num_abono+` </a></td>
                                 <td>`+pedido.fecha_emision+` </td>
                                 <td>`+pedido.nombre_cliente+` </td>
                                 <td>`+pedido.responsable+` </td>
                                 <td>`+pedido.por_encargo+` </td>
+                                <td>`+pedido.por_cobrar+`</td>
                                 <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button>  </td>
                                 <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente_modal(`+pedido.id+`)'>X</button> </td>
@@ -46,11 +48,12 @@
                         pedidos_aereos.forEach( pedido => {
                             $('#tbody_revision_pedidos_aereos').append(`
                             <tr> 
-                                <td>`+pedido.num_abono+` </td>
+                                <td><a href="javascript:void(0)" onclick="cargar_pedido_modal(`+pedido.id+`)">`+pedido.num_abono+`</a> </td>
                                 <td>`+pedido.fecha_emision+` </td>
                                 <td>`+pedido.nombre_cliente+` </td>
                                 <td>`+pedido.responsable+` </td>
                                 <td>`+pedido.por_encargo+` </td>
+                                <td>`+pedido.por_cobrar+`</td>
                                 <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button> </td>
                                 <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente_modal(`+pedido.id+`)'>X</button> </td>
@@ -71,6 +74,7 @@
             let nombre = $('#nombre').val();
             let telefono = $('#telefono').val();
             let email = $('#email').val();
+            let patente = $('#patente').val();
             let responsable = $('#responsable').val();
 
             if(nombre === ''){
@@ -125,7 +129,13 @@
                 return false;
             }
 
-            let parametros = {nombre: nombre, telefono: telefono, email: email, responsable: responsable};
+            let parametros = {
+                nombre: nombre,
+                telefono: telefono,
+                email: email,
+                patente: patente,
+                responsable: responsable
+            };
             let url = '/ventas/nuevo_abono';
 
             $.ajaxSetup({
@@ -139,7 +149,10 @@
             url:url,
             data:parametros,
             success:function(resp){
-                
+                if (!resp || !Number.isInteger(Number(resp.id)) || Number(resp.id) <= 0) {
+                    Vue.swal({title: 'ERROR', text: 'No se pudo crear el pedido.', icon: 'error'});
+                    return;
+                }
                 if(resp == 'no'){
                     Vue.swal({
                         text: 'Cliente ya existe ... ingrese uno nuevo',
@@ -152,11 +165,14 @@
                     return false;
                 }else{
                 //Recibo el id del nuevo abono y lo asigno a un input para poder registrar los nuevos productos
-                $('#id_abono').val(resp);
+                $('#id_abono').val(resp.id);
+                cargar_pedido(resp.id);
                 //Se remueven los atributos disabled para poder registrar nuevos productos
                 document.querySelectorAll("#tablero *").forEach(el => el.removeAttribute("disabled"));
                 //Se bloquean los input para no modificar los datos del cliente
                 document.querySelectorAll("#info_cliente *").forEach(el => el.setAttribute("disabled", "true"));
+
+                document.querySelectorAll("#tablero_select *").forEach(el => el.removeAttribute("disabled"));
                 
                 Vue.swal({
                     icon:'success',
@@ -168,6 +184,7 @@
             },
             error: function(err){
                 console.log(err);
+                Vue.swal({title: 'ERROR', text: 'No se pudo crear el pedido.', icon: 'error'});
             }
         });
         }
@@ -181,7 +198,12 @@
         }
         
         function agregar_repuesto(){
+            if (!Number.isInteger(Number($('#id_abono').val())) || Number($('#id_abono').val()) <= 0) {
+                Vue.swal({title: 'ERROR', text: 'Primero registra o selecciona un pedido.', icon: 'error'});
+                return;
+            }
             let cantidad = $('#cantidad').val();
+            let codigo_proveedor = $('#codigo_proveedor').val();
             let descripcion = $('#descripcion').val();
             let precio_unitario = $('#precio_unitario').val();
             let proveedor = $('#proveedor').val();
@@ -202,6 +224,19 @@
                 $('#cantidad').focus();
                 return false;
             }
+
+            if(codigo_proveedor === ''){
+                Vue.swal({
+                        text: 'Ingrese un código de proveedor correcto',
+                        position: 'top-end',
+                        icon: 'warning',
+                        toast: true,
+                        showConfirmButton: false,
+                        timer: 3000,
+                    });
+                    $('#codigo_proveedor').focus();
+                    return false;
+                }
 
             if(descripcion === ''){
                 Vue.swal({
@@ -244,6 +279,7 @@
             let parametros = { 
                 id_abono: id_abono,
                 cantidad: cantidad, 
+                codigo_proveedor: codigo_proveedor,
                 descripcion: descripcion, 
                 precio: precio_unitario,
                 total: total,
@@ -266,7 +302,7 @@
                 $('#tbody_historial').html('CARGANDO ...');
             },
             success:function(resp){
-                
+                console.log(resp);
                 $('#tbody_historial').empty();
                 $('#precio_lista').empty();
                 if(resp[2].length > 0){
@@ -293,7 +329,7 @@
                                     <td>`+item.descripcion+` </td>
                                     <td>$`+new Intl.NumberFormat().format(item.precio_unitario)+` </td>
                                     <td>$`+new Intl.NumberFormat().format(item.total)+` </td>
-                                    <td class='text-uppercase'>`+item.descripcion_estado+`</td>
+                                    <td>`+item.empresa_nombre_corto+`</td>
                                     <td><button class="btn btn-danger btn-sm" onclick="eliminar_pedido(`+item.idrep+`)">X</button> </td>
                                 </tr>
                                 `);
@@ -341,6 +377,10 @@
         }
 
         function limpiar_todo(){
+            $('#id_abono').val('');
+            document.querySelectorAll("#tablero *").forEach(el => el.setAttribute("disabled", "true"));
+            document.querySelectorAll("#tablero_select *").forEach(el => el.setAttribute("disabled", "true"));
+            document.querySelectorAll("#info_cliente *").forEach(el => el.removeAttribute("disabled"));
             // document.getElementById('buscado').value = "";
             document.getElementById("descripcion").value="";
             document.getElementById("cantidad").value="";
@@ -349,18 +389,22 @@
             $('#tbody_historial').empty();
             $('#nombre').val('');
             $('#telefono').val('');
+            $('#email').val('');
+            $('#patente').val('');
+            $('#responsable').val('');
             $('#abono').val('');
             $('#saldo_pendiente').val('');
             $('#precio_lista').val('');
         }
 
         function registrar(){
-            let por_encargo = $('input:radio[name=flexRadioDefault1]:checked').val();
-                let por_cobrar = $('input:radio[name=flexRadioDefault2]:checked').val();
+            let por_encargo = $('input:radio[name=tipo_envio]:checked').val();
+                let por_cobrar = $('input:radio[name=por_cobrar]:checked').val();
                 let id_abono = $('#id_abono').val();
                 let abono = $('#abono').val();
                 let saldo_pendiente = $('#saldo_pendiente').val();
                 let precio_lista = $('#precio_lista').val();
+                let forma_pago = $('#forma_pago').val();
 
             if(id_abono == ''){
                 Vue.swal({
@@ -419,6 +463,20 @@
                 $('#abono').focus();
                 return false;
             }
+
+            if(forma_pago == 0){
+                Vue.swal({
+                    text: 'Seleccione una forma de pago',
+                    position: 'top-end',
+                    icon: 'error',
+                    toast: true,
+                    showConfirmButton: false,
+                    timer: 3000,
+                });
+                $('#forma_pago').focus();
+                return false;
+            }
+
             let parametros = {
                 por_encargo: por_encargo, 
                 por_cobrar: por_cobrar, 
@@ -426,6 +484,7 @@
                 abono: abono, 
                 saldo_pendiente: saldo_pendiente, 
                 precio_lista: precio_lista, 
+                forma_pago: forma_pago
                 
             };
 
@@ -510,10 +569,11 @@
                                 <tr>
                                     <td>`+pedido.num_abono+` </td>
                                     <td>`+pedido.fecha_emision+` </td>
-                                    <td> <a href='javascript:cargar_pedido(`+pedido.num_abono+`)'> `+pedido.nombre_cliente+`</a> </td>
+                                    <td> <a href='javascript:cargar_pedido(`+pedido.id+`)'> `+pedido.nombre_cliente+`</a> </td>
+                                    <td>`+pedido.por_encargo+` </td>
+                                    <td>`+pedido.por_cobrar+`</td>
                                     <td>`+pedido.responsable+`</td>
                                     <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button> </td>
-                                    <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
                                     <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente(`+pedido.id+`)'>X</button> </td>
                                 </tr>
                                 
@@ -529,49 +589,118 @@
         }
 
         function cargar_pedido(pedido_id){
-            $('#exampleModal').modal('hide');
+            
             let url = '/ventas/cargar_pedido/'+pedido_id;
             $.ajax({
                 type:'get',
                 url: url,
                 success: function(resp){
                     console.log(resp);
-                    $('#tbody_historial').empty();
-                    
                     let cliente = resp[0];
                     let repuestos_pedidos = resp[1];
-                    let saldo_pend = cliente.precio_lista - cliente.abono;
+
+                    $('#contenedor_repuestos_pedidos_historial').empty();
                     $('#id_abono').val(cliente.id);
-                    $('#nombre').val(cliente.nombre_cliente);
-                    $('#telefono').val(cliente.telefono);
-                    $('#abono').val(cliente.abono);
-                    $('#saldo_pendiente').val(saldo_pend);
-                    $('#precio_lista').val(cliente.precio_lista);
 
                     repuestos_pedidos.forEach(repuesto => {
-                            items.push(repuesto.descripcion);
-                            $('#tbody_historial').append(`
+
+                        $('#contenedor_repuestos_pedidos_historial').append(`
                             <tr>
-                                <td>`+repuesto.cantidad+`</td>
-                                <td>`+repuesto.descripcion+` </td>
-                                <td>$`+repuesto.precio_unitario+` </td>
-                                <td>$`+repuesto.total+` </td>
-                                <td>`+repuesto.descripcion_estado+` </td>
-                                <td><button class="btn btn-danger btn-sm" onclick="eliminar_pedido(`+repuesto.idrep+`)">X</button></td>
+                                <td>${repuesto.cantidad}</td>
+
+                                <td>
+                                    ${repuesto.descripcion}
+                                    <br>
+                                    <small class="text-muted">
+                                        ${repuesto.empresa_nombre_corto}
+                                    </small>
+                                </td>
+
+                                <td>
+                                    $${new Intl.NumberFormat().format(repuesto.total)}
+                                </td>
+                            </tr>
+                        `);
+
+                    });
+
+                    $('#tbody_historial').empty();
+                    repuestos_pedidos.forEach(item => {
+                        $('#tbody_historial').append(`
+                            <tr>
+                                <td>`+item.cantidad+` </td>
+                                <td>`+item.descripcion+` </td>
+                                <td>$`+new Intl.NumberFormat().format(item.precio_unitario)+` </td>
+                                <td>$`+new Intl.NumberFormat().format(item.total)+` </td>
+                                <td>`+item.empresa_nombre_corto+`</td>
+                                <td><button class="btn btn-danger btn-sm" onclick="eliminar_pedido(`+item.idrep+`)">X</button> </td>
                             </tr>
                             `);
                     });
+
                     document.querySelectorAll("#tablero *").forEach(el => el.removeAttribute("disabled"));
                     // document.querySelectorAll("#info_cliente *").forEach(el => el.setAttribute("disabled", "true"));
                     document.getElementById('btn_registrar_cliente').setAttribute('disabled','true');
+                    $('#precio_lista').val(cliente.precio_lista);
+                    $('#abono').val(cliente.abono);
+                    $('#saldo_pendiente').val(cliente.saldo_pendiente);
+                    $('#forma_pago').val(cliente.forma_pago);
                 },
                 error: function(err){   
                     console.log(err);
                 }
             })
         }
+
+        function cargar_pedido_modal(pedido_id){
+
+            let url = '/ventas/cargar_pedido/'+pedido_id;
+
+            $.ajax({
+                type:'get',
+                url: url,
+
+                success: function(resp){
+
+                    let cliente = resp[0];
+                    let repuestos_pedidos = resp[1];
+
+                    $('#contenedor_repuestos_pedidos').empty();
+
+                    repuestos_pedidos.forEach(repuesto => {
+
+                        $('#contenedor_repuestos_pedidos').append(`
+                            <tr>
+                                <td>${repuesto.cantidad}</td>
+
+                                <td>
+                                    ${repuesto.descripcion}
+                                    <br>
+                                    <small class="text-muted">
+                                        ${repuesto.empresa_nombre_corto}
+                                    </small>
+                                </td>
+
+                                <td>
+                                    $${new Intl.NumberFormat().format(repuesto.total)}
+                                </td>
+                            </tr>
+                        `);
+
+                    });
+
+                },
+
+                error: function(err){
+                    console.log(err);
+                }
+
+            });
+
+        }
+
         function eliminar_pedido(idrep){
-    Vue.swal({ 
+            Vue.swal({ 
             title: '¿Estás seguro?',
             text: "Está eliminando el pedido",
             icon: 'warning',
@@ -588,39 +717,45 @@
                     type:'get',
                     url: url,
                     success: function(resp){
-                        
+                        if (!Array.isArray(resp)) {
+                            Vue.swal({title: 'ERROR', text: 'No se pudo actualizar el pedido. Recarga el pedido para verificar su estado.', icon: 'error'});
+                            return;
+                        }
                         $('#tbody_historial').empty();
-                        $('#precio_lista').empty();
+                        var total_precio_lista = 0;
                         if(resp.length > 0){
                             
-                            var total_precio_lista = 0;
+
                             resp.forEach(item => {
-                                total_precio_lista += item.total;
+                                total_precio_lista += Number(item.total) || 0;
                                 $('#tbody_historial').append(`
                                             <tr>
                                                 <td>`+item.cantidad+` </td>
                                                 <td>`+item.descripcion+` </td>
                                                 <td>$`+new Intl.NumberFormat().format(item.precio_unitario)+` </td>
                                                 <td>$`+new Intl.NumberFormat().format(item.total)+` </td>
-                                                <td class='text-uppercase'>`+item.descripcion_estado+`</td>
-                                                <td><button class="btn btn-danger btn-sm" onclick="eliminar_pedido(`+item.id+`)">X</button> </td>
+                                                <td>`+item.empresa_nombre_corto+`</td>
+                                                <td><button class="btn btn-danger btn-sm" onclick="eliminar_pedido(`+item.idrep+`)">X</button> </td>
                                             </tr>
                                             `);
                             });
-                            $('#precio_lista').val(total_precio_lista);
+
 
                             document.querySelectorAll("#tablero_select *").forEach(el => el.removeAttribute("disabled"));
                         }else{
                             $('#tbody_historial').append(`
                             <tr>
-                                <td>No hay pedidos </td>
+                                <td colspan="6">No hay pedidos</td>
                             </tr>
                             `);
                         }
             
+                        $('#precio_lista').val(total_precio_lista);
+                        $('#saldo_pendiente').val(total_precio_lista - (Number($('#abono').val()) || 0));
                         },
                         error: function(err){
                             console.log(err);
+                            Vue.swal({title: 'ERROR', text: 'No se pudo completar la solicitud. Recarga el pedido para verificar su estado.', icon: 'error'});
                         }
                     })
               
@@ -654,21 +789,7 @@
                             icon:'success',
                             text:'Abono eliminado con éxito'
                         });
-                        resp.forEach(pedido => {
-                            console.log(pedido);
-                    
-                            $('#tbody_clientes').append(`
-                                <tr>
-                                    <td>`+pedido.num_abono+` </td>
-                                    <td>`+pedido.fecha_emision+` </td>
-                                    <td> <a href='javascript:cargar_pedido(`+pedido.num_abono+`)'> `+pedido.nombre_cliente+`</a> </td>
-                                    <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button> </td>
-                                    <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
-                                    <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente(`+pedido.id+`)'>X</button> </td>
-                                </tr>
-                                
-                            `);
-                        });
+                        ver_historial();
                     }
             },
               
@@ -713,10 +834,11 @@
                                         pedidos_terrestre.forEach( pedido => {
                                             $('#tbody_revision_pedidos_terrestres').append(`
                                             <tr> 
-                                                <td>`+pedido.num_abono+` </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido_modal(`+pedido.id+`)">`+pedido.num_abono+`</a> </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.por_encargo+` </td>
+                                                <td>`+pedido.por_cobrar+`</td>
                                                 <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button>  </td>
                                                 <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente_modal(`+pedido.id+`)'>X</button> </td>
@@ -727,10 +849,11 @@
                                         pedidos_aereos.forEach( pedido => {
                                             $('#tbody_revision_pedidos_aereos').append(`
                                             <tr> 
-                                                <td>`+pedido.num_abono+` </td>
+                                                <td><a href="javascript:void(0)" onclick="cargar_pedido_modal(`+pedido.id+`)">`+pedido.num_abono+` </a> </td>
                                                 <td>`+pedido.fecha_emision+` </td>
                                                 <td>`+pedido.nombre_cliente+` </td>
                                                 <td>`+pedido.por_encargo+` </td>
+                                                <td>`+pedido.por_cobrar+`</td>
                                                 <td><button class='btn btn-success btn-sm' onclick='imprimir_pedido_antiguo(`+pedido.id+`)'><i class="fa-solid fa-print"></i> </button> </td>
                                                 <td><button class='btn btn-warning btn-sm' onclick='imprimir_pedido_admin(`+pedido.id+`)'><i class="fa-solid fa-print"></i></button> </td>
                                                 <td><button class='btn btn-danger btn-sm' onclick='eliminar_cliente_modal(`+pedido.id+`)'>X</button> </td>
@@ -800,8 +923,6 @@
 
       function imprimir_pedido_antiguo(id_abono){
         let url = '/ventas/imprimir_pedido/'+id_abono;
-        //   var url='{{url("ventas/imprimir_pedido")}}';
-        //   let parametros = {id_abono: id_abono};
 
           $.ajaxSetup({
                 headers: {
@@ -816,20 +937,20 @@
                
                 Vue.swal.close();
 
-                        let r=JSON.parse(resp);
-                            if(r.estado=='OK'){
-                                var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
-                                var w=window.open(r.mensaje,'_blank',config);
-                                // w.focus();
-                            }else{
-                                Vue.swal({
-                                    title: r.estado,
-                                    text: r.mensaje,
-                                    icon: 'error',
-                                });
-                            }
-                    limpiar_todo();
-                    },
+                let r=JSON.parse(resp);
+                    if(r.estado=='OK'){
+                        var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
+                        var w=window.open(r.mensaje,'_blank',config);
+                        // w.focus();
+                    }else{
+                        Vue.swal({
+                            title: r.estado,
+                            text: r.mensaje,
+                            icon: 'error',
+                        });
+                    }
+                limpiar_todo();
+                },
               
               error: function(err){
                 console.log(err.responseText);
@@ -906,16 +1027,14 @@
           $.ajax({
               type:'get',
               url: url,
-              success: function(resp){
+              success: function(url){
                
                 Vue.swal.close();
+                var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
+                var w=window.open(url,'_blank',config);
+                w.focus();
 
-                Vue.swal({
-                    title: 'Info',
-                    text: resp,
-                    icon: 'info',
-                })
-                    limpiar_todo();
+                limpiar_todo();
             },
               
               error: function(err){
@@ -949,201 +1068,507 @@
     <h4 class="titulazo">Generar pedidos</h4>
     <div class="container-fluid" style="width: 97%; margin: 0px auto;">
         <img src="{{asset('storage/imagenes/logo_pos.png')}}" alt="" class="logo_">
-        <div class="row mb-5" style="background: rgb(207, 255, 255);
-        padding: 10px;
-        border-radius: 10px;" id="info_cliente">
-            <div class="col-md-6">
-                <div class="form-group">
-                    <label for="nombre">Nombre del cliente</label>
-                    <input type="text" class="form-control" placeholder="Nombre del cliente" name="nombre" id="nombre">
+        <div class="row mb-4" id="info_cliente">
+
+            <div class="col-md-12">
+        
+                <div class="card shadow-sm">
+        
+                    <div class="card-header bg-light">
+                        Datos del cliente
+                    </div>
+        
+                    <div class="card-body">
+        
+                        <div class="row">
+        
+                            <div class="col-md-3">
+                                <label>Nombre del cliente</label>
+                                <input type="text"
+                                       class="form-control"
+                                       name="nombre"
+                                       id="nombre"
+                                       placeholder="Nombre del cliente">
+                            </div>
+
+                            <div class="col-md-2">
+                                <label>Teléfono</label>
+                                <input type="text"
+                                       name="telefono"
+                                       id="telefono"
+                                       class="form-control">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label>Email</label>
+                                <input type="text"
+                                       name="email"
+                                       id="email"
+                                       class="form-control">
+                            </div>
+
+                            <div class="col-md-2">
+                                <label>Patente <small class="text-muted">(opcional)</small></label>
+                                <input type="text"
+                                       name="patente"
+                                       id="patente"
+                                       class="form-control text-uppercase"
+                                       maxlength="10"
+                                       placeholder="Ej: AB1234"
+                                       oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
+                            </div>
+
+                            <div class="col-md-2">
+                                <label>Responsable</label>
+        
+                                <select name="responsable"
+                                        id="responsable"
+                                        class="form-control">
+        
+                                    <option value="">
+                                        Seleccione
+                                    </option>
+        
+                                    @foreach($usuarios as $usuario)
+                                        <option value="{{$usuario->id}}">
+                                            {{$usuario->name}}
+                                        </option>
+                                    @endforeach
+        
+                                </select>
+        
+                            </div>
+        
+                        </div>
+        
+        
+                        <!-- BOTONES -->
+        
+                        <div class="mt-3 text-right">
+        
+                            <button class="btn btn-success btn-sm"
+                                    onclick="registrar_cliente()"
+                                    id="btn_registrar_cliente">
+        
+                                Registrar cliente
+        
+                            </button>
+        
+                            <button class="btn btn-secondary btn-sm" onclick="revisar_pedidos()">Pedidos urgentes</button>
+
+                            <button class="btn btn-warning btn-sm"
+                                    onclick="ver_historial()"
+                                    data-toggle="modal"
+                                    data-target="#exampleModal">
+        
+                                Historial de pedidos
+        
+                            </button>
+        
+        
+                            <button class="btn btn-primary btn-sm"
+                                    onclick="nuevo_cliente()">
+        
+                                Nuevo cliente
+        
+                            </button>
+        
+                        </div>
+        
+                    </div>
+        
                 </div>
-                
+        
             </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label for="telefono">Telefono</label>
-                    <input type="text" name="telefono" id="telefono" class="form-control">
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                <label for="email">Email</label>
-                <input type="text" name="email" id="email" class="form-control">
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label for="responsable">Responsable</label>
-                    <select name="responsable" id="responsable" class="form-control">
-                        <option value="">Seleccione un responsable</option>
-                        @foreach($usuarios as $usuario)
-                            <option value="{{$usuario->id}}">{{$usuario->name}}</option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-            <button class='btn btn-success btn-sm ' onclick='registrar_cliente()' id="btn_registrar_cliente">Registrar Cliente </button>
-            <button class="btn btn-warning btn-sm" onclick="ver_historial()" data-toggle="modal" data-target="#exampleModal">Historial de pedidos</button>
-            <button class="btn btn-primary btn-sm" onclick="nuevo_cliente()">Nuevo cliente</button>
+        
         </div>
         
-        <div id="tablero">
+        <div id="tablero" class="mb-4">
+
             <div class="row">
-                <div class="col-md-8" style="background: #f2f4a9;
-                padding: 10px;
-                border-radius: 10px;">
-                    <div class='row mt-3'>
-                        <div class='col-md-1'>
-                            <p class='thead'>Cantidad</p>
+        
+                <!-- PANEL INGRESO -->
+                <div class="col-md-8">
+        
+                    <div class="card shadow-sm">
+        
+                        <div class="card-header bg-light">
+                            Agregar repuesto
                         </div>
-                        <div class='col-md-3'>
-                            <p class='thead'>Descripcion</p>
-                        </div>
-                        <div class="col-md-2">
-                            <p class="thread">Proveedor</p>
-                        </div>
-                        <div class='col-md-3'>
-                            <p class='thead'>Precio unitario</p>
-                        </div>
-                        <div class='col-md-3'>
-                            <p class='thead'>Total</p>
-                        </div>
-                    </div>
-                    <div class='row'>
-                        <div class='col-md-1'> 
-                            <input type='text' id='cantidad' name='cantidad' class='form-control' placeholder="Ingrese cantidad" onKeyPress="return soloNumeros(event)"  />
-                        </div>
-                        <div class='col-md-3'>
-                            <input type='text' id='descripcion' name='descripcion' placeholder="Ingrese descripcion o código interno del repuesto" style='width: 100%' class='form-control' />
-                        </div>
-                        <div class="col-md-2">
-                            <select name="proveedor" id="proveedor" class="form-control">
-                                <option value="">Seleccione un proveedor</option>
-                                @foreach($proveedores as $proveedor)
-                                    <option value="{{$proveedor->id}}">{{$proveedor->empresa_nombre_corto}}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class='col-md-3'>
-                            <input type='number' id='precio_unitario' onkeypress="calcular_total()" name='precio_unitario' placeholder="Ingrese valor unitario" class='form-control' />
-                        </div>
-                        <div class='col-md-3'>
-                            <input type='number' id='total' name='total' class='form-control' disabled />
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <table class="table">
-                        <thead class="thead-dark">
-                          <tr>
-                            <th scope="col">Cant.</th>
-                            <th scope="col">Descripción</th>
-                            <th scope="col">P.U.</th>
-                            <th scope="col">Total</th>
-                            <th scope="col">Estado</th>
-                            <th scope="col">Eliminar</th>
-                          </tr>
-                        </thead>
-                        <tbody id="tbody_historial" style="font-size: 13px;">
-                          
-                          
-                        </tbody>
-                      </table>
-                      <button class='btn btn-warning btn-sm mb-5' onclick='pagar_pendiente()' id="btn_pago">Pagar saldo pendiente </button> 
-                </div>
-            </div>
-            
-                <button class='btn btn-success btn-sm mt-4' onclick='agregar_repuesto()'>Agregar repuesto </button>
-                <button class='btn btn-warning btn-sm mt-4' onclick='limpiar_controles()'>Limpiar </button>
-            </div>
-            <div class="mb-5"></div>
-            <div id="tablero_select">
-                <div class="row">
-                    <div class="col-md-8" style="background: #cfffff;
-                    padding: 10px;
-                    border-radius: 10px;">
-                        <div class='row'>
-                            <div class='col-md-4'>
-                                <p class='thead'>Abono</p>
-                            </div>
-                            <div class='col-md-4'>
-                                <p class='thead'>Saldo pendiente</p>
-                            </div>
-                            <div class='col-md-4'>
-                                <p class='thead'>Precio lista</p>
-                            </div>
-                        </div>
+        
+                        <div class="card-body">
+
+                            <!-- FILA 1 -->
                         
-                        <div class='row'>
-                            <div class='col-md-4'>
-                                <input type='text' name='abono' id='abono' class='form-control' onKeyPress="return soloNumeros(event)"/>
-                                <button class="btn btn-success btn-sm mt-2" onclick="calcular_saldo_pendiente()">Calcular</button>
+                            <div class="row">
+                        
+                                <div class="col-md-2">
+                                    <label>Cantidad</label>
+                                    <input type="text"
+                                           id="cantidad"
+                                           class="form-control"
+                                           onkeypress="return soloNumeros(event)">
+                                </div>
+                        
+                                <div class="col-md-3">
+                                    <label>Cód. proveedor</label>
+                                    <input type="text"
+                                           id="codigo_proveedor"
+                                           class="form-control"
+                                           placeholder="Código proveedor">
+                                </div>
+                        
+                                <div class="col-md-4">
+                                    <label>Descripción</label>
+                                    <input type="text"
+                                           id="descripcion"
+                                           class="form-control"
+                                           placeholder="Descripción o código interno">
+                                </div>
+                        
+                                <div class="col-md-3">
+                                    <label>Proveedor</label>
+                                    <select id="proveedor"
+                                            class="form-control">
+                        
+                                        <option value="">
+                                            Seleccione
+                                        </option>
+                        
+                                        @foreach($proveedores as $proveedor)
+                                            <option value="{{$proveedor->id}}">
+                                                {{$proveedor->empresa_nombre_corto}}
+                                            </option>
+                                        @endforeach
+                        
+                                    </select>
+                                </div>
+                        
                             </div>
-                            <div class='col-md-4'>
-                                <input type='text' name='saldo_pendiente' id='saldo_pendiente' value="" class='form-control' disabled />
+                        
+                        
+                            <!-- FILA 2 -->
+                        
+                            <div class="row mt-3">
+                        
+                                <div class="col-md-3">
+                                    <label>Precio unitario</label>
+                                    <input type="number"
+                                           id="precio_unitario"
+                                           class="form-control"
+                                           onkeyup="calcular_total()">
+                                </div>
+                        
+                                <div class="col-md-3">
+                                    <label>Total</label>
+                                    <input type="number"
+                                           id="total"
+                                           class="form-control"
+                                           disabled>
+                                </div>
+                        
+                                <div class="col-md-6 d-flex align-items-end">
+                        
+                                    <button class="btn btn-success mr-2"
+                                            onclick="agregar_repuesto()">
+                        
+                                        Agregar repuesto
+                        
+                                    </button>
+                        
+                                    <button class="btn btn-secondary"
+                                            onclick="limpiar_controles()">
+                        
+                                        Limpiar
+                        
+                                    </button>
+                        
+                                </div>
+                        
                             </div>
-                            <div class='col-md-4'>
-                                <input type='text' name='precio_lista' id='precio_lista' value="" class='form-control' disabled />
-                            </div>
+                        
                         </div>
+        
                     </div>
+        
                 </div>
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class='row mt-5 div_select'>
-                            <div class='col-md-6'>
-                                <label>Servicio por encargo </label>
-                            </div>
-                            <div class='col-md-6'>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="flexRadioDefault1" id="flexRadioAereo" value='aereo'>
-                                    <label class="form-check-label" for="flexRadioDefault1">
-                                        Aereo
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="flexRadioDefault1" id="flexRadioterrestre" value='terrestre' checked>
-                                    <label class="form-check-label" for="flexRadioDefault2">
-                                        Terrestre
-                                    </label>
-                                </div>
-                            </div>
+        
+        
+                <!-- PANEL HISTORIAL -->
+                <div class="col-md-4">
+        
+                    <div class="card shadow-sm">
+        
+                        <div class="card-header bg-light">
+                            Repuestos agregados
                         </div>
-                    </div>
-                    
-                </div>
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class='row mt-5 div_select'>
-                            <div class='col-md-6'>
-                                <label>Por cobrar </label>
+        
+                        <div class="card-body p-0">
+        
+                            <div class="mt-4" style="max-height:350px; overflow:auto;">
+        
+                                <table class="table table-sm table-striped mb-0">
+        
+                                    <thead class="thead-light">
+        
+                                        <tr>
+                                            <th>Cant</th>
+                                            <th>Desc</th>
+                                            <th>P.U</th>
+                                            <th>Total</th>
+                                            <th>Prov</th>
+                                            <th></th>
+                                        </tr>
+        
+                                    </thead>
+        
+                                    <tbody id="tbody_historial"
+                                           style="font-size:12px;">
+        
+                                    </tbody>
+        
+                                </table>
+        
                             </div>
-                            <div class='col-md-6'>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="flexRadioDefault2" id="flexRadioCobrarSi" value='si'>
-                                    <label class="form-check-label" for="flexRadioDefault2">
-                                        Sí
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="flexRadioDefault2" id="flexRadioCobrarNo" value='no' checked>
-                                    <label class="form-check-label" for="flexRadioDefault2">
-                                        No
-                                    </label>
-                                </div>
-                            </div>
+        
                         </div>
+        
+                        <div class="card-footer text-right">
+        
+                            <button class="btn btn-warning btn-sm"
+                                    onclick="pagar_pendiente()"
+                                    id="btn_pago">
+        
+                                Pagar saldo pendiente
+        
+                            </button>
+        
+                        </div>
+        
                     </div>
+        
                 </div>
-                <div>
-                    <button class='btn btn-success btn-sm mb-5' onclick='registrar()'>Registrar </button>
-                    {{-- <button class='btn btn-warning btn-sm mb-5' onclick='pagar_pendiente()'>Pagar saldo pendiente </button> --}}
+        
+            </div>
+        
+        </div>
+     
+        <div id="tablero_select">
+            <div class="row">
+                <div class="col-md-8">
+
+                    <div class="card shadow-sm">
+                
+                        <div class="card-header bg-light">
+                            Datos de pago
+                        </div>
+                
+                        <div class="card-body">
+                
+                            <div class="row">
+                
+                                <div class="col-md-3">
+                                    <label>Precio lista</label>
+                                    <input type="text"
+                                            id="precio_lista"
+                                            name="precio_lista"
+                                            class="form-control"
+                                            disabled>
+                                </div>
+                
+                                <div class="col-md-3">
+                                    <label>Abono</label>
+                                    <input type="text"
+                                            id="abono"
+                                            name="abono"
+                                            class="form-control"
+                                            onkeypress="return soloNumeros(event)">
+                                </div>
+                
+                                <div class="col-md-3">
+                                    <label>Saldo pendiente</label>
+                                    <input type="text"
+                                            id="saldo_pendiente"
+                                            name="saldo_pendiente"
+                                            class="form-control"
+                                            disabled>
+                                </div>
+                
+                                <div class="col-md-3">
+                                    <label>Forma de pago</label>
+                
+                                    <select class="form-control"
+                                            name="forma_pago"
+                                            id="forma_pago">
+                
+                                        <option value="">Seleccione</option>
+                
+                                        @foreach($formas_pago as $fp)
+                                            <option value="{{ $fp->id }}">
+                                                {{ $fp->formapago }}
+                                            </option>
+                                        @endforeach
+                
+                                    </select>
+                
+                                </div>
+                
+                            </div>
+                
+                
+                            <div class="row mt-3">
+                
+                                <div class="col-md-12 text-right">
+                
+                                    <button class="btn btn-success"
+                                            onclick="calcular_saldo_pendiente()">
+                
+                                        Calcular saldo
+                
+                                    </button>
+                
+                                </div>
+                
+                            </div>
+                
+                        </div>
+                
+                    </div>
+                
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-8">
+
+                    <div class="card shadow-sm mt-3">
+                
+                        <div class="card-header bg-light">
+                            Opciones del pedido
+                        </div>
+                
+                        <div class="card-body">
+                
+                            <!-- SERVICIO POR ENCARGO -->
+                
+                            <div class="row mb-3">
+                
+                                <div class="col-md-4">
+                                    <label class="font-weight-bold">
+                                        Servicio por encargo
+                                    </label>
+                                </div>
+                
+                                <div class="col-md-8">
+                
+                                    <div class="form-check form-check-inline">
+                
+                                        <input class="form-check-input"
+                                                type="radio"
+                                                name="tipo_envio"
+                                                id="flexRadioAereo"
+                                                value="aereo">
+                
+                                        <label class="form-check-label"
+                                                for="flexRadioAereo">
+                
+                                            Aéreo
+                
+                                        </label>
+                
+                                    </div>
+                
+                
+                                    <div class="form-check form-check-inline">
+                
+                                        <input class="form-check-input"
+                                                type="radio"
+                                                name="tipo_envio"
+                                                id="flexRadioTerrestre"
+                                                value="terrestre"
+                                                checked>
+                
+                                        <label class="form-check-label"
+                                                for="flexRadioTerrestre">
+                
+                                            Terrestre
+                
+                                        </label>
+                
+                                    </div>
+                
+                                </div>
+                
+                            </div>
+                
+                
+                            <!-- POR COBRAR -->
+                
+                            <div class="row mb-3">
+                
+                                <div class="col-md-4">
+                                    <label class="font-weight-bold">
+                                        Por cobrar
+                                    </label>
+                                </div>
+                
+                                <div class="col-md-8">
+                
+                                    <div class="form-check form-check-inline">
+                
+                                        <input class="form-check-input"
+                                                type="radio"
+                                                name="por_cobrar"
+                                                id="flexRadioCobrarSi"
+                                                value="si">
+                
+                                        <label class="form-check-label"
+                                                for="flexRadioCobrarSi">
+                
+                                            Sí
+                
+                                        </label>
+                
+                                    </div>
+                
+                
+                                    <div class="form-check form-check-inline">
+                
+                                        <input class="form-check-input"
+                                                type="radio"
+                                                name="por_cobrar"
+                                                id="flexRadioCobrarNo"
+                                                value="no"
+                                                checked>
+                
+                                        <label class="form-check-label"
+                                                for="flexRadioCobrarNo">
+                
+                                            No
+                
+                                        </label>
+                
+                                    </div>
+                
+                                </div>
+                
+                            </div>
+                
+                        </div>
+                
+                    </div>
+                
                 </div>
             </div>
             
+            <div class="my-3">
+                <button class='btn btn-success btn-sm mb-5' onclick='registrar()'>Registrar </button>
+                {{-- <button class='btn btn-warning btn-sm mb-5' onclick='pagar_pendiente()'>Pagar saldo pendiente </button> --}}
+            </div>
+        </div>
+        
         <!-- Modal -->
-        <div class="modal fade bd-example-modal-lg" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal fade bd-example-modal-xl" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
             <div class="modal-content">
                 <div class="modal-header">
                 <h5 class="modal-title" id="exampleModalLabel">Listado de clientes</h5>
@@ -1152,22 +1577,57 @@
                 </button>
                 </div>
                 <div class="modal-body">
-                    <table class="table table-striped">
-                        <thead>
-                          <tr>
-                            <th scope="col">N° Pedido</th>
-                            <th scope="col">Fecha</th>
-                            <th scope="col">Cliente</th>
-                            <th scope="col">Responsable</th>
-                            <th scope="col">Imprimir</th>
-                            <th scope="col"></th>
-                            <th scope="col">Eliminar</th>
-                          </tr>
-                        </thead>
-                        <tbody id="tbody_clientes">
-                          
-                        </tbody>
-                      </table>
+                    <div class="row">
+                        <div class="col-md-9">
+                            <div class="tabla-scroll-y-500">
+                                <table class="table table-striped">
+                                    <thead>
+                                      <tr>
+                                        <th scope="col">N° Pedido</th>
+                                        <th scope="col">Fecha</th>
+                                        <th scope="col">Cliente</th>
+                                        <th scope="col">Tipo</th>
+                                        <th scope="col">Por pagar</th>
+                                        <th scope="col">Responsable</th>
+                                        <th scope="col">Imprimir</th>
+                                        <th scope="col">Eliminar</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody id="tbody_clientes">
+                                      
+                                    </tbody>
+                                  </table>
+                            </div>
+                            
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-light p-2">
+                                    Repuestos del pedido
+                                </div>
+                            
+                                <div class="card-body p-0">
+                                    
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Cant</th>
+                                                <th>Detalle</th>
+                                                <th>$</th>
+                                            </tr>
+                                        </thead>
+                            
+                                        <tbody id="contenedor_repuestos_pedidos_historial">
+                            
+                                        </tbody>
+                            
+                                    </table>
+                            
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                 </div>
                 <div class="modal-footer">
                 <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
@@ -1177,8 +1637,8 @@
             </div>
         </div>
         <!-- Modal revisión de pedidos -->
-        <div class="modal fade bd-example-modal-lg" id="modalRevisionPedidos" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal fade bd-example-modal-xl" id="modalRevisionPedidos" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
             <div class="modal-content">
                 <div class="modal-header">
                 <h5 class="modal-title" id="exampleModalLabel">Listado de Pedidos Urgentes</h5>
@@ -1187,43 +1647,76 @@
                 </button>
                 </div>
                 <div class="modal-body">
-                    <p>Listado de pedidos terrestres desde hace 21 días.</p>
-                    <table class="table table-striped">
-                        <thead>
-                          <tr>
-                            <th scope="col">N° Pedido</th>
-                            <th scope="col">Fecha</th>
-                            <th scope="col">Cliente</th>
-                            <th scope="col">Responsable</th>
-                            <th scope="col">Tipo</th>
-                            <th scope="col">Imprimir</th>
-                            <th scope="col"></th>
-                            <th scope="col"></th>
-                          </tr>
-                        </thead>
-                        <tbody id="tbody_revision_pedidos_terrestres">
-                          
-                        </tbody>
-                      </table>
-                        <hr>
-                        <p>Listado de pedidos aéreos desde hace 14 días.</p>
-                      <table class="table table-striped">
-                        <thead>
-                          <tr>
-                            <th scope="col">N° Pedido</th>
-                            <th scope="col">Fecha</th>
-                            <th scope="col">Cliente</th>
-                            <th scope="col">Responsable</th>
-                            <th scope="col">Tipo</th>
-                            <th scope="col">Imprimir</th>
-                            <th scope="col"></th>
-                            <th scope="col"></th>
-                          </tr>
-                        </thead>
-                        <tbody id="tbody_revision_pedidos_aereos">
-                          
-                        </tbody>
-                      </table>
+                    <div class="row">
+                        <div class="col-md-9">
+                            <p>Listado de pedidos terrestres desde hace 21 días.</p>
+                            <table class="table table-striped">
+                                <thead>
+                                  <tr>
+                                    <th scope="col">N° Pedido</th>
+                                    <th scope="col">Fecha</th>
+                                    <th scope="col">Cliente</th>
+                                    <th scope="col">Responsable</th>
+                                    <th scope="col">Tipo</th>
+                                    <th scope="col">Por cobrar</th>
+                                    <th scope="col">Imprimir</th>
+                                    <th scope="col"></th>
+                                    <th scope="col"></th>
+                                  </tr>
+                                </thead>
+                                <tbody id="tbody_revision_pedidos_terrestres">
+                                  
+                                </tbody>
+                            </table>
+                                <hr>
+                                <p>Listado de pedidos aéreos desde hace 14 días.</p>
+                              <table class="table table-striped">
+                                <thead>
+                                  <tr>
+                                    <th scope="col">N° Pedido</th>
+                                    <th scope="col">Fecha</th>
+                                    <th scope="col">Cliente</th>
+                                    <th scope="col">Responsable</th>
+                                    <th scope="col">Tipo</th>
+                                    <th scope="col">Por pagar</th>
+                                    <th scope="col">Imprimir</th>
+                                    <th scope="col"></th>
+                                    <th scope="col"></th>
+                                  </tr>
+                                </thead>
+                                <tbody id="tbody_revision_pedidos_aereos">
+                                  
+                                </tbody>
+                              </table>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-light p-2">
+                                    Repuestos del pedido
+                                </div>
+                            
+                                <div class="card-body p-0">
+                            
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Cant</th>
+                                                <th>Detalle</th>
+                                                <th>$</th>
+                                            </tr>
+                                        </thead>
+                            
+                                        <tbody id="contenedor_repuestos_pedidos">
+                            
+                                        </tbody>
+                            
+                                    </table>
+                            
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                 </div>
                 <div class="modal-footer">
                 <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>

@@ -3,7 +3,7 @@
 @elseif($tipodte == 39)
     <p>Detalle de boleta N° {{$boleta->num_boleta}} con fecha {{$boleta->fecha_emision}} creada por {{$boleta->name}}</p>
 @elseif($tipodte == 61)
-    <p>Detalle de boleta N° {{$boleta->num_nota_credito}} con fecha {{$boleta->fecha_emision}} creada por {{$boleta->name}}</p>
+    <p>Detalle de Nota Crédito N° {{$boleta->num_nota_credito}} con fecha {{$boleta->fecha_emision}} creada por {{$boleta->name}}</p>
 @endif
 <button class="btn btn-success btn-sm m-2" data-toggle="modal" data-target="#modalModificarBoleta">Modificar</button>
 @if($boleta->es_credito == 1)
@@ -24,8 +24,8 @@
       <tbody>
           
             @foreach($boleta_detalle as $b)
-            <tr>
-                <td>{{$b->codigo_interno}}</td>
+            <tr @if(isset($repuesto) && $repuesto->codigo_interno == $b->codigo_interno) style="background: red; color: white;" @endif>
+                <td >{{$b->codigo_interno}} </td>
                 <td>{{$b->descripcion}}</td>
                 <td>{{$b->cantidad}}</td>
                 <td>${{number_format($b->precio_venta)}}</td>

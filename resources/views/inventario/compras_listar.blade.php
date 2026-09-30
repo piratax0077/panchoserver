@@ -106,157 +106,188 @@
       }
 
 
+      function normalizarMonto(valor)
+      {
+        if(valor === null || valor === undefined){
+          return 0;
+        }
+
+        let texto = String(valor).trim();
+
+        // Formato chileno: 100.000 o 100.000,50
+        if(texto.includes(',')){
+          texto = texto.replace(/\./g, '').replace(',', '.');
+        }else{
+          // En este formulario el punto se utiliza como separador de miles.
+          texto = texto.replace(/\./g, '');
+        }
+
+        let monto = Number(texto);
+        return Number.isFinite(monto) ? monto : 0;
+      }
+
       function pagada(idFactura){
         let url = '{{url("compras")}}'+'/pagar_factura';
-        let paguitos=$('input[name="forma_pago"]:checked');
-        //Si no selecciona ningún check??
-        let seleccionados=paguitos.length;
-        if(seleccionados==0)
+        let paguitos = $('input[name="forma_pago"]:checked');
+
+        if(paguitos.length === 0)
         {
+          Vue.swal({
+            text: 'Debe seleccionar al menos una forma de pago',
+            position: 'top-end',
+            icon: 'error',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+          return false;
+        }
+
+        let id_forma_pago = [];
+        let monto_forma_pago = [];
+        let referencia_forma_pago = [];
+        let errorPago = false;
+
+        paguitos.each(function() {
+          let idFormaPago = $(this).val();
+          let texto_seleccionado = $.trim($(this).parent().text()).toUpperCase();
+          let monto = normalizarMonto($('#monto-'+idFormaPago).val());
+          let referencia = String($('#referencia-'+idFormaPago).val() || '').trim().toUpperCase();
+
+          if(monto <= 0)
+          {
             Vue.swal({
-                text: 'Debe seleccionar al menos una forma de pago',
+              text: texto_seleccionado+': Monto vacío, cero o no es un número válido.',
+              position: 'top-end',
+              icon: 'error',
+              toast: true,
+              showConfirmButton: false,
+              timer: 4000,
+            });
+            errorPago = true;
+            return false;
+          }
+
+          if(referencia.length === 0)
+          {
+            Vue.swal({
+              text: texto_seleccionado+': Debe ingresar una referencia.',
+              position: 'top-end',
+              icon: 'error',
+              toast: true,
+              showConfirmButton: false,
+              timer: 4000,
+            });
+            errorPago = true;
+            return false;
+          }
+
+          id_forma_pago.push(idFormaPago);
+          monto_forma_pago.push(monto);
+          referencia_forma_pago.push(referencia);
+        });
+
+        // return false dentro de each() sólo detiene el recorrido; aquí detenemos pagada().
+        if(errorPago){
+          return false;
+        }
+
+        if(total_pagado() === 'SI')
+        {
+          Vue.swal({
+            title: 'ATENCIÓN!!!',
+            text: 'Total a pagar no coincide con el total de la factura',
+            position: 'center',
+            icon: 'error',
+            showConfirmButton: false,
+            timer: 5000,
+          });
+          return false;
+        }
+
+        let parametros = {
+          idfactura: idFactura,
+          forma_pago: id_forma_pago,
+          monto: monto_forma_pago,
+          referencia: referencia_forma_pago,
+        };
+
+        $.ajaxSetup({
+          headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+          }
+        });
+
+        $.ajax({
+          type: 'POST',
+          data: parametros,
+          url: url,
+          beforeSend: function () {
+            $('#btnPagarFactura').prop('disabled', true);
+            $('#mensajes').html('Pagando Factura...');
+          },
+          success: function(resp){
+            if(resp.estado === 'OK'){
+              $('#formCabFac').modal('hide');
+
+              Vue.swal({
+                icon: 'success',
+                text: resp.mensaje || 'Factura pagada correctamente',
                 position: 'top-end',
-                icon: 'error',
+                timer: 3000,
                 toast: true,
                 showConfirmButton: false,
-                timer: 3000,
-                });
-            return false;
-        }
-        //inicio paguitos
-        
-        var id_forma_pago=[];
-        var monto_forma_pago=[];
-        var referencia_forma_pago=[];
-        var m="";
-        var r="";
-        var monto="";
-        var referencia_pago="";
-        let error=false;
-        paguitos.each(function() {
-            //Si los checks seleccionados no tienen monto ni referencia??
-            var texto_seleccionado=$(this)[0].nextSibling.nodeValue.toUpperCase().trim();
-            m="monto-"+$(this).val();
-            monto=document.getElementById(m).value;
-            //console.log("Checkbox " + $(this).prop("id") +  " (" + $(this).val() + ") Seleccionado MONTO-m: "+m+" TEXTO: "+texto_seleccionado+" monto-valor: "+Number(monto));
-            if(isNaN(monto) || Number(monto)<=0)
-            {
-                Vue.swal({
-                    text: texto_seleccionado+": Monto vacio, cero o no es un número válido.",
-                    position: 'top-end',
-                    icon: 'error',
-                    toast: true,
-                    showConfirmButton: false,
-                    timer: 4000,
-                    });
-                error=true;
-                return false; //sale del bucle jquery paguitos.each
+              });
+
+              $('#mensajes').html('PAGADA');
+
+              // Volver a consultar BD: evita arrastrar estado visual de la factura anterior.
+              dameFacturasDelProveedor();
+              dameFactura(idFactura);
+            }
+          },
+          error: function(xhr){
+            let mensaje = 'No fue posible registrar el pago.';
+
+            if(xhr.responseJSON){
+              mensaje = xhr.responseJSON.mensaje || xhr.responseJSON.message || mensaje;
+            }else if(xhr.responseText){
+              mensaje = xhr.responseText;
             }
 
-            r="referencia-"+$(this).val();
-            referencia_pago=document.getElementById(r).value.toUpperCase().trim();
-            if(referencia_pago.length==0)
-            {
-                Vue.swal({
-                    text: texto_seleccionado+": Referencia vacia, cero o no es un número válido.",
-                    position: 'top-end',
-                    icon: 'error',
-                    toast: true,
-                    showConfirmButton: false,
-                    timer: 4000,
-                    });
-                error=true;
-                return false; //sale del bucle jquery paguitos.each
-            }
-
-            id_forma_pago.push($(this).val());
-            monto_forma_pago.push(monto);
-            referencia_forma_pago.push(referencia_pago);
-        }); // fin de paguitos
-
-        var error_pago=total_pagado();
-       
-        if(error_pago=="SI")
-        {
-            mensaje_error="Total a Pagar no coincide con Total Venta";
             Vue.swal({
-                title:"ATENCIÓN!!!",
-                text: mensaje_error,
-                position: 'center',
-                icon: 'error',
-                showConfirmButton: false,
-                timer: 5000,
-                });
-            return false;
-        }
-
-        let parametros={
-          idfactura: idFactura,
-          forma_pago:id_forma_pago,
-          monto:monto_forma_pago,
-          referencia:referencia_forma_pago,
-          };
-          console.log(error_pago);
-          
-
-          $.ajaxSetup({
-            headers: {
-              'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            }
+              icon: 'error',
+              title: 'No se pudo pagar la factura',
+              text: mensaje,
             });
-        $.ajax({
-            type:'POST',
-            data: parametros,
-            beforeSend: function () {
-              $("#mensajes").html("Pagando Factura...");
-            },
-            url:url,
-            success:function(resp){
-              
-              if(resp[0] == 'OK'){
-                
-                  Vue.swal({
-                    icon:'success',
-                    text:'Factura pagada',
-                    position:'top-end',
-                    timer: 3000,
-                    toast: true,
-                    showConfirmButton: false,
-                  });
-                  $('#idpagada').empty();
-                  $('#idfactura_lista-'+resp[1]).empty();
 
-                  $('#idpagada').append('<span class="badge badge-success">Pagada</span>');
-                  $('#idfactura_lista-'+resp[1]).append('<span class="badge badge-success">Pagada</span>');
-                  $("#formCabFac").modal('hide');
-               $("#mensajes").html('PAGADA');
-              }
-              
-            },
-            error: function(xhr, status, error){
-              var errorMessage = xhr.status + ': ' + xhr.statusText
-              $('#mensajes').html(errorMessage);
-            }
-
-          }); //Fin ajax
+            $('#mensajes').html(mensaje);
+          },
+          complete: function(){
+            $('#btnPagarFactura').prop('disabled', false);
+          }
+        });
       }
 
       function calcular_sumatoria()
       {
-        var total_pago=0;
-        var paguitos=$('input[name="forma_pago"]:checked');
-        var monto=0;
-        var m="";
+        let total_pago = 0;
+        let paguitos = $('input[name="forma_pago"]:checked');
 
         paguitos.each(function() {
-          m="monto-"+$(this).val();
-          monto=Number(document.getElementById(m).value.replace(/\./g,""));
-          
-          total_pago=total_pago+monto;
-          
-          
+          total_pago += normalizarMonto($('#monto-'+$(this).val()).val());
         });
+
         return total_pago;
+      }
+
+      function total_pagado()
+      {
+        let total_pago = calcular_sumatoria();
+        let total_factura = normalizarMonto($('#valor_total_factura').val());
+        let diferencia = Math.abs(total_pago - total_factura);
+
+        return diferencia > 2 ? 'SI' : 'NO';
       }
 
       function total_pagado()
@@ -337,29 +368,13 @@
         }
 
         function calcular_precio_sugerido(){
-          var fle=document.getElementById("flete").value;
-          var flete=0;
-
-          if(isNaN(fle) || Number(fle)<0 || fle.length==0 )
-          {
-              document.getElementById("flete").value=0;
-          }else{
-              flete=parseInt(fle);
-
-          }
-
-          var pu=parseInt(document.getElementById("nuevo_pu").value);
+          var pu=parseFloat(document.getElementById("nuevo_pu").value);
           var iva=0.19; // Leer de la tabla parámetros
           var utilidad=parseFloat(document.getElementById("utilidad").value)/100.0;
           var ps=document.getElementById("nuevo_ps");
-          var elvalor=pu*(1+utilidad)*(1+iva)+flete;
-
-          
-          if(flete==0 && ps.value>0) //calcula el flete
-          {
-              flete=ps.value-elvalor;
-              document.getElementById("flete").value=flete;
-          }
+          var elvalor=pu*(1+utilidad)*(1+iva);
+          // Recalculo manual con utilidad de familia; guardar sin Calcular conserva el flete existente.
+          document.getElementById("flete").value = Math.max(0, Number(ps.value)-elvalor).toFixed(2);
           Vue.swal({
             icon:'success',
             text:'Precio sugerido actualizado correctamente',

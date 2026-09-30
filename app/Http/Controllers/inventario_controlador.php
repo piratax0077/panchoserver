@@ -3,9 +3,14 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\cajero;
+use App\carrito_virtual;
+use App\carrito_virtual_detalle;
+use App\carrito_transferido;
 use App\local;
 use App\repuesto;
 use App\solicitudes;
+use App\oem;
 use App\pais;
 use App\permissions_detail;
 use App\devolucion_mercaderia;
@@ -211,7 +216,7 @@ class inventario_controlador extends Controller
         try {
             $permisos_detalles = permissions_detail::all();
             foreach($permisos_detalles as $permiso_detalle){
-                if($permiso_detalle->permission_id == 4 && $permiso_detalle->usuarios_id == Auth::user()->id && $permiso->path_ruta == '/solicitudes'){
+                if($permiso_detalle->permission_id == 4 && $permiso_detalle->usuarios_id == Auth::user()->id && $permiso_detalle->path_ruta == '/solicitudes'){
                     $solicitudes = devolucion_mercaderia::where('activo',1)->orderBy('created_at','desc')->groupBy('num_nc')->get();
                     
                     return view('inventario.pedidos_a_bodega',['solicitudes' => $solicitudes]);
@@ -237,6 +242,31 @@ class inventario_controlador extends Controller
         return count($solicitudes);
     }
 
+    public function revisar_totem(){
+        $user_id = Auth::user()->id;
+        // el usuario 16 corresponde a los carros enviados desde el totem
+        $solicitudes = carrito_transferido::select(
+            'carrito_transferido.*',
+            'repuestos.codigo_interno',
+            'repuestos.descripcion',
+            'repuestos.oferta',
+            'repuestos.precio_venta',
+            'repuestos.id as idrepuesto',
+            'u1.name as usuario_nombre',
+            'u2.name as bodeguero_nombre'
+                )
+                ->join('repuestos', 'carrito_transferido.id_repuestos', '=', 'repuestos.id')
+                ->join('users as u1', 'carrito_transferido.usuarios_id', '=', 'u1.id') // Alias para usuario
+                ->leftjoin('users as u2', 'carrito_transferido.id_bodeguero', '=', 'u2.id') // Alias para bodeguero
+                ->where('carrito_transferido.estado', 1)
+                ->distinct()
+                ->groupBy('carrito_transferido.cliente_id')
+                ->orderBy('carrito_transferido.id', 'asc')
+                ->get();
+        
+        return count($solicitudes);
+    }
+
     public function eliminar_solicitud($id){
 
         $solicitud = solicitudes::where('id',$id)->first();
@@ -257,6 +287,241 @@ class inventario_controlador extends Controller
             return $e->getMessage();
         }
         
+    }
+
+    public function dame_ventas_totem(){
+        try {
+            $solicitudes = carrito_transferido::select(
+                'carrito_transferido.*',
+                'repuestos.codigo_interno',
+                'repuestos.descripcion',
+                'repuestos.oferta',
+                'repuestos.precio_venta',
+                'repuestos.id as idrepuesto',
+                'u1.name as usuario_nombre',
+                'u2.name as bodeguero_nombre'
+                    )
+                    ->join('repuestos', 'carrito_transferido.id_repuestos', '=', 'repuestos.id')
+                    ->join('users as u1', 'carrito_transferido.usuarios_id', '=', 'u1.id') // Alias para usuario
+                    ->leftjoin('users as u2', 'carrito_transferido.id_bodeguero', '=', 'u2.id') // Alias para bodeguero
+                    ->where('carrito_transferido.estado', 1)
+                    ->distinct()
+                    ->groupBy('carrito_transferido.cliente_id')
+                    ->orderBy('carrito_transferido.id', 'asc')
+                    ->get();
+
+
+                foreach($solicitudes as $item){
+                    // Convertir a objeto Carbon
+                    $carbon = Carbon::parse($item->created_at);
+                
+                    // Asignar fecha y hora correctamente
+                    $item->fecha = $carbon->format('d-m-Y');
+                    $item->hora = $carbon->format('H:i:s');
+                }
+            $v = view('fragm.tarjetas_pedido_totem',compact('solicitudes'))->render();
+            return $v;
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+        
+    }
+
+    public function aceptar_totem($id){
+        try {
+            $el_id_usuario = Auth::user()->id; 
+            $cajero = cajero::all();
+            $carrito = carrito_virtual::find($id);
+            $detalle = carrito_virtual_detalle::where('carrito_numero',$carrito->id)->get();
+            $cliente_id = 4;
+            foreach($detalle as $cc)
+            {
+                $repuesto = repuesto::find($cc->repuesto_id);
+                $ct=new carrito_transferido;
+                $ct->usuarios_id = $el_id_usuario;
+                $ct->cajeros_id = $cajero[0]->id;
+                $ct->cliente_id = $cliente_id;
+                $ct->item=$cc->item;
+                $ct->id_repuestos=$cc->repuesto_id;
+                $ct->id_local=1; // por defecto
+                $ct->id_unidad_venta=$repuesto->id_unidad_venta;
+                $ct->cantidad=$cc->cantidad;
+                $ct->pu=$cc->pu;
+                $ct->subtotal_item=$cc->subtotal_item;
+                $ct->descuento_item=$cc->descuento_item;
+                $ct->total_item=$cc->total_item;
+                $ct->titulo = 'TOTEM';
+                $ct->save();
+    
+                // auth()->user()->notify(new CarritoTransferidoNotification($ct));
+    
+                // User::all()
+                // ->except($ct->usuarios_id)
+                // ->each(function(User $user) use ($ct){
+                //     $user->notify(new CarritoTransferidoNotification($ct));
+                // });
+    
+            }
+
+            return 'OK';
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
+    }
+
+    public function transferir_carrito_completo($id, $cliente_id, $titulo){
+        $el_id_usuario=Auth::user()->id;
+        $carrito_compra = carrito_compra::where('usuarios_id', $el_id_usuario)->get();
+        foreach($carrito_compra as $cc)
+        {
+            $ct=new carrito_transferido;
+            $ct->usuarios_id = $el_id_usuario;
+            $ct->cajeros_id = $id;
+            $ct->cliente_id = $cliente_id;
+            $ct->item=$cc->item;
+            $ct->id_repuestos=$cc->id_repuestos;
+            $ct->id_local=$cc->id_local;
+            $ct->id_unidad_venta=$cc->id_unidad_venta;
+            $ct->cantidad=$cc->cantidad;
+            $ct->pu=$cc->pu;
+            $ct->subtotal_item=$cc->subtotal_item;
+            $ct->descuento_item=$cc->descuento_item;
+            $ct->total_item=$cc->total_item;
+            $ct->titulo = $titulo;
+            $ct->save();
+
+            // auth()->user()->notify(new CarritoTransferidoNotification($ct));
+
+            // User::all()
+            // ->except($ct->usuarios_id)
+            // ->each(function(User $user) use ($ct){
+            //     $user->notify(new CarritoTransferidoNotification($ct));
+            // });
+
+        }
+        return 'OK';
+    }
+
+    public function dame_venta_totem($id_carrito){
+
+        try {
+    
+            $detalle = carrito_transferido::select(
+                    'carrito_transferido.*',
+                    'repuestos.codigo_OEM_repuesto as codigo_oem',
+                    'repuestos.codigo_interno',
+                    'repuestos.oferta',
+                    'repuestos.descripcion',
+                    'repuestos.id_familia',
+                    'repuestos.cod_repuesto_proveedor',
+                    'repuestos.precio_venta',
+                    'repuestos.id as idrepuesto',
+                    'ofertas_pagina_web.activo',
+                    'marcarepuestos.marcarepuesto',
+                    'users.name',
+                    'locales.local_nombre'
+                )
+                ->where('carrito_transferido.cliente_id',$id_carrito)
+                ->where('carrito_transferido.estado',1)
+                ->join('repuestos','carrito_transferido.id_repuestos','repuestos.id')
+                ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                ->join('locales','carrito_transferido.id_local','locales.id')
+                ->join('users','carrito_transferido.usuarios_id','users.id')
+                ->leftJoin('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
+                ->orderBy('carrito_transferido.item','ASC')
+                ->get();
+    
+    
+            $productos_sustitutos = [];
+    
+    
+            foreach($detalle as $d){
+    
+                $d->id_bodeguero = Auth::user()->id;
+                $d->save();
+    
+    
+                // ✅ 1) buscar OEM del repuesto actual
+    
+                $oems = oem::where('id_repuestos',$d->idrepuesto)
+                    ->where('activo',1)
+                    ->pluck('codigo_oem')
+                    ->toArray();
+    
+    
+                if(count($oems) == 0){
+                    continue;
+                }
+    
+    
+                // ✅ 2) buscar todos los repuestos con esos OEM
+    
+                $idsRelacionados = oem::whereIn('codigo_oem',$oems)
+                    ->where('activo',1)
+                    ->pluck('id_repuestos')
+                    ->toArray();
+    
+    
+                if(count($idsRelacionados) == 0){
+                    continue;
+                }
+    
+    
+                // ✅ 3) buscar repuestos sustitutos
+    
+                $sustitutos = repuesto::whereIn('repuestos.id',$idsRelacionados)
+    
+                    ->whereRaw('(stock_actual > 0 OR stock_actual_dos > 0 OR stock_actual_tres > 0)')
+
+                    ->where('repuestos.activo',1)
+    
+                    ->where('repuestos.id','!=',$d->idrepuesto)
+    
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+    
+                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+    
+                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+    
+                    ->select(
+                        'proveedores.empresa_nombre_corto',
+                        'paises.nombre_pais',
+                        'marcarepuestos.marcarepuesto',
+                        'repuestos.*'
+                    )
+    
+                    ->get();
+    
+    
+                if($sustitutos->count() > 0){
+    
+                    $productos_sustitutos[$d->idrepuesto] = $sustitutos;
+    
+                }
+    
+            }
+    
+    
+            $v = view(
+                'fragm.repuestos_totem',
+                [
+                    'repuestos' => $detalle,
+                    'num_nc' => $id_carrito,
+                    'productos_sustitutos' => $productos_sustitutos
+                ]
+            )->render();
+    
+    
+            return $v;
+    
+    
+        } catch (\Exception $e) {
+    
+            return $e->getMessage();
+    
+        }
+    
     }
 
     public function procesar_solicitud(Request $req){

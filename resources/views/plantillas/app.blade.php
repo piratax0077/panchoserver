@@ -27,13 +27,17 @@
             echo "<link href=\"".asset('css/dev.css')."\" rel='stylesheet'>";
         }
     @endphp
-    
-    <title>@yield('titulo','Default') | {{config('app.name')}}</title>
+<title>@yield('titulo','Default') | {{config('app.name')}}</title>
     <section>
+        <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
+        <script src="{{ asset('vendor/select2/select2.min.js') }}"></script>
+        <!-- Inputmask con jQuery integration explícita (versión bundle completa) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.9/jquery.inputmask.min.js" integrity="sha512-F5Ul1uuyFlGnIT1dk2c4kB4DBdi5wnBJjVhL7gQlGh46Xn0VhvD8kgxLtjdZ5YN83gybk/aASUAlpdoWUjRR3g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/inputmask/5.0.8/inputmask.min.js"></script>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/inputmask/5.0.8/jquery.inputmask.min.js"></script>
         @yield('javascript')
         
-        <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
-        <script type='text/javascript' src="https://rawgit.com/RobinHerbots/jquery.inputmask/3.x/dist/jquery.inputmask.bundle.js"></script>
         <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.min.js"> </script>
         <script src="{{asset('js/mis-libs.js')}}"></script>
         
@@ -62,6 +66,7 @@
                 });
                 repuestos_stock_minimo();
                 repuestos_sin_stock_proveedor();
+                repuestos_stock_critico();
                 dame_porcentaje_ventas();
             });
 
@@ -150,36 +155,31 @@
                 fetch('/ventas/dame_porcentaje_ventas')
                 .then(response => response.json())
                 .then(data => {
-                     console.log(data);
+               
                     let porcentaje = parseFloat(data[0]).toFixed(1);
                     let porcentaje_mitad = parseFloat(data[1]).toFixed(1);
                     let porcentaje_inicial = parseFloat(data[2]).toFixed(1);
+                   
                     if(porcentaje > 0){
-                        porcentaje = porcentaje;
-                        porcentaje_inicial = porcentaje_inicial;
-                        porcentaje_mitad = porcentaje_mitad;
-                        porcentaje_inicial = porcentaje_inicial+'%';
-                            porcentaje_mitad = porcentaje_mitad+'%';
-                            porcentaje = porcentaje+'%';
                         if(porcentaje_inicial >= 100){
-                            porcentaje = porcentaje+'%';
-                            porcentaje_inicial = '<span class="bg-success text-white rounded">'+100+'%'+'</span>';
-                            porcentaje_mitad = porcentaje_mitad+'%';
+                            porcentaje = porcentaje;
+                            porcentaje_inicial = '<span class="bg-success text-white rounded">'+100+'</span>';
+                            porcentaje_mitad = porcentaje_mitad;
                         }
                         if(porcentaje_mitad >= 100){
-                            porcentaje = porcentaje+'%';
-                            porcentaje_mitad = '<span class="bg-success text-white rounded">'+100+'%'+'</span>';
-                            porcentaje_inicial = porcentaje_inicial+'%';
+                            porcentaje = porcentaje;
+                            porcentaje_mitad = '<span class="bg-success text-white rounded">'+100+'</span>';
+                            porcentaje_inicial = porcentaje_inicial;
                         }
                         if(porcentaje >= 100){
 
-                            porcentaje = '<span class="bg-success text-white rounded">'+100+'%'+'</span>';
-                            porcentaje_inicial = porcentaje_inicial+'%';
-                            porcentaje_mitad = porcentaje_mitad+'%';
+                            porcentaje = '<span class="bg-success text-white rounded">'+100+'</span>';
+                            porcentaje_inicial = porcentaje_inicial;
+                            porcentaje_mitad = porcentaje_mitad;
                         }
                         $('#porcentaje_ventas').removeClass('d-none');
                         $('#porcentaje_ventas').addClass('d-block');
-                        $('#porcentaje_ventas').html(porcentaje+"<br>"+porcentaje_mitad+"<br>"+porcentaje_inicial);
+                        $('#porcentaje_ventas').html(porcentaje+" %<br>"+porcentaje_mitad+" %<br>"+porcentaje_inicial+" %");
                     }else{
                         $('#porcentaje_ventas').removeClass('d-block');
                         $('#porcentaje_ventas').addClass('d-none');
@@ -200,6 +200,23 @@
                     }else{
                         $('#cantidad_sin_prov').removeClass('d-block');
                         $('#cantidad_sin_prov').addClass('d-none');
+                    }
+                })
+                .catch(error => console.log(error.responseText));
+            }
+
+            function repuestos_stock_critico(){
+                fetch('/repuesto/revisar_stock_critico')
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    if(data > 0){
+                        $('#cantidad_stock_critico').removeClass('d-none');
+                        $('#cantidad_stock_critico').addClass('d-block');
+                        $('#cantidad_stock_critico').html(data);
+                    }else{
+                        $('#cantidad_stock_critico').removeClass('d-block');
+                        $('#cantidad_stock_critico').addClass('d-none');
                     }
                 })
                 .catch(error => console.log(error.responseText));
@@ -395,6 +412,7 @@
         }
 
     @endphp
+    @yield('javascript_footer')
 
 <!-- Ventana modal BUSCAR REPUESTO -->
 <div role="dialog" tabindex="-1" class="modal fade" id="buscar-repuesto-modal">

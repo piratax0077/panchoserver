@@ -9,6 +9,7 @@ use App\permissions_detail;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Session;
+use Illuminate\Validation\Rule;
 
 class familiacontrolador extends Controller
 {
@@ -117,18 +118,28 @@ class familiacontrolador extends Controller
 
         if(isset($request->btnGuardarFamilia))
         {
+            $request->merge([
+                'nombrefamilia' => trim((string) $request->nombrefamilia),
+                'prefijo' => trim((string) $request->prefijo) !== ''
+                    ? strtoupper(trim((string) $request->prefijo))
+                    : null,
+                'porcentaje' => $request->input('porcentaje', 0),
+                'porcentaje_flete' => $request->input('porcentaje_flete', 0),
+            ]);
+
             if($request->modificando==0){ //es nuevo
                 $reglas=array(
                     'nombrefamilia'=>'required|max:50|unique:familias,nombrefamilia',
-                    'porcentaje'=>'required|min:1|max:99|numeric',
-                    'porcentaje_flete'=>'required|min:1|max:99|numeric',
-                    'prefijo'=>'required|max:4|alpha_num|unique:familias,prefijo'
+                    'porcentaje'=>'required|numeric|min:0|max:99',
+                    'porcentaje_flete'=>'required|numeric|min:0|max:99',
+                    'prefijo'=>['nullable', 'max:5', 'regex:/^[A-Z0-9\/]+$/', 'unique:familias,prefijo']
                 );
             }else{
                 $reglas=array(
-                    'nombrefamilia'=>'required|max:50',
-                    'porcentaje'=>'required|min:1|max:99|numeric',
-                    'porcentaje_flete'=>'required|min:1|max:99|numeric'
+                    'nombrefamilia'=>['required', 'max:50', Rule::unique('familias', 'nombrefamilia')->ignore($request->id_familia)],
+                    'porcentaje'=>'required|numeric|min:0|max:99',
+                    'porcentaje_flete'=>'required|numeric|min:0|max:99',
+                    'prefijo'=>['nullable', 'max:5', 'regex:/^[A-Z0-9\/]+$/', Rule::unique('familias', 'prefijo')->ignore($request->id_familia)]
                 );
             }
 
@@ -138,16 +149,17 @@ class familiacontrolador extends Controller
                 'nombrefamilia.max'=>'El nombre de la familia debe tener como máximo 50 caracteres.',
                 'nombrefamilia.unique'=>'El nombre de la familia ya existe.',
                 'porcentaje.required'=>'Falta Ingresar el Porcentaje',
-                'porcentaje.min'=>'El porcentaje debe ser mayor a 0.',
+                'porcentaje.min'=>'El porcentaje no puede ser menor a 0.',
                 'porcentaje.max'=>'El porcentaje debe ser menor a 100.',
                 'porcentaje.numeric'=>'El porcentaje debe ser un número entero.',
                 'porcentaje_flete.required'=>'Falta Ingresar el Porcentaje del Flete',
-                'porcentaje_flete.min'=>'El porcentaje del Flete debe ser mayor a 0.',
+                'porcentaje_flete.min'=>'El porcentaje del Flete no puede ser menor a 0.',
                 'porcentaje_flete.max'=>'El porcentaje del Flete debe ser menor a 100.',
                 'porcentaje_flete.numeric'=>'El porcentaje del Flete debe ser un número entero.',
                 'prefijo.required'=>'Debe ingresar el prefijo.',
                 'prefijo.alpha_num'=>'Debe ingresar combinación de texto y números.',
-                'prefijo.max'=>'El prefijo debe tener hasta 4 caracteres.',
+                'prefijo.regex'=>'El prefijo solo puede contener letras, numeros y /.',
+                'prefijo.max'=>'El prefijo debe tener hasta 5 caracteres.',
                 'prefijo.unique'=>'El :attribute ya existe.'
             );
 
@@ -163,9 +175,7 @@ class familiacontrolador extends Controller
             $familia->nombrefamilia=$request->nombrefamilia;
             $familia->porcentaje=$request->porcentaje;
             $familia->porcentaje_flete=$request->porcentaje_flete;
-            if($request->modificando==0){ //es nuevo
-                $familia->prefijo=strtoupper($request->prefijo);
-            }
+            $familia->prefijo=$request->prefijo;
             $familia->save();
             $familias=$this->damefamilias();
             if($request->donde=="familia")

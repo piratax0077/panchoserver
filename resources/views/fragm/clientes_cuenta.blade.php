@@ -14,9 +14,95 @@
         font-size: 17px;
         margin: 10px;
     }
+    .contenedor{
+            background: #eee;
+            padding: 10px;
+        }
+    #btn_mostrar{
+        display: flex;
+        justify-content: center;
+        
+    }
+
+    #btn_imprimir{
+        align-self: center;
+        justify-self: center;
+        display:grid;
+        grid-column: 6/7;
+    }
+
+    #cuerpo{
+        grid-column:1/7;
+        grid-row:3/4;
+        /* display:grid; */
+        grid-template-columns: 50% 50%;
+        grid-auto-flow: column;
+    }
+    #resumen{
+        grid-column:1/2;
+    }
+    #detalle{
+        grid-column:2/3;
+    }
+    .transbank{
+        color:grey;
+    }
+
+    #fechainicial{
+        align-self: center;
+        justify-self: center;
+        grid-column: 1/2;
+        grid-row: 2/3;
+        display:grid;
+        grid-auto-flow: unset;
+    }
+    #fechafinal{
+        align-self: center;
+        justify-self: center;
+        grid-column: 2/3;
+        grid-row: 2/3;
+        display:grid;
+        grid-auto-flow: unset;
+    }
 </style>
 
-<script>
+    <script>
+
+
+let totalDeuda = 0;
+
+$(document).on('click', '.col-deuda', function(){
+
+    let deuda = parseFloat($(this).data('deuda')) || 0;
+    let fila = $(this).closest('tr');
+
+    // Si ya estaba seleccionada → RESTAR
+    if (fila.hasClass('fila-seleccionada')) {
+
+        totalDeuda -= deuda;
+        fila.removeClass('fila-seleccionada table-warning');
+
+    } 
+    // Si no estaba seleccionada → SUMAR
+    else {
+
+        totalDeuda += deuda;
+        fila.addClass('fila-seleccionada table-warning');
+    }
+
+    // Evitar negativos por seguridad
+    if (totalDeuda < 0) {
+        totalDeuda = 0;
+    }
+
+    $('#total-deuda-seleccionada').text(
+        totalDeuda.toLocaleString('es-CL')
+    );
+
+});
+
+
+
     function abrirModal(num){
         let url = '{{url("/factuprodu/damefactura")}}'+'/'+num;
         $.ajax({
@@ -108,76 +194,227 @@
 
     }
 
-    function borrar_cuenta_clave(idop){
-    Vue.swal({
-                title: 'Ingrese Contraseña',
-                input: 'password',
-                confirmButtonText: 'Verificar',
-                showConfirmButton: true,
-                showCancelButton: true,
-            }).then((result) => {
-                if(result.isConfirmed){
-                    let clave=result.value;
-                    //Pedir contraseña
-                    let url='{{url("/clave")}}';
-                    let parametros={
-                        clave:clave,
-                    };
+//     function borrar_cuenta_clave(idop){
+//         Vue.swal({
+//                 title: 'Ingrese Contraseña',
+//                 input: 'password',
+//                 confirmButtonText: 'Verificar',
+//                 showConfirmButton: true,
+//                 showCancelButton: true,
+//         }).then((result) => {
+//             if(result.isConfirmed){
+//                 let clave=result.value;
+//                 //Pedir contraseña
+//                 let url='{{url("/clave")}}';
+//                 let parametros={
+//                     clave:clave,
+//                 };
+                
+//                 $.ajaxSetup({
+//                     headers: {
+//                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+//                     }
+//                 });
+
+//                 $.ajax({
+//                 type:'POST',
+//                 beforeSend: function () {
+//                 //espere("Guardando Cuenta...");
+//                 },
+//                 url:url,
+//                 data:parametros,
+//                 success:function(resp){
                     
-                    $.ajaxSetup({
-                        headers: {
-                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                        }
-                    });
-
-                    $.ajax({
-                    type:'POST',
-                    beforeSend: function () {
-                    //espere("Guardando Cuenta...");
-                    },
-                    url:url,
-                    data:parametros,
-                    success:function(resp){
-                       
-                        Vue.swal.close();
-                        if(resp=="OK"){
-                            borrar_cuenta(idop);
-                        }else{
-                            console.log('esa no es la contraseña correcta');
-                        }
-                    },
-                    error: function(error){
-                        Vue.swal.close();
-                            Vue.swal({
-                                title: 'ERROR',
-                                text: error.responseText,
-                                icon: 'error',
-                            });
-                    }
-                    });
+//                     Vue.swal.close();
+//                     if(resp=="OK"){
+//                         borrar_cuenta(idop);
+//                     }else{
+//                         console.log('esa no es la contraseña correcta');
+//                     }
+//                 },
+//                 error: function(error){
+//                     Vue.swal.close();
+//                         Vue.swal({
+//                             title: 'ERROR',
+//                             text: error.responseText,
+//                             icon: 'error',
+//                         });
+//                 }
+//                 });
 
 
 
-                }
+//             }
 
 
-            });
-  }
+//         });
+//     }
 
-  function borrar_cuenta(idop){
-    let data=elid+"*"+idop;
-    var url='{{url("/clientes/borrar_cuenta")}}'+'/'+data;
-      $.ajax({
-        type:'GET',
-        beforeSend: function () {
-          espere("Borrando cuenta del Cliente...");
-        },
-        url:url,
-        success:function(resp){
+//   function borrar_cuenta(idop){
+//     let data=elid+"*"+idop;
+//     var url='{{url("/clientes/borrar_cuenta")}}'+'/'+data;
+//       $.ajax({
+//         type:'GET',
+//         beforeSend: function () {
+//           espere("Borrando cuenta del Cliente...");
+//         },
+//         url:url,
+//         success:function(resp){
             
+//             $("#listar_clientes").html(resp);
+//             Vue.swal.close();
+//           Vue.swal({
+//                 text: 'Listo...',
+//                 position: 'top-end',
+//                 icon: 'info',
+//                 toast: true,
+//                 showConfirmButton: false,
+//                 timer: 3000,
+//             });
+//         },
+//         error: function(error){
+//             Vue.swal.close();
+//             Vue.swal({
+//                 title: 'ERROR',
+//                 text: error.responseText,
+//                 icon: 'error',
+//             });
+//         }
+//       });
+//   }
+
+function borrar_cuentas_clave() {
+    // Obtener los IDs seleccionados
+    let seleccionados = [];
+    document.querySelectorAll('.registro-checkbox:checked').forEach((checkbox) => {
+        seleccionados.push(checkbox.value);
+    });
+
+    if (seleccionados.length === 0) {
+        Vue.swal({
+            title: 'Advertencia',
+            text: 'Debe seleccionar al menos un registro para eliminar.',
+            icon: 'warning',
+        });
+        return;
+    }
+
+    Vue.swal({
+        title: 'Ingrese Contraseña',
+        input: 'password',
+        confirmButtonText: 'Verificar',
+        showConfirmButton: true,
+        showCancelButton: true,
+    }).then((result) => {
+        if (result.isConfirmed) {
+            let clave = result.value;
+            // Pedir contraseña
+            let url = '{{url("/clave")}}';
+            let parametros = {
+                clave: clave,
+            };
+
+            $.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                },
+            });
+
+            $.ajax({
+                type: 'POST',
+                beforeSend: function () {
+                    //espere("Verificando contraseña...");
+                },
+                url: url,
+                data: parametros,
+                success: function(resp) {
+                    Vue.swal.close();
+                    if (resp == "OK") {
+                        borrar_cuentas(seleccionados); // Llamar a la función para borrar múltiples registros
+                    } else {
+                        console.log('Esa no es la contraseña correcta');
+                    }
+                },
+                error: function(error) {
+                    Vue.swal.close();
+                    Vue.swal({
+                        title: 'ERROR',
+                        text: error.responseText,
+                        icon: 'error',
+                    });
+                },
+            });
+        }
+    });
+}
+
+// function borrar_cuentas(ids) {
+//     let url = '{{url("/borrar-cuentas")}}'; // Ruta para eliminar múltiples registros
+//     let parametros = {
+//         ids: ids, // Enviar los IDs seleccionados
+//     };
+
+//     $.ajax({
+//         type: 'POST',
+//         url: url,
+//         data: parametros,
+//         success: function(resp) {
+//             if (resp == "OK") {
+//                 ids.forEach((id) => {
+//                     document.querySelector(`input[value="${id}"]`).closest('tr').remove();
+//                 });
+//                 Vue.swal({
+//                     title: 'Éxito',
+//                     text: 'Registros eliminados correctamente.',
+//                     icon: 'success',
+//                 });
+//             } else {
+//                 Vue.swal({
+//                     title: 'Error',
+//                     text: 'No se pudieron eliminar los registros.',
+//                     icon: 'error',
+//                 });
+//             }
+//         },
+//         error: function(error) {
+//             Vue.swal({
+//                 title: 'ERROR',
+//                 text: error.responseText,
+//                 icon: 'error',
+//             });
+//         },
+//     });
+// }
+
+function borrar_cuentas(ids) {
+    // Verificar si el array de IDs está vacío
+    if (ids.length === 0) {
+        Vue.swal({
+            title: 'Advertencia',
+            text: 'Debe seleccionar al menos un registro para eliminar.',
+            icon: 'warning',
+        });
+        return;
+    }
+
+    // Convertir el array de IDs en un string separado por comas (si es necesario)
+    let data = elid + "*" + ids.join(',');
+
+    // URL para enviar los datos
+    var url = '{{url("/clientes/borrar_cuenta")}}' + '/' + data;
+
+    $.ajax({
+        type: 'GET',
+        beforeSend: function () {
+            espere("Borrando cuentas del Cliente...");
+        },
+        url: url,
+        success: function(resp) {
+            console.log(resp);
+            // Actualizar la vista con la respuesta del servidor
             $("#listar_clientes").html(resp);
             Vue.swal.close();
-          Vue.swal({
+            Vue.swal({
                 text: 'Listo...',
                 position: 'top-end',
                 icon: 'info',
@@ -186,7 +423,7 @@
                 timer: 3000,
             });
         },
-        error: function(error){
+        error: function(error) {
             Vue.swal.close();
             Vue.swal({
                 title: 'ERROR',
@@ -194,26 +431,40 @@
                 icon: 'error',
             });
         }
-      });
-  }
+    });
+}
 
+    function abrir_modal_detalle_boleta(num_boleta){
+        let tipodte = 39; //boleta
+        let url = '{{url("/ventas/damedetalleboleta")}}'+"/"+tipodte+"/"+num_boleta;
+        $.ajax({
+            type:'GET',
+            url: url,
+            success: function(resp){
+                $('#exampleModal_boleta').modal('show');
+                $('#modal_body_detalle_boleta').html(resp);  
+            },
+            error: function(error){
+                console.log(error.responseText);
+            }
+        })
+    }
 
-
-  function abrir_modal_detalle_boleta(num_boleta){
-            let tipodte = 39; //boleta
-            let url = '{{url("/ventas/damedetalleboleta")}}'+"/"+tipodte+"/"+num_boleta;
-            $.ajax({
-                type:'GET',
-                url: url,
-                success: function(resp){
-                    $('#exampleModal_boleta').modal('show');
-                    $('#modal_body_detalle_boleta').html(resp);  
-                },
-                error: function(error){
-                    console.log(error.responseText);
-                }
-            })
-        }
+    function abrir_modal_detalle_nc(num_nc){
+        let tipodte = 61; //nota de crédito
+        let url = '{{url("/ventas/damedetalleboleta")}}'+"/"+tipodte+"/"+num_nc;
+        $.ajax({
+            type:'GET',
+            url: url,
+            success: function(resp){
+                $('#exampleModal_boleta').modal('show');
+                $('#modal_body_detalle_boleta').html(resp);  
+            },
+            error: function(error){
+                console.log(error.responseText);
+            }
+        })
+    }
 
     function abrir_modal_detalle_factura(num_factura){
         let tipodte = 33; //factura
@@ -234,6 +485,13 @@
   function prueba(){
       alert('hola');
   }
+
+  function mostrar(){
+    Vue.swal({
+        title: 'En construcción...',
+        icon: 'info',
+    });
+  }
 </script>
 
 <div id="ccuenta" class="col-sm-12 tabla-scroll-y-400 mt-3">
@@ -247,16 +505,19 @@
         <p>Sin empresa registrada</p>
         @endif
     </div>
+    
     <nav>
         <div class="nav nav-tabs nav-fill" id="nav-tab" role="tablist" style="background-color:beige">
-            <a class="nav-item nav-link active" id="nav-resumen-tab" data-toggle="tab" href="#tab-resumen" role="tab" aria-controls="nav-home" aria-selected="true">Resumen</a>
-            <a class="nav-item nav-link" id="nav-cuenta-tab" data-toggle="tab" href="#tab-cuenta" role="tab" aria-controls="nav-profile" aria-selected="false">Cuenta</a>
+            <a class="nav-item nav-link" id="nav-resumen-tab" data-toggle="tab" href="#tab-resumen" role="tab" aria-controls="nav-home" aria-selected="true">Resumen</a>
+            <a class="nav-item nav-link active" id="nav-cuenta-tab" data-toggle="tab" href="#tab-cuenta" role="tab" aria-controls="nav-profile" aria-selected="false">Cuenta</a>
             <a class="nav-item nav-link" id="nav-facturas-tab" data-toggle="tab" href="#tab-facturas" role="tab" aria-controls="nav-profile" aria-selected="false">Facturas Emitidas</a>
             <a class="nav-item nav-link" id="nav-boletas-tab" data-toggle="tab" href="#tab-boletas" role="tab" aria-controls="nav-contact" aria-selected="false">Boletas Emitidas</a>
+            <a class="nav-item nav-link" id="nav-nc-tab" data-toggle="tab" href="#tab-nc" role="tab" aria-controls="nav-contact" aria-selected="false">Notas Crédito Emitidas</a>
+            <a class="nav-item nav-link" id="nav-ingreso_egreso-tab" data-toggle="tab" href="#tab-ingreso_egreso" role="tab" aria-controls="nav-contact" aria-selected="false">Ingresos vs Egresos</a>
         </div>
     </nav>
     <div class="tab-content py-3 px-3 px-sm-0" id="nav-tabContent">
-        <div class="tab-pane fade show active" id="tab-resumen" role="tabpanel" aria-labelledby="nav-resumen-tab">
+        <div class="tab-pane fade" id="tab-resumen" role="tabpanel" aria-labelledby="nav-resumen-tab">
             <strong>Total Pagos:</strong>&nbsp;{{number_format($total_pagos,0,',','.')}} <br> <strong>Total Deuda:</strong>&nbsp;{{number_format($total_deuda,0,',','.')}} <br> <strong>Diferencia:</strong>
             @if($diferencia>=0)
                         {{number_format($diferencia,0,',','.')}}
@@ -267,7 +528,8 @@
             <strong>Total Facturas Emitidas:</strong>&nbsp;{{number_format($facturas_suma,0,',','.')}}<br>
             <strong>Total Boletas Emitidas:</strong>&nbsp;{{number_format($boletas_suma,0,',','.')}}<br>
         </div>
-        <div class="tab-pane fade" id="tab-cuenta" role="tabpanel" aria-labelledby="nav-cuenta-tab">
+        <div class="tab-pane fade show active" id="tab-cuenta" role="tabpanel" aria-labelledby="nav-cuenta-tab">
+            
             <div id="ccuenta_cabecera" class="row">
                 <div class="form-group">
                     <label for="pago">Pago:</label>
@@ -277,7 +539,7 @@
                     <label for="referencia">Referencia:</label>
                     <input type="text" id="referencia" maxlength="200" style="width:300px"><br>
                     <div class="box-info-cuenta">
-                        <p><strong>Total Pagos:</strong>{{number_format($total_pagos,0,',','.')}} </p>  <p><strong>Total Deuda:</strong>{{number_format($total_deuda,0,',','.')}} </p>  <p><strong>Diferencia:</strong> 
+                        <p><strong>Total Pagos:</strong>{{number_format($total_pagos,0,',','.')}} </p>  <p><strong>Total Deuda:</strong>{{number_format($total_deuda,0,',','.')}} </p><p> <strong>Total Notas Crédito:</strong>{{number_format($total_nc,0,',','.')}}</p>  <p><strong>Diferencia:</strong> 
                             @if($diferencia>=0)
                                 {{number_format($diferencia,0,',','.')}}
                             @else
@@ -320,6 +582,9 @@
                     </div>
                 @endif
             </div> <!-- fin ccuenta_cabecera -->
+            <p><strong>Total Deuda Seleccionada:</strong> 
+                <span id="total-deuda-seleccionada">0</span>
+            </p>
             @if($cuenta->count()>0)
                 <div id="ccuenta_detalle" class="row mt-2">
                     <table class="table table-sm table-hover">
@@ -336,14 +601,25 @@
                                 <tr>
                                     <td>{{$i->fecha_operacion}}</td>
                                     <td>{{number_format($i->pago,0,',','.')}}</td>
-                                    <td>{{number_format($i->deuda,0,',','.')}}</td>
-                                    <td>{{$i->referencia}}</td>
+                                    <td class="col-deuda" data-deuda="{{$i->deuda}}" style="cursor:pointer;">
+                                        {{number_format($i->deuda,0,',','.')}}
+                                    </td>
+                                    <td>
+                                        {{$i->referencia}}
+                                        @if(isset($i->nota_credito))
+                                            <br>
+                                            <span class="text-success">Nota de Crédito: {{$i->nota_credito->num_nota_credito}} - ${{number_format($i->nota_credito->total,0,',','.')}}</span>
+                                        @endif
+                                    </td>
                                     <td>{{$i->usuario}}</td>
-                                <td><button class="btn btn-danger btn-sm" onclick="borrar_cuenta_clave({{$i->id}})">X</button></td>
+                                    <td>
+                                        <input type="checkbox" class="registro-checkbox" value="{{$i->id}}">
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
+                    <button id="eliminar-seleccionados" class="btn btn-danger" onclick="borrar_cuentas_clave()">Eliminar Seleccionados</button>
                 </div> <!-- fin ccuenta_detalle -->
             @else
                 <h4>Sin datos en la cuenta</h4>
@@ -355,6 +631,7 @@
                     <thead>
                         <th class="text-center" scope="col" style="width:100px">Fecha</th>
                         <th class="text-center" scope="col" style="width:50px">N°</th>
+                        <th class="text-center" scope="col" style="width: 50px;">Nota de credito</th>
                         <th class="text-center" scope="col" style="width:50px">Estado</th>
                         <th class="text-center" scope="col" style="width:80px">Total</th>
                     </thead>
@@ -363,6 +640,7 @@
                         <tr>
                             <td class="text-center">{{\Carbon\Carbon::parse($factura->fecha_emision)->format("d-m-Y")}}</td>
                             <td class="text-center"><a href="javascript:abrir_modal_detalle_factura('{{$factura->id}}')">{{$factura->num_factura}}</a> </td>
+                            <td class="text-center"><a href="javascript:abrir_modal_detalle_nc('{{$factura->nota_credito ? $factura->nota_credito->id : ''}}')">{{ $factura->nota_credito ? $factura->nota_credito->num_nota_credito : '' }}</a> </td>
                             @switch($factura->estado)
 
                                 @case(0)
@@ -373,7 +651,7 @@
                                  @break
 
                                 @case(2)
-                                <td class="text-center">Anular</td>
+                                <td class="text-center">Anulada</td>
                                 @break
 
                                 @default
@@ -395,6 +673,7 @@
                     <thead>
                         <th class="text-center" scope="col" style="width:100px">Fecha</th>
                         <th class="text-center" scope="col" style="width:50px">N°</th>
+                        <th class="text-center" scope="col" style="width: 50px;">Nota de credito</th>
                         <th class="text-center" scope="col" style="width:80px">Total</th>
                     </thead>
                     <tbody>
@@ -402,6 +681,7 @@
                         <tr>
                             <td class="text-center">{{\Carbon\Carbon::parse($boleta->fecha_emision)->format("d-m-Y")}}</td>
                             <td class="text-center"><a href="javascript:abrir_modal_detalle_boleta('{{$boleta->id}}')">{{$boleta->num_boleta}}</a> </td>
+                            <td class="text-center"><a href="javascript:abrir_modal_detalle_nc('{{$boleta->nota_credito ? $boleta->nota_credito->id : ''}}')">{{ $boleta->nota_credito ? $boleta->nota_credito->num_nota_credito : '' }}</a> </td>
                             <td class="text-right">{{number_format($boleta->total,0,',','.')}}</td>
                         </tr>
                         @endforeach
@@ -412,6 +692,77 @@
             @endif
         </div>
 
+        <div class="tab-pane fade" id="tab-nc" role="tabpanel" aria-labelledby="nav-nc-tab">
+            @if(isset($notas_credito))
+            @if($notas_credito->count()>0)
+                <table class="table table-bordered table-hover" style="width:50%">
+                    <thead>
+                        <th class="text-center" scope="col" style="width:100px">Fecha</th>
+                        <th class="text-center" scope="col" style="width:50px">N°</th>
+                        <th class="text-center" scope="col" style="width: 50px">Documento</th>
+                        <th class="text-center" scope="col" style="width:80px">Total</th>
+                    </thead>
+                    <tbody>
+                        {{-- @foreach($notas_credito as $nc)
+                        <tr>
+                            <td class="text-center">{{\Carbon\Carbon::parse($nc->fecha_emision)->format("d-m-Y")}}</td>
+                            <td class="text-center"><a href="javascript:abrir_modal_detalle_nc('{{$nc->id}}')">{{$nc->num_nota_credito}}</a> </td>
+                            @if($nc->tipo_documento == 'factura')
+                            <td class="text-center"><a href="javascript:abrir_modal_detalle_factura({{$nc->doc->id}})">{{$nc->tipo_documento}} {{ $nc->num_doc }}</a></td>
+                            @elseif($nc->tipo_documento == 'boleta')
+                            <td class="text-center"><a href="javascript:abrir_modal_detalle_boleta({{$nc->doc->id}})">{{$nc->tipo_documento}} {{ $nc->num_doc }}</a></td>
+                            @else
+                            <td class="text-center">{{$nc->tipo_documento}} {{ $nc->num_doc }}</td>
+                            @endif
+                            <td class="text-right">{{number_format($nc->total,0,',','.')}}</td>
+                        </tr>
+                        @endforeach --}}
+                    </tbody>
+                </table>
+            @else
+                <h3 style="color:red">NO HAY NC EMITIDAS</h3>
+            @endif
+            @endif
+        </div>
+
+        <div class="tab-pane fade" id="tab-ingreso_egreso" role="tabpanel" aria-labelledby="nav-ingreso_egreso-tab">
+            <div id="botones" class="row w-100">
+                <div class="col-md-3">
+                    <div id="fechainicial">
+                        <label for="fechainicial">Fecha Inicial:</label>
+                        <input type="date" name="ifechainicial" value='<?php echo date("Y-m-d"); ?>' id="ifechainicial" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div id="fechafinal">
+                        <label for="fechafinal">Fecha Final:</label>
+                        <input type="date" name="ifechafinal" value='@php echo date("Y-m-d"); @endphp'  id="ifechafinal" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div id="horario_estadisticas_inicial">
+                        <label for="horario_estadisticas">Horario Inicial:</label>
+                        <input type="time" class="form-control" id="ihorarioinicial" value="10:05 AM" />
+                          
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div id="horario_estadisticas_final">
+                        <label for="horario_estadisticas">Horario Final:</label>
+                        <input type="time" class="form-control" id="ihorariofinal" value="10:05 AM" />
+                          
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div id="btn_mostrar"><button class="btn btn-sm btn-success" onclick="mostrar()">MOSTRAR</button></div>
+                </div>
+                    
+                    
+                
+                
+                
+            </div>
+        </div>
     </div>
 
 </div> <!-- fin ccuenta -->
@@ -440,19 +791,19 @@
   <!-- Modal -->
 <div class="modal fade bd-example-modal-lg" id="exampleModal_boleta" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
+        <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="exampleModalLabel">Detalle</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <h5 class="modal-title" id="exampleModalLabel">Detalle</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
             <span aria-hidden="true">&times;</span>
-          </button>
+            </button>
         </div>
         <div class="modal-body" id="modal_body_detalle_boleta">
-          ...
+            ...
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
         </div>
-      </div>
+        </div>
     </div>
-  </div>
+</div>

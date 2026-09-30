@@ -48,6 +48,8 @@ class repuesto extends Model
         'fecha_actualizacion_stock_dos',
         'fecha_actualizacion_stock_tres',
         'usuario_id_modifica',
+        'id_modifica_estado',
+        'fecha_modificacion_estado',
         'oferta',
         'estado'
     ];
@@ -75,5 +77,24 @@ class repuesto extends Model
     public function solicitud()
     {
         return $this->hasMany('App\solicitudes');
+    }
+
+    public function stocks()
+    {
+        return $this->hasMany('App\\RepuestoStock', 'repuesto_id');
+    }
+
+    public function save(array $options = [])
+    {
+        if (!\App\Services\StockPorLocalService::habilitado()) return parent::save($options);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($options) {
+            app(\App\Services\StockPorLocalService::class)->validarEscrituraLegada($this);
+            return parent::save($options);
+        }, 3);
+    }
+
+    public function movimientosStock()
+    {
+        return $this->hasMany('App\StockMovimiento', 'repuesto_id');
     }
 }

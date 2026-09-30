@@ -54,6 +54,8 @@
             border: 0px;
             border-collapse: collapse;
         }
+
+        
     </style>
 </head>
 <body>
@@ -113,25 +115,27 @@
         <tr>
             <th scope="col" width="20px" style="padding-left:5px">Cant</th>
             <th scope="col" width="180px">Descripción</th>
-            <th scope="col" width="30px">Precio</th>
+            <th scope="col" width="30px">Precio Normal</th>
+            <th scope="col" width="30px">Precio Oferta</th>
         </tr>
         <tbody>
             @foreach($det_cotizacion as $item)
             <tr>
                 <td align="center">{{$item->cantidad}}</td>
                 <td>{{$item->descripcion}}</td>
+                <td>{{number_format($item->precio_venta,0,',','.')}}</td>
                 <td align="right">@if($item->oferta == 1)*@endif{{number_format($item->total,0,',','.')}}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
-    <p align="right" style="margin-right:15px;"><strong>TOTAL:</strong>$ {{number_format($cab_cotizacion->total,0,',','.')}}</p>
+    <p align="right" style="margin-right:15px;"><strong>TOTAL:</strong>$ {{number_format($total_precio_normal,0,',','.')}}</p>
     <br><br>
     <h5 style="margin-left:15px;margin-right:15px; text-align:center">
         ESTA COTIZACIÓN TIENE UNA VIGENCIA DE 07 DÍAS CALENDARIO A PARTIR DE LA FECHA DE EMISIÓN O HASTA AGOTAR STOCK
     </h5>
     @if(isset($oferta) && $oferta !== false)
-    <h5 style="margin-left:15px;margin-right:15px; text-align:center; text-transform: uppercase;">(*)Productos en oferta hasta {{\Carbon\Carbon::parse($cab_cotizacion->fecha_emision)->format("d-m-Y")}}.</h5>
+    <h5 style="margin-left:15px;margin-right:15px; text-align:center; text-transform: uppercase;">(*)Productos en oferta, pagos en efectivo o transferencia, hasta {{\Carbon\Carbon::parse($cab_cotizacion->fecha_emision)->format("d-m-Y")}}.</h5>
     @endif
     <h4 align="center">PANCHO REPUESTOS</h4>
     <br>

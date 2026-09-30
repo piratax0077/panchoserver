@@ -12,5 +12,5 @@ pie{
 }
 </style>
 <pie>
-	<p><i>SysMaFra&copy;2024 &nbsp;</i></p>
+	<p><i>SysMaFra&copy;2026 &nbsp;</i></p>
 </pie>

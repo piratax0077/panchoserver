@@ -17,8 +17,10 @@ use App\modelovehiculo;
 use App\similar;
 use App\carrito_virtual;
 use App\familia;
+use App\formapago;
 use App\marcavehiculo;
 use App\carrito_virtual_detalle;
+use App\carrito_transferido;
 use App\retiro_tienda;
 use App\repuesto_catalogo;
 use App\repuesto_carrito;
@@ -28,7 +30,9 @@ use App\boleta;
 use App\boleta_detalle;
 use App\factura;
 use App\factura_detalle;
+use App\fabricante;
 use App\pago;
+use App\oem;
 use App\proveedor;
 use App\oferta_pagina_web;
 use App\oferta_catalogo;
@@ -44,10 +48,14 @@ use App\Mail\EnviarCorreo;
 use App\descuento;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Hash;
+use App\cotizacion;
+use App\cotizacion_detalle;
+use App\cliente_potencial;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Illuminate\Support\Facades\Password;
 
 use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
+use Illuminate\Support\Facades\DB;
 
 use App\Mail\EnviarCorreo_comentario;
 use App\Mail\ResetPasswordMail;
@@ -141,7 +149,7 @@ class api_controlador extends Controller
                         ->where('idmarcavehiculo','<>',33)
                         ->where('idmarcavehiculo','<>',34)
                         ->where('idmarcavehiculo','<>',36)
-                        ->where('idmarcavehiculo','<>',38)
+                        // ->where('idmarcavehiculo','<>',38)
                         ->where('idmarcavehiculo','<>',39)
                         ->where('idmarcavehiculo','<>',40)
                         ->where('idmarcavehiculo','<>',43)
@@ -342,6 +350,67 @@ class api_controlador extends Controller
             return $v;
         }
 
+    }
+
+    public function dame_familias_repuestos($dato)
+    {
+        //usando auth en el grupo de rutas. ver web.php //Valida sesión
+        $op = substr($dato, 0, 1);
+        $idmodelo = substr($dato, 1);
+        try {
+            $modelo = modelovehiculo::find($idmodelo);
+            $quemodelo =$modelo->modelonombre . ' ' . $modelo->anios_vehiculo;
+
+            if ($op == 0) {
+                $s = "SELECT repuestos.id_familia, UPPER(familias.nombrefamilia) as nombrefamilia,COUNT(repuestos.id_familia) as total
+                FROM repuestos
+                INNER JOIN familias ON repuestos.id_familia=familias.id
+                WHERE repuestos.activo=1 AND repuestos.id in (SELECT similares.id_repuestos FROM similares WHERE similares.id_modelo_vehiculo=$idmodelo)
+                GROUP BY repuestos.id_familia
+                ORDER BY nombrefamilia";
+            }
+
+            if ($op == 1) {
+                $s = "SELECT repuestos.id_familia, UPPER(familias.nombrefamilia) as nombrefamilia,COUNT(repuestos.id_familia) as total
+                FROM repuestos
+                inner join familias on repuestos.id_familia=familias.id
+                WHERE repuestos.id in (SELECT similares.id_repuestos FROM similares WHERE similares.id_modelo_vehiculo=$idmodelo)
+                AND repuestos.medidas<>'No Definidas'
+                GROUP by repuestos.id_familia
+                order by familias.nombrefamilia";
+            }
+
+            if ($op == 2) {
+                $s = "SELECT repuestos.id_familia, UPPER(familias.nombrefamilia) as nombrefamilia,COUNT(repuestos.id_familia) as total FROM repuestos
+                inner join familias on repuestos.id_familia=familias.id
+                WHERE repuestos.id in (SELECT similares.id_repuestos FROM similares WHERE similares.id_modelo_vehiculo=$idmodelo)
+                AND repuestos.stock_actual>0
+                GROUP by repuestos.id_familia
+                order by familias.nombrefamilia";
+            }
+
+            if ($op == 3) {
+                $s = "SELECT repuestos.id_familia, UPPER(familias.nombrefamilia) as nombrefamilia,COUNT(repuestos.id_familia) as total FROM repuestos
+                inner join familias on repuestos.id_familia=familias.id
+                WHERE repuestos.id in (SELECT similares.id_repuestos FROM similares WHERE similares.id_modelo_vehiculo=$idmodelo)
+                AND repuestos.stock_actual>0
+                AND repuestos.medidas<>'No Definidas'
+                GROUP by repuestos.id_familia
+                order by familias.nombrefamilia";
+            }
+
+            $familias = \DB::select($s);
+            $total_repuestos = 0;
+            foreach ($familias as $repuesto) {
+                $total_repuestos += $repuesto->total;
+            }
+
+            return ['familias' => $familias, 'total_repuestos' => $total_repuestos, 'modelo' => $quemodelo];
+
+        } catch (\Exception $error) {
+            $debug = $error;
+            return ['error' => $debug->getMessage()];
+        }
     }
 
     public function damerepuestos(){
@@ -574,6 +643,208 @@ class api_controlador extends Controller
         }
         
     }
+
+    public function damerepuestototem($id_repuesto)   {
+        try {
+            $repuesto_original = repuesto::select('repuestos.*',
+                                        'marcarepuestos.marcarepuesto',
+                                        'paises.nombre_pais',
+                                        'paises.id as pais_id',
+                                        'familias.nombrefamilia',
+                                        DB::raw(\App\Services\StockPorLocalService::totalSql() . ' as stock_actual_total')
+                                        )
+                                        ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                                        ->join('paises', 'repuestos.id_pais', 'paises.id')
+                                        ->join('familias','repuestos.id_familia','familias.id')
+                                        ->where('repuestos.id',$id_repuesto)
+                                        ->first();
+
+            // Ordenar las medidas del repuesto por valor numérico (mayor a menor)
+            if ($repuesto_original && $repuesto_original->medidas) {
+                $porciones = preg_split('/[:,]/', $repuesto_original->medidas);
+                
+                // Ordenar las porciones por el valor numérico que contienen (de mayor a menor)
+                usort($porciones, function($a, $b) {
+                    // Extraer números de cada porción
+                    preg_match_all('/\d+(?:[.,]\d+)?/', $a, $matches_a);
+                    preg_match_all('/\d+(?:[.,]\d+)?/', $b, $matches_b);
+                    
+                    // Obtener el valor máximo de cada porción
+                    $max_a = 0;
+                    if (!empty($matches_a[0])) {
+                        $numeros_a = array_map(function($num) {
+                            return (float) str_replace(',', '.', $num);
+                        }, $matches_a[0]);
+                        $max_a = max($numeros_a);
+                    }
+                    
+                    $max_b = 0;
+                    if (!empty($matches_b[0])) {
+                        $numeros_b = array_map(function($num) {
+                            return (float) str_replace(',', '.', $num);
+                        }, $matches_b[0]);
+                        $max_b = max($numeros_b);
+                    }
+                    
+                    // Ordenar de mayor a menor
+                    return $max_b <=> $max_a;
+                });
+                
+                // Reconstruir el string de medidas ordenadas
+                $repuesto_original->medidas = implode(',', $porciones);
+            }
+
+            
+
+        // get next repuesto id
+        try {
+            // Obtener la fecha actual
+            $fechaActual = date('Y-m-d');
+
+            // Restar 60 días
+            $fechaRestada = strtotime('-60 days', strtotime($fechaActual));
+
+            // Convertir la fecha restada de UNIX timestamp a formato de fecha
+            $fechaRestadaFormateada = date('Y-m-d', $fechaRestada);
+        
+            // El id del repuesto siguiente debe tener un máximo de fecha de actualización hasta 60 días
+            $next = repuesto::where('id', '>', $repuesto_original->id)
+            ->where('stock_actual','>',0)
+            ->where('id_familia','<>',312)
+            ->where('fecha_actualiza_precio','>',$fechaRestadaFormateada)
+            ->where('activo',1)
+            ->min('id');
+
+            // El id del repuesto anterior tambien debe tener un máximo de fecha de actualización hasta 60 días
+            $previous = repuesto::where('id','<',$repuesto_original->id)
+            ->where('stock_actual','>',0)
+            ->where('id_familia','<>',312)
+            ->where('fecha_actualiza_precio','>',$fechaRestadaFormateada)
+            ->where('activo',1)
+            ->max('id');
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+                        
+        $fotos=repuestofoto::where('id_repuestos','=',$id_repuesto)->get();
+        
+
+        $recomendados = $this->damerecomendados($id_repuesto);
+        
+        $similares_ = $this->damesimilares($id_repuesto);
+        $similares = similar::where('similares.id_repuestos',$id_repuesto)
+                                    ->join('repuestos','similares.id_repuestos','repuestos.id')
+                                    ->get();
+        
+        $idmodelos = [];
+        foreach ($similares as $similar) {
+            array_push($idmodelos,$similar->id_modelo_vehiculo);
+        }
+        
+        
+        if(count($idmodelos) > 0){
+            $re = similar::where('id_modelo_vehiculo',$idmodelos[0])->get();
+        }else{
+            $re = [];
+        }
+        
+        $repuestos_prueba = [];
+        foreach ($re as $r) {
+            $rep = repuesto::select('repuestos.*','marcarepuestos.marcarepuesto')
+                            ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                            ->where('repuestos.id',$r->id_repuestos)
+                            ->first();
+            
+            array_push($repuestos_prueba,$rep);
+        }
+        
+        $recomendados_ = [];
+    
+        foreach($repuestos_prueba as $repuesto){
+            if(is_null($repuesto) ){
+
+            }else{
+                if($repuesto->stock_actual > 0 && $repuesto->id_familia == $repuesto_original->id_familia && $repuesto->id !== $repuesto_original->id ){
+                    $firstDate = $repuesto->fecha_actualiza_precio;
+                    $secondDate = date('d-m-Y H:i:s');
+        
+                    $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
+        
+                    $years  = floor($dateDifference / (365 * 60 * 60 * 24));
+                    $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
+                    $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
+        
+                    $minutos = floor(abs($dateDifference / 60));
+                    $horas = floor($minutos / 60);
+                    $dias = floor($horas / 24);
+                    $rep = new repuesto_catalogo;
+                    $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
+                    if(!isset($foto)){
+                        $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                    }
+                    if($dias<= 60){
+                        $oferta_rec = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
+                        $descuento_rec = descuento::where('activo',1)->where('id_familia',$repuesto->id_familia)->first();
+                        $rep->id = $repuesto->id;
+                        $rep->descripcion = $repuesto->descripcion;
+                        $rep->urlfoto = $foto->urlfoto;
+                        $rep->precio_normal = $repuesto->precio_venta;
+                        $rep->marcarepuesto = $repuesto->marcarepuesto;
+                        $rep->nombrefamilia = $repuesto->nombrefamilia;
+                        if($oferta_rec){
+                            $rep->precio_venta = $oferta_rec->precio_actualizado;
+                            $rep->oferta = 1;
+                        }elseif($descuento_rec){
+                            $rep->precio_venta = $repuesto->precio_venta - (($descuento_rec->porcentaje / 100) * $repuesto->precio_venta);
+                            $rep->oferta = 1;
+                        }else{
+                            $rep->precio_venta = $repuesto->precio_venta;
+                            $rep->oferta = 0;
+                        }
+                        array_push($recomendados_,$rep);
+                    }
+                }
+            }
+        
+    }
+
+    // buscamos los rectificadores del repuesto
+    $rectificadores = regulador_voltaje::select('rectificador')
+    ->where('id_repuesto',$id_repuesto)
+    ->where('rectificador','<>','---')
+    ->get();
+    // buscamos los alternadors del repuesto
+    $alternadores = regulador_voltaje::select('alternador')
+    ->where('id_repuesto',$id_repuesto)
+    ->where('alternador','<>','---')
+    ->get();
+
+    //Verificamos si existe el repuesto en oferta
+    $existe = oferta_pagina_web::where('id_repuesto',$id_repuesto)->first();
+    $flag = 0;
+
+    $descuento = descuento::where('activo',1)->where('id_familia',$repuesto_original->id_familia)->first();
+    if($existe){
+        $repuesto_original->oferta = 1;
+        $repuesto_original->precio_normal = $repuesto_original->precio_venta;
+        $repuesto_original->precio_venta = $existe->precio_actualizado;
+        return [$repuesto_original,$fotos, $similares_,$recomendados_,$existe,$next,$previous,$rectificadores, $alternadores];
+    }
+
+    if($descuento){
+        $repuesto_original->oferta = 1;
+        $repuesto_original->precio_normal = $repuesto_original->precio_venta;
+        $repuesto_original->precio_venta = $repuesto_original->precio_venta - (($descuento->porcentaje/100) * $repuesto_original->precio_venta);
+    } else {
+        $repuesto_original->oferta = 0;
+    }
+
+    return [$repuesto_original,$fotos, $similares_,$recomendados_,0,$next,$previous, $rectificadores, $alternadores]; 
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+    
+}
 
     public function damerepuesto_demo($id_repuesto)
         {
@@ -883,15 +1154,17 @@ class api_controlador extends Controller
             }
 
      
+            //return repuesto::where('oems.codigo_oem', 'LIKE', '%'.$buscado_sin_guion . '%')->join('oems', 'repuestos.id', 'oems.id_repuestos')->get();
+
     
             $repuestos = repuesto::where('oems.codigo_oem', 'LIKE', '%'.$buscado_sin_guion . '%')
                 ->where('repuestos.activo',1)
                 ->where('repuestos.stock_actual','>',0)
                 ->where('repuestos.id_familia','<>',312)
                 ->where('repuestos.id_marca_repuesto','<>',190)
-                    ->orWhere('oems.codigo_oem', 'LIKE', '%'.$buscado_con_guion. '%')
+                    // ->orWhere('oems.codigo_oem', 'LIKE', '%'.$buscado_con_guion. '%')
                     ->join('paises', 'repuestos.id_pais', 'paises.id')
-                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                    ->leftjoin('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
                     ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
                     ->join('oems', 'repuestos.id', 'oems.id_repuestos')
                     ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'oems.codigo_oem', 'repuestos.*')
@@ -938,6 +1211,91 @@ class api_controlador extends Controller
                         array_push($repuestos_,$rep);
                         array_push($marcas_repuestos, $repuesto->marcarepuesto);
                     }
+                }
+                
+            }
+                
+        
+        return [$repuestos_, array_values(array_unique($marcas_repuestos))];
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+        
+        
+    }
+
+    public function buscar_por_oem_totem($oem){
+        try {
+          
+            $pos=strpos($oem,"-");
+            if($pos===false)
+            {
+                $buscado_sin_guion=$oem;
+                $buscado_con_guion=substr($oem,0,5)."-".substr($oem,5);
+            }else{
+                $buscado_sin_guion=str_replace("-","",$oem); //quitar guion
+                $buscado_con_guion=$oem;
+            }
+
+            //return repuesto::where('oems.codigo_oem', 'LIKE', '%'.$buscado_sin_guion . '%')->join('oems', 'repuestos.id', 'oems.id_repuestos')->get();
+
+            $repuestos = repuesto::where('oems.codigo_oem', 'LIKE', '%'.$buscado_sin_guion . '%')
+                ->where('repuestos.activo',1)
+                ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' > 0')
+                ->where('repuestos.id_familia','<>',312)
+                ->where('repuestos.id_marca_repuesto','<>',190)
+                    // ->orWhere('oems.codigo_oem', 'LIKE', '%'.$buscado_con_guion. '%')
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+                    ->leftjoin('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                    ->join('oems', 'repuestos.id', 'oems.id_repuestos')
+                    ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'oems.codigo_oem', 'repuestos.*')
+                    ->groupBy('repuestos.id')
+                    ->get();
+    
+                    $repuestos_= [];
+                    $marcas_repuestos = [];
+        foreach($repuestos as $repuesto){
+                //Fecha ultima actualización del precio del repuesto
+                $firstDate = $repuesto->fecha_actualiza_precio;
+                $secondDate = date('d-m-Y H:i:s');
+
+                $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
+
+                $years  = floor($dateDifference / (365 * 60 * 60 * 24));
+                $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
+                $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
+
+                $minutos = floor(abs($dateDifference / 60));
+                $horas = floor($minutos / 60);
+                $dias = floor($horas / 24);
+                $similares = $this->damesimilares($repuesto->id);
+                if($similares->count() > 0 && $dias <= 60){
+                    $rep = new repuesto_catalogo;
+                    $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
+                    if(!isset($foto)){
+                        $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                    }
+                    $oferta = oferta_pagina_web::where('id_repuesto', $repuesto->id)->first();
+                    $descuento = descuento::where('activo',1)->where('id_familia',$repuesto->id_familia)->first();
+                    $rep->id = $repuesto->id;
+                    $rep->descripcion = $repuesto->descripcion;
+                    $rep->urlfoto = $foto->urlfoto;
+                    $rep->marcarepuesto = $repuesto->marcarepuesto;
+                    $rep->precio_normal = $repuesto->precio_venta;
+                    $rep->stock_actual = \App\Services\StockPorLocalService::total($repuesto);
+                    if($oferta){
+                        $rep->precio_venta = $oferta->precio_actualizado;
+                        $rep->oferta = 1;
+                    }elseif($descuento){
+                        $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje / 100) * $repuesto->precio_venta);
+                        $rep->oferta = 1;
+                    }else{
+                        $rep->precio_venta = $repuesto->precio_venta;
+                        $rep->oferta = 0;
+                    }
+                    array_push($repuestos_,$rep);
+                    array_push($marcas_repuestos, $repuesto->marcarepuesto);
                 }
                 
             }
@@ -1027,10 +1385,215 @@ class api_controlador extends Controller
         
     }
 
+    public function agregar_carrito_totem(Request $req){
+     
+        $idrep = $req->idrep;
+        $cantidad = $req->cantidad;
+        $cliente_id = $req->cliente_id;
+        $usuario_id = 16; // USUARIO FRANCISCO ROJO
+        // if($usuario_id == '' || !$usuario_id){
+        //     return response()->json([
+        //         'message' => 'Le informamos que para poder agregar repuestos al carrito debe registrarse.',
+        //     ], 500);
+        // }
+        try {
+            $correlativo = correlativo::find(11);
+      
+            $existe = carrito_virtual::where('usuario_id',$usuario_id)->where('activo',1)->first();
+    
+            if(!$existe){
+                $carrito_virtual = new carrito_virtual;
+                
+                $carrito_virtual->fecha_emision = Carbon::today()->toDateString();
+                $carrito_virtual->numero_carrito = intval($correlativo->correlativo) + 1;
+                $carrito_virtual->activo = 1;
+                $carrito_virtual->usuario_id = $usuario_id;
+                $carrito_virtual->save();
+
+                $correlativo->correlativo = $carrito_virtual->numero_carrito;
+                $correlativo->save();
+            }
+            $carrito_existente = $this->damecarritoexistente($usuario_id);
+            // Los amortiguadores laterales se venden como máximo uno por lado.
+            $repuesto_amortiguador = repuesto::find($idrep);
+            if ($repuesto_amortiguador && in_array((int) $repuesto_amortiguador->id_familia, [344, 345], true)) {
+                if ((int) $cantidad !== 1) {
+                    return "amortiguador_unidad_lado";
+                }
+
+                $descripcion_amortiguador = strtoupper($repuesto_amortiguador->descripcion);
+                $lado_amortiguador = str_contains($descripcion_amortiguador, 'IZQUIERD')
+                    ? 'IZQUIERD'
+                    : (str_contains($descripcion_amortiguador, 'DERECH') ? 'DERECH' : null);
+
+                if ($lado_amortiguador) {
+                    $mismo_lado_en_carrito = carrito_virtual_detalle::where('carrito_numero', $carrito_existente->numero_carrito)
+                        ->join('repuestos', 'carrito_virtual_detalle.repuesto_id', 'repuestos.id')
+                        ->where('repuestos.id_familia', $repuesto_amortiguador->id_familia)
+                        ->where('repuestos.descripcion', 'like', '%' . $lado_amortiguador . '%')
+                        ->exists();
+
+                    if ($mismo_lado_en_carrito) {
+                        return "amortiguador_lado_duplicado";
+                    }
+                }
+            }
+            
+            $pregunta = carrito_virtual_detalle::where('repuesto_id',$idrep)->where('carrito_numero',$carrito_existente->numero_carrito)->get();
+          
+            if($pregunta->count() > 0){
+                return response()->json([
+                    'message' => 'Repuesto ya existe en carrito!!',
+                ], 500);
+            }else{
+              
+                $repuesto = repuesto::find($idrep);
+                $id_familia = $repuesto->id_familia;
+                // verificar que si la familia es 24 (bujias) la cantidad minima a agregar sea 3
+                if($id_familia == 24 || $id_familia == 29){
+                    if($cantidad < 3){
+                        return "bujia_minimo";
+                    }
+                }
+                // verificar que si la familia es 532 (valvulas) la cantidad minima a agregar sea 4
+                if($id_familia == 532 || $id_familia == 78){
+                    if($cantidad < 4){
+                        return "valvula_minimo";
+                    }
+                }
+
+                // verificar que si la familia es 374 (disco freno delantero) o 375 (disco freno trasero) la cantidad sea multiplo de 2
+                if($id_familia == 374 || $id_familia == 375){
+                    if($cantidad % 2 != 0){
+                        return "disco_freno_multiplo";
+                    }
+                }
+
+                // verificar que si la familia es 362 (retenes de valvulas)  la cantidad minima a agregar sea 8
+                if($id_familia == 362 || $id_familia == 87 || $id_familia == 392){ 
+                    if($cantidad % 8 != 0){
+                        return "retene_valvula_multiplo";
+                    }
+                }
+
+                // verificamos que si la familia es 74 (culata) se debe acercar al meson
+                if($id_familia == 74 || $id_familia == 271 || $id_familia == 306 || $id_familia == 285 || $id_familia == 32 || $id_familia == 269 || $id_familia == 156 || $id_familia == 153 || $id_familia == 12 || $id_familia == 11 || $id_familia == 33){
+                    return "meson";
+                }
+
+                if($id_familia == 188){
+                    if($cantidad < 4){
+                        return "golilla_minimo";
+                    }
+                }
+
+                $stock_total = \App\Services\StockPorLocalService::total($repuesto);
+                // preguntamos si existe la cantidad en el stock de bodega
+                if($stock_total < $cantidad){
+                    return response()->json([
+                        'message' => 'Cantidad solicitada sobrepasa stock actual',
+                    ], 500);
+                }
+              
+                $o = oferta_pagina_web::where('id_repuesto',$idrep)->where('activo',1)->first();
+            
+                $dcto_familia = descuento::where('id_familia',$repuesto->id_familia)->where('activo',1)->first();
+                $detalle = new carrito_virtual_detalle;
+           
+                $detalle->repuesto_id = $idrep;
+                $detalle->cantidad = $cantidad;
+                $detalle->carrito_numero = $carrito_existente->numero_carrito;
+                $detalle->item = $this->dameultimoitem($carrito_existente->numero_carrito) + 1;
+                //Si existe en oferta
+                if(isset($o)){
+                    $detalle->pu = $o->precio_actualizado; //Ya incluye el IVA, ESTE PRECIO DEBE PREDOMINAR, (ademas contiene el valor con el descuento en oferta)
+                }elseif(!isset($o) && isset($dcto_familia) && ($dcto_familia->id_local <> 2)){
+                    
+                    $detalle->pu = $repuesto->precio_venta - (($dcto_familia->porcentaje/100) * $repuesto->precio_venta);
+                    
+                }else{
+                    $detalle->pu = $repuesto->precio_venta;
+                }
+                
+                $detalle->pu_neto=round($detalle->pu/(1+Session::get('PARAM_IVA')),2);
+                $detalle->descuento_item = 0.00;
+                $detalle->subtotal_item = $detalle->cantidad * $detalle->pu;
+                $detalle->total_item = $detalle->subtotal_item - $detalle->descuento_item;
+                $detalle->save();
+                $carrito_existente->fecha_emision = Carbon::today()->toDateString();
+                // Guardamos la fecha de ingreso del ultimo item del carrito
+                $carrito_existente->save();
+
+                $items = $this->revisar_carrito_virtual($usuario_id);
+     
+    
+                return response()->json([
+                    'message' => 'OK'
+                ]);
+            }
+            
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+        
+    }
+
+    private function dameultimoitem($numero_carrito)
+    {
+        $ultimo = carrito_virtual_detalle::where('carrito_numero', $numero_carrito)->max('item');//carrito_compra::where('usuarios_id', $id_usu)->latest()->value('item');
+        if (is_null($ultimo)) {
+            $ultimo = 0;
+        }
+        return $ultimo;
+    }
+
     public function damecarritoexistente($usuario_id){
         $carro = carrito_virtual::where('usuario_id',$usuario_id)->where('activo',1)->first();
         return $carro;
     }
+
+public function imprimir_ticket_totem($numero_carrito){
+    try {
+        // Intentar primero como carrito virtual
+        $carrito_totem = carrito_virtual::where('numero_carrito', $numero_carrito)->first();
+
+        if ($carrito_totem) {
+            $carrito_virtual = carrito_virtual_detalle::select('carrito_virtual_detalle.*','repuestos.*','carrito_virtual.numero_carrito')
+                ->join('carrito_virtual','carrito_virtual.numero_carrito','carrito_virtual_detalle.carrito_numero')
+                ->join('repuestos','carrito_virtual_detalle.repuesto_id','repuestos.id')
+                ->where('carrito_virtual_detalle.carrito_numero', $carrito_totem->numero_carrito)
+                ->get();
+            return ['estado' => 'OK', 'carrito' => $carrito_totem, 'detalle' => $carrito_virtual];
+        }
+
+        // Si no es carrito, buscar como cotización
+        $cotizacion = cotizacion::where('num_cotizacion', $numero_carrito)->first();
+        if (!$cotizacion) {
+            return ['estado' => 'ERROR', 'mensaje' => 'No se encontró el carrito o cotización'];
+        }
+
+        $detalle = cotizacion_detalle::select(
+                'cotizaciones_detalle.precio_venta as precio_cotizado',
+                'cotizaciones_detalle.cantidad',
+                'cotizaciones_detalle.total as total_item',
+                'repuestos.codigo_interno',
+                'repuestos.precio_venta as precio_normal',
+                'repuestos.descripcion',
+                'repuestos.oferta'
+            )
+            ->join('repuestos', 'cotizaciones_detalle.id_repuestos', 'repuestos.id')
+            ->where('cotizaciones_detalle.id_cotizacion', $cotizacion->id)
+            ->get();
+
+        return ['estado' => 'OK', 'carrito' => $cotizacion, 'detalle' => $detalle];
+
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+}
 
    public function revisar_carrito_virtual(){
    
@@ -1114,6 +1677,93 @@ class api_controlador extends Controller
     
    }
 
+   public function revisar_carrito_totem(){
+    try {
+        $usuario_id = 16; // USUARIO FRANCISCO ROJO
+        if(!$usuario_id){
+            return response()->json([
+                'repuestos' => []
+            ]);
+        }
+        $carrito = carrito_virtual::where('usuario_id',$usuario_id)
+                                            ->where('activo',1)
+                                        ->first();
+      
+        if($carrito){
+            $carrito_virtual = carrito_virtual_detalle::select('carrito_virtual_detalle.*','repuestos.*','carrito_virtual.numero_carrito')
+            ->join('carrito_virtual','carrito_virtual.numero_carrito','carrito_virtual_detalle.carrito_numero')
+            ->join('repuestos','carrito_virtual_detalle.repuesto_id','repuestos.id')
+            
+            ->where('carrito_virtual_detalle.carrito_numero',$carrito->numero_carrito)
+            ->get();
+            $repuestos_= [];
+            foreach($carrito_virtual as $repuesto){
+                    $existe = oferta_pagina_web::where('id_repuesto',$repuesto->id)->get();
+                    $descuento = descuento::where('activo',1)->where('id_familia',$repuesto->id_familia)->where('id_local','<>',1)->first();
+                    // $similares = $this->damesimilares($repuesto->id);
+                    $rep = new repuesto_carrito;
+                    $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
+                    if(isset($foto)){
+                        $rep->id = $repuesto->id;
+                        $rep->descripcion = $repuesto->descripcion;
+                        $rep->urlfoto = $foto->urlfoto;
+                        $rep->precio_normal = intval($repuesto->precio_venta);
+                        if(count($existe) > 0){
+                            $rep->precio_venta = $existe[0]->precio_actualizado;
+                            $rep->oferta = 1;
+                        }elseif($descuento){
+                            $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje/100) * $repuesto->precio_venta);
+                            $rep->oferta = 1;
+                        }else{
+                            $rep->precio_venta = $repuesto->precio_venta;
+                        }
+                        
+                        $rep->cantidad = $repuesto->cantidad;
+                        $rep->numero_carrito = $repuesto->numero_carrito;
+                        
+                        
+                        array_push($repuestos_,$rep);
+                    }else{
+                        $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                        $rep->id = $repuesto->id;
+                        $rep->descripcion = $repuesto->descripcion;
+                        $rep->urlfoto = $foto->urlfoto;
+                        $rep->precio_normal = $repuesto->precio_venta;
+                        if(count($existe) > 0){
+                            $rep->precio_venta = $existe[0]->precio_actualizado;
+                            $rep->oferta = 1;
+                        }elseif($descuento){
+                            $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje/100) * $repuesto->precio_venta);
+                            $rep->oferta = 1;
+                        }else{
+                            $rep->precio_venta = $repuesto->precio_venta;
+                        }
+                        $rep->cantidad = $repuesto->cantidad;
+                        $rep->numero_carrito = $repuesto->numero_carrito;
+
+                        array_push($repuestos_,$rep);
+                    }
+                    
+                    
+            }
+                                
+                        //Devolvemos el token
+                    return response()->json([
+                        'repuestos' => $repuestos_
+                    ]);
+            
+        }else{
+            
+            return response()->json([
+                'repuestos' => []
+            ]);
+        }
+        
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+   }
+
    public function eliminar_item_carrito($idrep,$carrito_numero){
     
     try {
@@ -1129,37 +1779,270 @@ class api_controlador extends Controller
     
    }
 
+   public function eliminar_item_carrito_totem($idrep,$carrito_numero){
+    
+    try {
+        $usuario_id = 16;
+        $carrito_virtual = carrito_virtual_detalle::where('repuesto_id',$idrep)->where('carrito_numero',$carrito_numero)->first();
+        
+        $carrito_virtual->delete();
+        $items = $this->revisar_carrito_totem($usuario_id);
+        return $items;
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+    
+   }
+
    public function damemodelos_pormarca($idmarca)
     {
         $marca = marcavehiculo::where('idmarcavehiculo', $idmarca)->first();
-        //usando auth en el grupo de rutas. ver web.php
-        $modelos = modelovehiculo::where('activo', '=', 1)
-            ->where('marcavehiculos_idmarcavehiculo', $idmarca)
-            ->orderBy('modelonombre')
+        
+        // Obtener modelos que tengan repuestos con stock en una sola query optimizada
+        $modelos = modelovehiculo::where('modelovehiculos.activo', '=', 1)
+            ->where('modelovehiculos.marcavehiculos_idmarcavehiculo', $idmarca)
+            ->whereExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('similares')
+                    ->join('repuestos', 'similares.id_repuestos', '=', 'repuestos.id')
+                    ->whereColumn('similares.id_modelo_vehiculo', 'modelovehiculos.id')
+                    ->where('similares.activo', 1)
+                    ->where('repuestos.activo', 1)
+                    ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' > 0')
+                    ->where('repuestos.id_familia', '<>', 312)
+                    ->where('repuestos.id_marca_repuesto', '<>', 190);
+            })
+            ->orderBy('modelovehiculos.modelonombre')
             ->get();
+        
+        return [$modelos, $marca];
+    }
 
-        //Creamos una nueva variable que contendrá los modelos que solo tengan repuestos
-        $nuevos_modelos = [];
-        foreach($modelos as $m){
-            $c = $this->damemodelo_pormarca($m->id);
-            $repuestos = $c[0];
-            //Si la cantidad de repuestos es de al menos 1 
-            if(count($repuestos) > 0){
-                //Guardamos el nuevo modelo con la cantidad de repuestos
-                $m->cantidad_repuestos = count($repuestos);
-                //Guardamos el nuevo modelo confirmando que hay al menos 1 repuesto
-                //$m->cantidad_repuestos = 1;
-                //Guardamos el modelo en el nuevo arreglo
-                array_push($nuevos_modelos,$m);
+    public function damemodelos_pormarca_totem($idmarca)
+    {
+        $marca = marcavehiculo::where('idmarcavehiculo', $idmarca)->first();
+        
+        // Obtener modelos que tengan repuestos con stock en una sola query optimizada
+        $modelos = modelovehiculo::select('modelovehiculos.*')
+            ->where('modelovehiculos.activo', '=', 1)
+            ->where('modelovehiculos.marcavehiculos_idmarcavehiculo', $idmarca)
+            ->whereExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('similares')
+                    ->join('repuestos', 'similares.id_repuestos', '=', 'repuestos.id')
+                    ->whereColumn('similares.id_modelo_vehiculo', 'modelovehiculos.id')
+                    ->where('similares.activo', 1)
+                    ->where('repuestos.activo', 1)
+                    ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' > 0')
+                    ->where('repuestos.id_familia', '<>', 312)
+                    ->where('repuestos.id_marca_repuesto', '<>', 190);
+            })
+            ->orderBy('modelovehiculos.modelonombre')
+            ->get();
+        
+        return [$modelos, $marca];
+    }
+
+    public function formas_pago_totem(){
+        $formas_pago = formapago::where('activo',1)->get();
+        return $formas_pago;
+    }
+
+    public function damerepuestosfamilia_totem($idmodelo, $familia){
+        try {
+            $familia_completa = familia::where('nombrefamilia', $familia)->first();
+            if(!$familia_completa){
+                return response()->json([]);
             }
-            
 
+            $aplicaciones = similar::where('id_modelo_vehiculo', $idmodelo)
+                            ->pluck('id_repuestos')
+                            ->toArray();
+
+            $repuestos = repuesto::wherein('repuestos.id', $aplicaciones)
+                ->where('repuestos.activo', 1)
+                ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' > 0')
+                ->where('repuestos.id_familia', $familia_completa->id)
+                ->where('repuestos.id_marca_repuesto', '<>', 190)
+                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                ->join('familias', 'repuestos.id_familia', 'familias.id')
+                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                ->select('repuestos.*', 'marcarepuestos.marcarepuesto', 'familias.nombrefamilia', 'paises.nombre_pais')
+                ->orderBy('repuestos.descripcion')
+                ->get();
+
+            $repuestos_ = [];
+            foreach($repuestos as $repuesto){
+                $foto = repuestofoto::where('id_repuestos', '=', $repuesto->id)->first();
+                if(!isset($foto)){
+                    $foto = repuestofoto::where('id_repuestos', '=', 62816)->first();
+                }
+
+                $rep = new repuesto_catalogo;
+                $rep->id = $repuesto->id;
+                $rep->descripcion = $repuesto->descripcion;
+                $rep->urlfoto = $foto->urlfoto;
+                $rep->marcarepuesto = $repuesto->marcarepuesto;
+                $rep->nombrefamilia = $repuesto->nombrefamilia;
+                $rep->nombre_pais = $repuesto->nombre_pais;
+                $rep->stock_actual = \App\Services\StockPorLocalService::total($repuesto);
+                $rep->precio_normal = $repuesto->precio_venta;
+                $rep->id_familia = $repuesto->id_familia;
+                $rep->codigo_interno = $repuesto->codigo_interno;
+                $rep->observaciones = $repuesto->observaciones;
+
+                $oferta = oferta_pagina_web::where('id_repuesto', $repuesto->id)->first();
+                $descuento = descuento::where('activo', 1)->where('id_familia', $repuesto->id_familia)->first();
+                if($oferta){
+                    $rep->precio_venta = $oferta->precio_actualizado;
+                    $rep->oferta = 1;
+                }elseif($descuento){
+                    $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje / 100) * $repuesto->precio_venta);
+                    $rep->oferta = 1;
+                }else{
+                    $rep->precio_venta = $repuesto->precio_venta;
+                    $rep->oferta = 0;
+                }
+
+                array_push($repuestos_, $rep);
+            }
+
+            if (in_array((int) $familia_completa->id, [344, 345, 348, 374, 375, 50], true)) {
+                $repuestos_ = $this->armarParesDerechoIzquierdo($repuestos_);
+            }
+
+            return response()->json($repuestos_);
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    private function armarParesDerechoIzquierdo($repuestos)
+    {
+        $derechos = [];
+        $izquierdos = [];
+        $otros = [];
+
+        foreach ($repuestos as $rep) {
+            $lado = $this->detectarLadoPar($rep->descripcion);
+
+            if ($lado === 'derecho') {
+                $key = $this->generarKeyPar($rep, 'derecho');
+                $derechos[$key][] = $rep;
+            } elseif ($lado === 'izquierdo') {
+                $key = $this->generarKeyPar($rep, 'izquierdo');
+                $izquierdos[$key][] = $rep;
+            } else {
+                $otros[] = $rep;
+            }
         }
 
-        
-        
-        return [$nuevos_modelos,$marca];
+        $pares = [];
+        $usadosIzq = [];
+
+        foreach ($derechos as $key => $itemsDerechos) {
+            foreach ($itemsDerechos as $derecho) {
+                $izquierdo = null;
+
+                if (isset($izquierdos[$key])) {
+                    foreach ($izquierdos[$key] as $idx => $itemIzquierdo) {
+                        if (!isset($usadosIzq[$itemIzquierdo->id])) {
+                            $izquierdo = $itemIzquierdo;
+                            $usadosIzq[$itemIzquierdo->id] = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$izquierdo) {
+                    $izquierdo = $this->productoNoDisponible(
+                        $derecho,
+                        'No existe complemento izquierdo'
+                    );
+                }
+
+                $pares[] = [
+                    'derecho' => $derecho,
+                    'izquierdo' => $izquierdo,
+                ];
+            }
+        }
+
+        // Si existen izquierdos sin derecho
+        foreach ($izquierdos as $key => $itemsIzquierdos) {
+            foreach ($itemsIzquierdos as $izquierdo) {
+                if (isset($usadosIzq[$izquierdo->id])) {
+                    continue;
+                }
+
+                $pares[] = [
+                    'derecho' => $this->productoNoDisponible(
+                        $izquierdo,
+                        'No existe complemento derecho'
+                    ),
+                    'izquierdo' => $izquierdo,
+                ];
+            }
+        }
+
+        // Los productos sin lateralidad se muestran como tarjetas normales.
+        foreach ($otros as $otro) {
+            $pares[] = $otro;
+        }
+
+        return $pares;
     }
+
+    private function generarKeyPar($rep, $lado)
+    {
+        $descripcion = strtoupper($rep->descripcion);
+
+        if ($lado === 'derecho') {
+            $descripcion = preg_replace('/\b(DERECHO|DERECHA|DER|RIGHT|RH)\b/u', ' ', $descripcion);
+        } elseif ($lado === 'izquierdo') {
+            $descripcion = preg_replace('/\b(IZQUIERDO|IZQUIERDA|IZQ|LEFT|LH)\b/u', ' ', $descripcion);
+        }
+
+        $descripcion = preg_replace('/\s+/', ' ', $descripcion);
+        $descripcion = trim($descripcion);
+
+        return $rep->marcarepuesto . '|' . $descripcion;
+    }
+
+    private function detectarLadoPar($descripcion)
+    {
+        $descripcion = strtoupper($descripcion);
+
+        if (preg_match('/\b(DERECHO|DERECHA|DER|RIGHT|RH)\b/u', $descripcion)) {
+            return 'derecho';
+        }
+
+        if (preg_match('/\b(IZQUIERDO|IZQUIERDA|IZQ|LEFT|LH)\b/u', $descripcion)) {
+            return 'izquierdo';
+        }
+
+        return null;
+    }
+
+private function productoNoDisponible($base, $mensaje)
+{
+    $rep = new \stdClass();
+
+    $rep->id = 0;
+    $rep->descripcion = $mensaje;
+    $rep->urlfoto = 'fotozzz/no-disponible.jpg';
+    $rep->marcarepuesto = $base->marcarepuesto;
+    $rep->nombrefamilia = $base->nombrefamilia;
+    $rep->nombre_pais = $base->nombre_pais;
+    $rep->stock_actual = 0;
+    $rep->precio_normal = 0;
+    $rep->id_familia = $base->id_familia;
+    $rep->precio_venta = 0;
+    $rep->oferta = 0;
+    $rep->no_disponible = true;
+
+    return $rep;
+}
 
     public function damemodelo_pormarca($idmodelo){
         try {
@@ -1264,6 +2147,121 @@ class api_controlador extends Controller
         
     }
 
+public function damemodelo_pormarca_totem($idmodelo){
+    try {
+        $modelo = modelovehiculo::select('modelovehiculos.*','marcavehiculos.marcanombre')
+                                    ->join('marcavehiculos','modelovehiculos.marcavehiculos_idmarcavehiculo','marcavehiculos.idmarcavehiculo')
+                                    ->where('modelovehiculos.id',$idmodelo)
+                                    ->first();
+        $aplicaciones = similar::select('id_repuestos')
+        ->where('id_modelo_vehiculo', $idmodelo)
+        ->get()
+        ->toArray();
+
+        $repuestos = repuesto::wherein('repuestos.id', $aplicaciones)
+        ->where('repuestos.activo',1)
+        ->where('repuestos.stock_actual','>',0)
+        ->where('repuestos.id_familia','<>',312)
+        ->where('repuestos.id_marca_repuesto','<>',190)
+            ->join('paises', 'repuestos.id_pais', 'paises.id')
+            ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+            ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+            ->join('familias','repuestos.id_familia','familias.id')
+            ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*','familias.nombrefamilia')
+            ->orderBy('repuestos.descripcion')
+            ->get();
+            $repuestos_= [];
+            $marcas_repuestos = [];
+            $familias_repuestos = [];
+            foreach($repuestos as $repuesto){
+                
+                //Fecha ultima actualización del precio del repuesto
+                    $firstDate = $repuesto->fecha_actualiza_precio;
+                    $secondDate = date('d-m-Y H:i:s');
+
+                    $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
+
+                    $years  = floor($dateDifference / (365 * 60 * 60 * 24));
+                    $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
+                    $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
+
+                    $minutos = floor(abs($dateDifference / 60));
+                    $horas = floor($minutos / 60);
+                    $dias = floor($horas / 24);
+                    $similares = $this->damesimilares($repuesto->id);
+
+                    $descuento = descuento::where('activo',1)->where('id_familia',$repuesto->id_familia)->where('id_local','<>',1)->first();
+
+                    if($similares->count() > 0 && $dias <= 60){
+
+                        $rep = new repuesto_catalogo;
+                        $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
+                        if(isset($foto)){
+                            $rep->id = $repuesto->id;
+                            $rep->descripcion = $repuesto->descripcion;
+                            $rep->urlfoto = $foto->urlfoto;
+                           //Revisamos si viene en oferta para respetar el precio oferta
+                            if($repuesto->oferta == 1){
+                                $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
+                                $rep->precio_venta = $v->precio_actualizado;
+                            }elseif($descuento){
+                                $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje/100) * $repuesto->precio_venta);
+                            }else{
+                                $rep->precio_venta = $repuesto->precio_venta;
+                            }
+                            
+                            $rep->nombrefamilia = $repuesto->nombrefamilia;
+                            $rep->marcarepuesto = $repuesto->marcarepuesto;
+                            $rep->stock_actual = $repuesto->stock_actual;
+                            array_push($repuestos_,$rep);
+                            array_push($marcas_repuestos, $rep->marcarepuesto);
+                            array_push($familias_repuestos, $repuesto->nombrefamilia);
+                        }else{
+                            $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                            $rep->id = $repuesto->id;
+                            $rep->descripcion = $repuesto->descripcion;
+                            $rep->urlfoto = $foto->urlfoto;
+                            //Revisamos si viene en oferta para respetar el precio oferta
+                            if($repuesto->oferta == 1){
+                                $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
+                                $rep->precio_venta = $v->precio_actualizado;
+                            }elseif($descuento){
+                                $rep->precio_venta = $repuesto->precio_venta - (($descuento->porcentaje/100) * $repuesto->precio_venta);
+                            }else{
+                                $rep->precio_venta = $repuesto->precio_venta;
+                            }
+                            
+                            
+                            $rep->marcarepuesto = $repuesto->marcarepuesto;
+                            $rep->stock_actual = $repuesto->stock_actual;
+                            $rep->nombrefamilia = $repuesto->nombrefamilia;
+                            array_push($repuestos_,$rep);
+                            array_push($marcas_repuestos, $rep->marcarepuesto);
+                            array_push($familias_repuestos, $repuesto->nombrefamilia);
+                        }
+                    }
+                    
+                }
+            
+            // op=0: todas las familias activas con similares para el modelo (sin filtro de medidas ni días)
+            $familias_totem = DB::select("
+                SELECT repuestos.id_familia, UPPER(familias.nombrefamilia) as nombrefamilia, COUNT(repuestos.id_familia) as total
+                FROM repuestos
+                INNER JOIN familias ON repuestos.id_familia = familias.id
+                WHERE repuestos.activo = 1
+                AND (repuestos.stock_actual > 0 OR repuestos.stock_actual_dos > 0 OR repuestos.stock_actual_tres > 0)
+                AND repuestos.id IN (SELECT similares.id_repuestos FROM similares WHERE similares.id_modelo_vehiculo = ?)
+                GROUP BY repuestos.id_familia
+                ORDER BY familias.nombrefamilia
+            ", [$idmodelo]);
+
+            return [$repuestos_,$modelo,array_values(array_unique($marcas_repuestos)),array_values(array_unique($familias_repuestos)), $familias_totem];
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+    
+}
+
     public function damesimilares($id_repuesto)
     {
         $s=similar::select('marcavehiculos.marcanombre','marcavehiculos.urlfoto','modelovehiculos.modelonombre','modelovehiculos.zofri','similares.id','similares.anios_vehiculo','marcavehiculos.idmarcavehiculo','modelovehiculos.id as id_modelo')
@@ -1274,6 +2272,13 @@ class api_controlador extends Controller
         ->orderBy('marcavehiculos.marcanombre','ASC')
         ->get();
         return $s;
+    }
+
+    public function tieneSimilares($id_repuesto)
+    {
+        return similar::where('id_repuestos', $id_repuesto)
+            ->where('activo', 1)
+            ->exists();
     }
 
     public function ordenar($id){
@@ -2409,7 +3414,7 @@ class api_controlador extends Controller
 
 
     public function buscar_en_descrip($buscado,$orden){
-      
+      try {
         //repuestos.descripcion, repuesto->id
         $resp['resultado']=false;
         $buscado=trim($buscado);
@@ -2681,6 +3686,11 @@ class api_controlador extends Controller
         }
 
         return $encontrados;
+      } catch (\Exception $e) {
+        //throw $th;
+        return $e->getMessage();
+      }
+        
     }
 
     public function buscar_en_descrip_marca($buscado,$orden,$marca){
@@ -5964,103 +6974,182 @@ public function buscar_por_medida($medida){
         return [$marca, $modelo, $familia];
     }
 
-    public function dame_ofertas(){
-       $hoy = getdate();
-       $dia = $hoy['mday'];
-       $mes = $hoy['mon'];
-       $year = $hoy['year'];
+  
 
-       $fecha = $year.'-'.$mes.'-'.$dia;
-      
-        $ofertas = oferta_pagina_web::select('ofertas_pagina_web.*','repuestos.descripcion','repuestos.fecha_actualiza_precio')
-                                    ->join('repuestos','ofertas_pagina_web.id_repuesto','repuestos.id')
-                                    ->where('ofertas_pagina_web.activo',1)
-                                    ->get();
-        $repuestos = repuesto::select('repuestos.*','ofertas_pagina_web.precio_actualizado','ofertas_pagina_web.descuento','familias.nombrefamilia','ofertas_pagina_web.desde','ofertas_pagina_web.hasta')
-                                    ->where('repuestos.stock_actual','>',0)
-                                    ->where('repuestos.id_familia','<>',312)
-                                    ->where('repuestos.id_marca_repuesto','<>',190)
-                                    ->where('ofertas_pagina_web.activo',1)
-                                    ->join('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
-                                    ->join('familias','repuestos.id_familia','familias.id')
-                                    ->get();
-
-       
-         $repuestos_= [];
-                foreach($repuestos as $repuesto){
-                  
-                    //Revisamos si hay oferta disponible el dia de hoy
-                
-                        //Fecha ultima actualización del precio del repuesto
-                        $firstDate = $repuesto->fecha_actualiza_precio;
-                        $secondDate = date('d-m-Y H:i:s');
-
-                        $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
-
-                        $years  = floor($dateDifference / (365 * 60 * 60 * 24));
-                        $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
-                        $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
-
-                        $minutos = floor(abs($dateDifference / 60));
-                        $horas = floor($minutos / 60);
-                        $dias = floor($horas / 24);
-                        $similares = $this->damesimilares($repuesto->id);
-                        if($similares->count() > 0 && $dias <= 60){
-
-                            $rep = new oferta_catalogo;
-                            $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
-                            if(isset($foto)){
-                                $rep->id = $repuesto->id;
-                                $rep->codigo_interno = $repuesto->codigo_interno;
-                                $rep->descripcion = $repuesto->descripcion;
-                                $rep->urlfoto = $foto->urlfoto;
-                                if($repuesto->oferta == 1){
-                                    $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
-                                    $rep->precio_venta = $v->precio_actualizado;
-                                }else{
-                                    $rep->precio_venta = $repuesto->precio_venta;
-                                }
-                                $rep->precio_actualizado = $repuesto->precio_actualizado;
-                                $rep->descuento = $repuesto->descuento;
-                                $rep->marcarepuesto = $repuesto->marcarepuesto;
-                                $rep->nombrefamilia = $repuesto->nombrefamilia;
-                                $rep->stock_actual = $repuesto->stock_actual;
-                                array_push($repuestos_,$rep);
-                            }else{
-                                $foto=repuestofoto::where('id_repuestos','=',62816)->first();
-                                $rep->id = $repuesto->id;
-                                $rep->descripcion = $repuesto->descripcion;
-                                $rep->urlfoto = $foto->urlfoto;
-                                if($repuesto->oferta == 1){
-                                    $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
-                                    $rep->precio_venta = $v->precio_actualizado;
-                                }else{
-                                    $rep->precio_venta = $repuesto->precio_venta;
-                                }
-                                $rep->precio_actualizado = $repuesto->precio_actualizado;
-                                $rep->descuento = $repuesto->descuento;
-                                $rep->marcarepuesto = $repuesto->marcarepuesto;
-                                $rep->nombrefamilia = $repuesto->nombrefamilia;
-                                $rep->stock_actual = $repuesto->stock_actual;
-                                array_push($repuestos_,$rep);
-                            }
-                        }
-                   
-                    
-                        
+    public function dame_ofertas()
+    {
+        try {
+            $fechaHoy = date('Y-m-d');
+    
+            $repuestos = repuesto::select(
+                    'repuestos.*',
+                    'ofertas_pagina_web.precio_actualizado',
+                    'ofertas_pagina_web.descuento',
+                    'familias.nombrefamilia',
+                    DB::raw(\App\Services\StockPorLocalService::totalSql() . ' as stock_total')
+                )
+                ->join('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
+                ->join('familias','repuestos.id_familia','familias.id')
+                ->where('ofertas_pagina_web.activo',1)
+                ->whereIn('ofertas_pagina_web.local',[4,5,6])
+                ->where('repuestos.id_familia','<>',312)
+                ->where('repuestos.id_marca_repuesto','<>',190)
+                ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' > 0')
+                ->get();
+        
+            $repuestos_ = [];
+        
+            foreach($repuestos as $repuesto){
+        
+                // validar fecha precio <= 60 días
+                $dias = now()->diffInDays($repuesto->fecha_actualiza_precio);
+        
+                if($dias > 60) continue;
+        
+                // validar similares
+                if(!$this->tieneSimilares($repuesto->id)) continue;
+        
+                $rep = new oferta_catalogo;
+        
+                $foto = repuestofoto::where('id_repuestos',$repuesto->id)->first();
+        
+                if(!$foto){
+                    $foto = repuestofoto::where('id_repuestos',62816)->first();
                 }
-                    // El id local 1 corresponde a las ofertas solo en local
-                    // El id local 2 y el id local 3 corresponde a las ofertas web
-                $descuentos = descuento::select('descuentos.*','familias.nombrefamilia')
-                                        ->join('familias','descuentos.id_familia','familias.id')
-                                        ->where('descuentos.activo',1)
-                                        ->where('id_local','<>',1)
-                                        ->get();
+        
+                $rep->id = $repuesto->id;
+                $rep->codigo_interno = $repuesto->codigo_interno;
+                $rep->descripcion = $repuesto->descripcion;
+                $rep->urlfoto = $foto->urlfoto;
+                $rep->precio_venta = $repuesto->precio_actualizado ?? $repuesto->precio_venta;
+                $rep->precio_actualizado = $repuesto->precio_actualizado;
+                $rep->descuento = $repuesto->descuento;
+                $rep->marcarepuesto = $repuesto->marcarepuesto;
+                $rep->nombrefamilia = $repuesto->nombrefamilia;
+                $rep->stock_actual = $repuesto->stock_total;
+        
+                $repuestos_[] = $rep;
+            }
+        
+        
+            $descuentos = descuento::select(
+                    'descuentos.*',
+                    'familias.nombrefamilia'
+                )
+                ->join('familias','descuentos.id_familia','familias.id')
+                ->where('descuentos.activo',1)
+                ->where('id_local','<>',1)
+                ->get();
+        
+        
+            $user = Auth::user();
+        
+            return [$repuestos_, $descuentos, $user];
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
 
-                $user = Auth::user();
-                
-                return [$repuestos_,$descuentos,$user];
     }
+
+    public function dame_ofertas_totem(){
+        $hoy = getdate();
+        $dia = $hoy['mday'];
+        $mes = $hoy['mon'];
+        $year = $hoy['year'];
+ 
+        $fecha = $year.'-'.$mes.'-'.$dia;
+       
+         $ofertas = oferta_pagina_web::select('ofertas_pagina_web.*','repuestos.descripcion','repuestos.fecha_actualiza_precio')
+                                     ->join('repuestos','ofertas_pagina_web.id_repuesto','repuestos.id')
+                                     ->where('ofertas_pagina_web.activo',1)
+                                     ->whereIn('ofertas_pagina_web.local',[4,5,6])
+                                     ->get();
+         $repuestos = repuesto::select('repuestos.*','ofertas_pagina_web.precio_actualizado','ofertas_pagina_web.descuento','familias.nombrefamilia','ofertas_pagina_web.desde','ofertas_pagina_web.hasta')
+                                     ->where('repuestos.stock_actual','>',0)
+                                     ->where('repuestos.id_familia','<>',312)
+                                     ->where('repuestos.id_marca_repuesto','<>',190)
+                                     ->where('ofertas_pagina_web.activo',1)
+                                     ->join('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
+                                     ->join('familias','repuestos.id_familia','familias.id')
+                                     ->get();
+ 
+        
+          $repuestos_= [];
+                 foreach($repuestos as $repuesto){
+                   
+                     //Revisamos si hay oferta disponible el dia de hoy
+                 
+                         //Fecha ultima actualización del precio del repuesto
+                         $firstDate = $repuesto->fecha_actualiza_precio;
+                         $secondDate = date('d-m-Y H:i:s');
+ 
+                         $dateDifference = abs(strtotime($secondDate) - strtotime($firstDate));
+ 
+                         $years  = floor($dateDifference / (365 * 60 * 60 * 24));
+                         $months = floor(($dateDifference - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
+                         $days   = floor(($dateDifference - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 *24) / (60 * 60 * 24));
+ 
+                         $minutos = floor(abs($dateDifference / 60));
+                         $horas = floor($minutos / 60);
+                         $dias = floor($horas / 24);
+                         $similares = $this->damesimilares($repuesto->id);
+                         if($similares->count() > 0 && $dias <= 60){
+ 
+                             $rep = new oferta_catalogo;
+                             $foto=repuestofoto::where('id_repuestos','=',$repuesto->id)->first();
+                             if(isset($foto)){
+                                 $rep->id = $repuesto->id;
+                                 $rep->codigo_interno = $repuesto->codigo_interno;
+                                 $rep->descripcion = $repuesto->descripcion;
+                                 $rep->urlfoto = $foto->urlfoto;
+                                 if($repuesto->oferta == 1){
+                                     $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
+                                     $rep->precio_venta = $v->precio_actualizado;
+                                 }else{
+                                     $rep->precio_venta = $repuesto->precio_venta;
+                                 }
+                                 $rep->precio_actualizado = $repuesto->precio_actualizado;
+                                 $rep->descuento = $repuesto->descuento;
+                                 $rep->marcarepuesto = $repuesto->marcarepuesto;
+                                 $rep->nombrefamilia = $repuesto->nombrefamilia;
+                                 $rep->stock_actual = $repuesto->stock_actual;
+                                 array_push($repuestos_,$rep);
+                             }else{
+                                 $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                                 $rep->id = $repuesto->id;
+                                 $rep->descripcion = $repuesto->descripcion;
+                                 $rep->urlfoto = $foto->urlfoto;
+                                 if($repuesto->oferta == 1){
+                                     $v = oferta_pagina_web::where('id_repuesto',$repuesto->id)->first();
+                                     $rep->precio_venta = $v->precio_actualizado;
+                                 }else{
+                                     $rep->precio_venta = $repuesto->precio_venta;
+                                 }
+                                 $rep->precio_actualizado = $repuesto->precio_actualizado;
+                                 $rep->descuento = $repuesto->descuento;
+                                 $rep->marcarepuesto = $repuesto->marcarepuesto;
+                                 $rep->nombrefamilia = $repuesto->nombrefamilia;
+                                 $rep->stock_actual = $repuesto->stock_actual;
+                                 array_push($repuestos_,$rep);
+                             }
+                         }
+                    
+                     
+                         
+                 }
+                     // El id local 1 corresponde a las ofertas solo en local
+                     // El id local 2 y el id local 3 corresponde a las ofertas web
+                 $descuentos = descuento::select('descuentos.*','familias.nombrefamilia')
+                                         ->join('familias','descuentos.id_familia','familias.id')
+                                         ->where('descuentos.activo',1)
+                                         ->where('id_local','<>',1)
+                                         ->get();
+ 
+                 $user = Auth::user();
+                 
+                 return [$repuestos_,$descuentos,$user];
+     }
 
     public function enviar_correo(Request $req){
         try {
@@ -6365,6 +7454,1231 @@ public function buscar_por_medida($medida){
         }
         
     }
+
+    /**
+     * Determina si un producto tiene características de ser complementario
+     */
+    private function esProductoComplementario($descripcion)
+    {
+        $descripcion_lower = mb_strtolower($descripcion);
+        
+        // Palabras clave que indican lateralidad o posición
+        $palabras_clave = [
+            'izquierdo', 'izquierda', 'izq', 'left', 'lh',
+            'derecho', 'derecha', 'der', 'right', 'rh',
+            'delantero', 'delantera', 'del', 'front', 'ant', 'anterior',
+            'trasero', 'trasera', 'tras', 'rear', 'post', 'posterior',
+            'superior', 'sup', 'upper', 'top',
+            'inferior', 'inf', 'lower', 'bottom'
+        ];
+        
+        foreach($palabras_clave as $palabra){
+            if(strpos($descripcion_lower, $palabra) !== false){
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Busca el complemento de un producto (ej: si es izquierdo, busca el derecho)
+     */
+    private function buscarComplemento($repuesto, $todosRepuestos)
+    {
+        $descripcion = mb_strtolower($repuesto->descripcion);
+        
+        // Definir pares de complementos
+        $pares = [
+            ['izquierdo', 'derecho'],
+            ['izquierda', 'derecha'],
+            ['izq', 'der'],
+            ['left', 'right'],
+            ['lh', 'rh'],
+            ['delantero', 'trasero'],
+            ['delantera', 'trasera'],
+            ['del', 'tras'],
+            ['front', 'rear'],
+            ['ant', 'post'],
+            ['anterior', 'posterior'],
+            ['superior', 'inferior'],
+            ['sup', 'inf'],
+            ['upper', 'lower'],
+            ['top', 'bottom']
+        ];
+        
+        $palabra_actual = null;
+        $palabra_complemento = null;
+        
+        // Identificar qué palabra tiene y cuál sería su complemento
+        foreach($pares as $par){
+            if(strpos($descripcion, $par[0]) !== false){
+                $palabra_actual = $par[0];
+                $palabra_complemento = $par[1];
+                break;
+            }
+            if(strpos($descripcion, $par[1]) !== false){
+                $palabra_actual = $par[1];
+                $palabra_complemento = $par[0];
+                break;
+            }
+        }
+        
+        if(!$palabra_actual || !$palabra_complemento){
+            return null;
+        }
+        
+        // Crear la descripción esperada del complemento
+        $descripcion_complemento = str_replace($palabra_actual, $palabra_complemento, $descripcion);
+        
+        // Buscar en todos los repuestos uno que coincida
+        foreach($todosRepuestos as $posible_complemento){
+            if($posible_complemento->id == $repuesto->id){
+                continue; // Saltar el mismo producto
+            }
+            
+            $desc_posible = mb_strtolower($posible_complemento->descripcion);
+            
+            // ============= CRITERIOS DE EMPAREJAMIENTO =============
+            
+            // CRITERIO 1: Misma marca de repuesto (obligatorio)
+            if($posible_complemento->marcarepuesto != $repuesto->marcarepuesto){
+                continue;
+            }
+            
+            // CRITERIO 2: Misma familia de producto (obligatorio)
+            if($posible_complemento->nombrefamilia != $repuesto->nombrefamilia){
+                continue;
+            }
+            
+            // CRITERIO 3: Debe contener la palabra complementaria (izq->der, del->tras, etc)
+            if(strpos($desc_posible, $palabra_complemento) === false){
+                continue;
+            }
+            
+            // CRITERIO 4: Similitud en descripción (al menos 70%)
+            // Removemos las palabras de posición para comparar el resto
+            $desc_limpia_1 = str_replace([$palabra_actual, $palabra_complemento], '', $descripcion);
+            $desc_limpia_2 = str_replace([$palabra_actual, $palabra_complemento], '', $desc_posible);
+            
+            similar_text($desc_limpia_1, $desc_limpia_2, $porcentaje);
+            
+            if($porcentaje < 70){
+                continue;
+            }
+            
+            // CRITERIO 5: Precio similar (±30% de diferencia) - opcional pero recomendado
+            $precio_original = floatval($repuesto->precio_venta);
+            $precio_complemento = floatval($posible_complemento->precio_venta);
+            
+            if($precio_original > 0 && $precio_complemento > 0){
+                $diferencia_porcentual = abs($precio_original - $precio_complemento) / $precio_original * 100;
+                
+                // Si la diferencia de precio es mayor al 30%, es menos confiable pero lo aceptamos
+                // (algunos complementos pueden tener pequeñas variaciones de precio)
+                if($diferencia_porcentual > 30){
+                    // Aún así podría ser válido, solo bajamos la confianza
+                    // pero lo aceptamos si cumple los demás criterios
+                }
+            }
+            
+            // Si llegó aquí, cumple todos los criterios principales
+            return $posible_complemento;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Agrupa productos complementarios para mostrar en formato de 2 columnas
+     * Retorna los repuestos con toda su información más propiedades de agrupamiento
+     */
+    private function agruparProductosComplementarios($repuestos)
+    {
+        $procesados = [];
+        $resultado = [];
+        
+        foreach($repuestos as $index => $repuesto){
+            // Si ya fue procesado, saltar
+            if(in_array($repuesto->id, $procesados)){
+                continue;
+            }
+            
+            // Agregar propiedades por defecto
+            $repuesto->tiene_complemento = false;
+            $repuesto->id_complemento = null;
+            $repuesto->posicion_en_par = null; // 'izquierdo', 'derecho', 'delantero', 'trasero', etc.
+            
+            // Verificar si es un producto complementario
+            if($this->esProductoComplementario($repuesto->descripcion)){
+                // Buscar su complemento
+                $complemento = $this->buscarComplemento($repuesto, $repuestos);
+                
+                if($complemento){
+                    // Marcar que tiene complemento
+                    $repuesto->tiene_complemento = true;
+                    $repuesto->id_complemento = $complemento->id;
+                    $repuesto->posicion_en_par = $this->detectarPosicion($repuesto->descripcion);
+                    
+                    // Agregar el producto principal
+                    $resultado[] = $repuesto;
+                    
+                    // Configurar y agregar el complemento
+                    $complemento->tiene_complemento = true;
+                    $complemento->id_complemento = $repuesto->id;
+                    $complemento->posicion_en_par = $this->detectarPosicion($complemento->descripcion);
+                    $resultado[] = $complemento;
+                    
+                    // Marcar ambos como procesados
+                    $procesados[] = $repuesto->id;
+                    $procesados[] = $complemento->id;
+                } else {
+                    // No se encontró complemento, agregar como individual
+                    $resultado[] = $repuesto;
+                    $procesados[] = $repuesto->id;
+                }
+            } else {
+                // Producto sin características complementarias
+                $resultado[] = $repuesto;
+                $procesados[] = $repuesto->id;
+            }
+        }
+        
+        return $resultado;
+    }
+    
+    /**
+     * Detecta la posición/lateralidad del producto
+     */
+    private function detectarPosicion($descripcion)
+    {
+        $descripcion_lower = mb_strtolower($descripcion);
+        
+        $posiciones = [
+            'izquierdo' => ['izquierdo', 'izquierda', 'izq', 'left', 'lh'],
+            'derecho' => ['derecho', 'derecha', 'der', 'right', 'rh'],
+            'delantero' => ['delantero', 'delantera', 'del', 'front', 'ant', 'anterior'],
+            'trasero' => ['trasero', 'trasera', 'tras', 'rear', 'post', 'posterior'],
+            'superior' => ['superior', 'sup', 'upper', 'top'],
+            'inferior' => ['inferior', 'inf', 'lower', 'bottom']
+        ];
+        
+        foreach($posiciones as $nombre => $variantes){
+            foreach($variantes as $variante){
+                if(strpos($descripcion_lower, $variante) !== false){
+                    return $nombre;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    public function buscar_por_descripcion($dato){ //busqueda principal
+        try {
+         
+            $op = substr($dato, 0, 1);
+            $desc = substr(trim($dato), 1);
+            $de = array(" de ", " DE ", " dE ", " De ");
+            $descripcion = str_replace($de, " ", $desc);
+            
+            $descripcion= str_replace("  "," ",$descripcion);
+            $descripcion=str_replace("_&_","/",$descripcion);
+            $descripcion_original=$descripcion;
+            $descripcion_sin_guiones= str_replace("-","",$descripcion);
+            $buscado_original=trim($descripcion_original);
+            
+            $buscado_sin_guiones=$descripcion_sin_guiones;
+            $terminos=explode(" ",$descripcion);
+
+            // Detectar si la búsqueda incluye un año (ej: "filtro aire accent 2012")
+            $anio_buscado = null;
+            foreach($terminos as $t){
+                if(preg_match('/^(19|20)\d{2}$/', trim($t))){
+                    $anio_buscado = trim($t);
+                    break;
+                }
+            }
+            
+            $quien_busca=User::find(16)->name;
+            $id_buscados=\DB::table('busquedas')->insertGetId(['buscado'=>$desc,'encontrados'=>"INICIO",'fecha_hora_buscado'=>date("Y-m-d H:i:s"),'quien_busca'=>$quien_busca]);
+            $conteo=[];
+            $conteo["codint"]=$this->buscar_en_codint($buscado_original);
+
+            $conteo["codprov"]=$this->buscar_en_codprov($buscado_original);
+            
+            $conteo["codalt"]=$this->buscar_en_codAlternador($buscado_sin_guiones);
+            
+            $conteo["codrec"]=$this->buscar_en_codRectificador($buscado_sin_guiones);
+  
+          
+            // $conteo["codmtr"]=$this->buscar_en_codmotor($buscado_sin_guiones);
+            $conteo["codoem"]=$this->buscar_en_codoem($buscado_sin_guiones);
+         
+            $conteo["codfab"]=$this->buscar_en_codfab($buscado_original); // ERROR Malformed UTF-8 caracters, possibly incorrectly encoded exception. es por la función substr_replace que no admite caracteres UTF-8
+            $conteo["descrip"]=$this->buscar_en_descrip($buscado_original,1);
+ 
+            $conteo["solo_descrip"]=$this->buscar_solo_en_descrip($buscado_original);
+            
+            $repuestos=Collect(); //Colección que juntará todos los resultados a entregar
+            $criterio="( ";
+    
+            
+            if($conteo['codint']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codint']['repuestos']);
+                $criterio.="codint:".$conteo["codint"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['codoem']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codoem']['repuestos']);
+                $criterio.="codoem:".$conteo["codoem"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['codfab']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codfab']['repuestos']);
+                $criterio.="codfab:".$conteo["codfab"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['codprov']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codprov']['repuestos']);
+                $criterio.="codprov:".$conteo["codprov"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['codalt']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codalt']['repuestos']);
+                $criterio.="codalt:".$conteo["codalt"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['codrec']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['codrec']['repuestos']);
+                $criterio.="codrec:".$conteo["codrec"]["repuestos"]->count()." ";
+            }
+
+            if($conteo['descrip']){
+                $repuestos=$this->revisar($repuestos,$conteo['descrip']);
+                $criterio.="algor nuevo:".$conteo["descrip"]->count()." ";
+            }
+
+            if($conteo['solo_descrip']['resultado']){
+                $repuestos=$this->revisar($repuestos,$conteo['solo_descrip']['repuestos']);
+                $criterio.="en_descrip:".$conteo["solo_descrip"]["repuestos"]->count()." ";
+            }
+
+            $repuestos_ = [];
+
+            foreach($repuestos as $rep){
+                $foto=repuestofoto::where('id_repuestos','=',$rep->id)->first();
+                
+                // Obtener el nombre del país
+                $repuesto_completo = repuesto::select('repuestos.*', 'paises.nombre_pais')
+                    ->join('paises', 'repuestos.id_pais', '=', 'paises.id')
+                    ->where('repuestos.id', $rep->id)
+                    ->first();
+                
+                if($repuesto_completo){
+                    $rep->nombre_pais = $repuesto_completo->nombre_pais;
+                }
+                
+                if(isset($foto)){
+                    $rep->urlfoto = $foto->urlfoto;
+                }else{
+                    $foto=repuestofoto::where('id_repuestos','=',62816)->first();
+                    $rep->urlfoto = $foto->urlfoto;
+                }
+
+                if($rep->stock_actual > 0 || $rep->stock_actual_dos > 0 || $rep->stock_actual_tres > 0) array_push($repuestos_,$rep);
+            }
+
+            // Si la búsqueda incluyó un año, filtrar solo repuestos compatibles con ese año
+            if($anio_buscado){
+                $repuestos_ = array_values(array_filter($repuestos_, function($r) use ($anio_buscado){
+                    return similar::where('id_repuestos', $r->id)
+                                  ->where('activo', 1)
+                                  ->where('anios_vehiculo', 'LIKE', '%'.$anio_buscado.'%')
+                                  ->exists();
+                }));
+            }
+
+            foreach ($repuestos_ as $r) {
+                $oferta = oferta_pagina_web::where('id_repuesto',$r->id)->where('activo',1)->first();
+                $familia_dcto = descuento::where('id_familia', $r->id_familia)->where('activo',1)->first();
+                if(isset($oferta)){
+                    $r->precio_normal = $r->precio_venta;
+                    $r->precio_venta = $oferta->precio_actualizado;
+                    
+                }elseif(!isset($oferta) && isset($familia_dcto)){
+                    $r->precio_normal = $r->precio_venta;
+                    $r->precio_venta = $r->precio_venta - (($familia_dcto->porcentaje/100) * $r->precio_venta);
+                    
+                    $r->oferta = 2;
+                }else{
+                    $r->oferta = 0;
+                }
+            }
+            
+            // Agrupar productos complementarios para el tótem
+            $repuestos_agrupados = $this->agruparProductosComplementarios($repuestos_);
+            
+            return $repuestos_agrupados;
+
+            $criterio.=" )";
+            if($op==7){
+                return $repuestos->count();
+            }
+          
+    
+            //$repuestos=$repuestos->sortByDesc("id_familia");
+            //enviar saldos por local: id_repuestos, id_local, saldo / locales: locales.local_nombre
+            $saldos = saldo::select('saldos.id_repuestos', 'locales.local_nombre', 'saldos.id_local', 'saldos.saldo')
+                ->where('saldos.saldo', '>', 0)
+                ->join('locales', 'saldos.id_local', 'locales.id')
+                ->get();
+    
+    
+    
+            //Mandamos array con los id_repuestos que tengan fotos
+            $tienen_foto=repuestofoto::select('id_repuestos')
+                                        ->distinct()
+                                        ->get()
+                                        ->toArray();
+    
+            $arreglo = [];
+           
+            foreach ($repuestos as $repuesto) {
+                    $primera_foto_repuesto = repuestofoto::select('repuestos_fotos.urlfoto','repuestos.*','proveedores.empresa_nombre_corto','marcarepuestos.marcarepuesto','paises.nombre_pais')
+                                                ->where('repuestos.id',$repuesto->id)
+                                                ->join('repuestos','repuestos.id','repuestos_fotos.id_repuestos')
+                                                ->join('proveedores','repuestos.id_proveedor','proveedores.id')
+                                                ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                                                ->join('paises','repuestos.id_pais','paises.id')
+                                                ->get();
+                    if($primera_foto_repuesto->count() > 0){
+                        array_push($arreglo,$primera_foto_repuesto[0]);
+                    }else{
+                        try {
+                            //Si no tiene foto buscamos el repuesto con sus principales datos y le agregamos una url personalizada.
+                            $repuesto_ = repuesto::select('repuestos.*','proveedores.empresa_nombre_corto','marcarepuestos.marcarepuesto','paises.nombre_pais')
+                                                ->where('repuestos.id',$repuesto->id)
+                                                ->join('proveedores','repuestos.id_proveedor','proveedores.id')
+                                                ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
+                                                ->join('paises','repuestos.id_pais','paises.id')
+                                                ->first();
+                            $repuesto_->urlfoto = 'fotozzz/sinfoto.png';
+                            array_push($arreglo,$repuesto_);
+                        } catch (\Exception $e) {
+                            return $e->getMessage();
+                        }
+                        
+                    }
+                
+            }
+            
+            $stocks_repuesto = [];
+    
+            foreach($repuestos as $repuesto){
+                $stock_bodega = repuesto::select('repuestos.stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
+                                            ->join('locales', 'repuestos.local_id', 'locales.id')
+                                            ->leftjoin('users as responsables','repuestos.id_responsable','responsables.id')
+                                            ->where('repuestos.id',$repuesto->id)
+                                            ->where('repuestos.local_id',1)
+                                            ->first();
+    
+                $stock_bodega_segunda_ubicacion = repuesto::select('repuestos.stock_actual_dos as stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
+                                            ->join('locales', 'repuestos.local_id_dos', 'locales.id')
+                                            ->leftjoin('users as responsables','repuestos.id_responsable_dos','responsables.id')
+                                            ->where('repuestos.id',$repuesto->id)
+                                            ->where('repuestos.local_id_dos',1)
+                                            ->first();
+                                            
+                $stock_tienda = repuesto::select('repuestos.stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
+                                            ->join('locales', 'repuestos.local_id', 'locales.id')
+                                            ->leftjoin('users as responsables','repuestos.id_responsable','responsables.id')
+                                            ->where('repuestos.id',$repuesto->id)
+                                            ->where('repuestos.local_id',3)
+                                            ->first();
+       
+    
+                $stock_tienda_segunda_ubicacion = repuesto::select('repuestos.stock_actual_dos as stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
+                                            ->join('locales', 'repuestos.local_id_dos', 'locales.id')
+                                            ->leftjoin('users as responsables','repuestos.id_responsable_dos','responsables.id')
+                                            ->where('repuestos.id',$repuesto->id)
+                                            ->where('repuestos.local_id_dos',3)
+                                            ->first();
+    
+                $stock_cm_tercera_ubicacion = repuesto::select('repuestos.stock_actual_tres as stock_actual','locales.local_nombre','repuestos.id','locales.id as id_local','responsables.name as responsable')
+                                        ->join('locales', 'repuestos.local_id_tres', 'locales.id')
+                                        ->leftjoin('users as responsables','repuestos.id_responsable_tres','responsables.id')
+                                        ->where('repuestos.id',$repuesto->id)
+                                        ->where('repuestos.local_id_tres',4)
+                                        ->first();
+                
+                array_push($stocks_repuesto,$stock_bodega,$stock_bodega_segunda_ubicacion,$stock_tienda, $stock_tienda_segunda_ubicacion,$stock_cm_tercera_ubicacion);
+            }
+    
+    
+            $desde = 'd';
+            $permiso = permissions_detail::where('usuarios_id',16)->where('path_ruta','/repuesto/modificar-precio')->first();
+                if($permiso){
+                    $permiso_modificar = true;
+                }else{
+                    $permiso_modificar = false;
+                }
+    
+            $permiso_ = permissions_detail::where('usuarios_id',16)->where('path_ruta','/actualizar-precio')->first();
+                if($permiso_){
+                    $permiso_actualizar = true;
+                }else{
+                    $permiso_actualizar = false;
+                }
+
+            $familias_descuento = descuento::all();
+     
+            foreach ($repuestos as $r) {
+                $oferta = oferta_pagina_web::where('id_repuesto',$r->id)->where('activo',1)->first();
+                //El idlocal 2 corresponde a ofertas para el sitio web
+                $familia_dcto = descuento::where('id_familia', $r->id_familia)->where('id_local','<>',2)->where('activo',1)->first();
+                if(isset($oferta)){
+                    $r->precio_venta = $oferta->precio_actualizado;
+                }elseif(!isset($oferta) && isset($familia_dcto)){
+                    
+                    $r->precio_venta = $r->precio_venta - (($familia_dcto->porcentaje/100) * $r->precio_venta);
+                    $r->oferta = 2;
+                }else{
+                    $r->oferta = 0;
+                }
+                
+                //Llevamos a la vista la ultima fecha de modificación de alguno de los 3 stock que tenga el repuesto.
+                if($r->fecha_actualizacion_stock > $r->fecha_actualizacion_stock_dos && $r->fecha_actualizacion_stock > $r->fecha_actualizacion_stock_tres){
+                        $fecha_ultima = $r->fecha_actualizacion_stock;
+                        $r->fecha_ultima = $fecha_ultima;
+                }elseif($r->fecha_actualizacion_stock_dos > $r->fecha_actualizacion_stock && $r->fecha_actualizacion_stock_dos > $r->fecha_actualizacion_stock_tres){
+                        $fecha_ultima = $r->fecha_actualizacion_stock_dos;
+                        $r->fecha_ultima = $fecha_ultima;
+                }elseif($r->fecha_actualizacion_stock_tres > $r->fecha_actualizacion_stock && $r->fecha_actualizacion_stock_tres > $r->fecha_actualizacion_stock_dos){
+                        $fecha_ultima = $r->fecha_actualizacion_stock_tres;
+                        $r->fecha_ultima = $fecha_ultima;
+                }else{
+                        $fecha_ultima = $r->fecha_actualizacion_stock;
+                        $r->fecha_ultima = $fecha_ultima;
+                }
+            }
+            
+            foreach ($arreglo as $r) {
+                $oferta = oferta_pagina_web::where('id_repuesto',$r->id)->where('activo',1)->first();
+                $familia_dcto = descuento::where('id_familia', $r->id_familia)->where('activo',1)->first();
+                if(isset($oferta)){
+                    $r->precio_venta = $oferta->precio_actualizado;
+                }elseif(!isset($oferta) && isset($familia_dcto)){
+                    
+                    $r->precio_venta = $r->precio_venta - (($familia_dcto->porcentaje/100) * $r->precio_venta);
+                    $r->oferta = 2;
+                }else{
+                    $r->oferta = 0;
+                }
+            }
+
+            
+            return $repuestos;
+    
+        } catch (\Exception $e) {
+            //throw $th;
+            return $e->getMessage();
+        }
+
+    }
+
+public function buscar_solo_en_descrip($buscado){
+        //repuestos.descripcion, repuesto->id
+        $resp['resultado']=false;
+        $terminos=explode(" ",$buscado);
+        $encontrados=Collect();
+
+        $sql="";
+        for($i=0;$i<count($terminos);$i++){
+            $sql.="(repuestos.descripcion LIKE ? OR repuestos.descripcion LIKE ? OR repuestos.descripcion LIKE ?) AND ";
+        }
+        $sql=$sql." repuestos.activo=?";
+
+        $param=[];
+        for($i=0;$i<count($terminos);$i++){
+            $al_inicio=$terminos[$i]." %";
+            $en_medio="% ".$terminos[$i]." %";
+            $al_final="% ".$terminos[$i];
+            array_push($param,$al_inicio);
+            array_push($param,$en_medio);
+            array_push($param,$al_final);
+        }
+        array_push($param,1);
+        $encontrados=repuesto::whereRaw($sql,$param)
+                        ->where('repuestos.codigo_OEM_repuesto','<>','XPRESS')
+                        ->join('paises', 'repuestos.id_pais', 'paises.id')
+                        ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                        ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                        ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                        ->get();
+        if($encontrados->count()>0){
+            $resp['resultado']=true;
+            $resp['repuestos']=$encontrados;
+        }
+
+        return $resp;
+
+    }
+
+public function buscar_en_codint($buscado){
+    $resp['resultado']=false;
+    $terminos=explode(" ",$buscado);
+    /*
+
+    $terminos_encontrados=[];
+    for($i=0;$i<count($terminos);$i++){
+        $hay=repuesto::where('repuestos.codigo_interno',$terminos[$i])
+        ->where('repuestos.activo',1)
+        ->count();
+        if($hay>0){
+            array_push($terminos_encontrados,$terminos[$i]);
+        }
+    }
+    if(count($terminos_encontrados)>0){
+        $sql="";
+        for($i=0;$i<count($terminos_encontrados);$i++){
+            $sql.="repuestos.codigo_interno=? AND ";
+        }
+        $sql=$sql." repuestos.activo=?";
+        $param=[];
+        for($i=0;$i<count($terminos_encontrados);$i++){
+            $buscado="%".$terminos_encontrados[$i]."%";
+            array_push($param,$buscado);
+        }
+        array_push($param,1);
+
+        $encontrados=repuesto::whereRaw($sql,$param)
+                        ->join('paises', 'repuestos.id_pais', 'paises.id')
+                        ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                        ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                        ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                        ->get();
+        */
+        $encontrados=Collect();
+        if(count($terminos)==1){
+            $encontrados=repuesto::where('repuestos.codigo_interno',$buscado)
+                        ->where('repuestos.activo',1)
+                        ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                        ->join('paises', 'repuestos.id_pais', 'paises.id')
+                        ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                        ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                        ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                        ->get();
+        }
+        if($encontrados->count()>0){
+            $resp['resultado']=true;
+            $resp['repuestos']=$encontrados;
+        }
+
+    return $resp;
+}
+
+public function buscar_en_codprov($buscado){
+    $buscado=trim($buscado);
+    $resp['resultado']=false;
+    $terminos=explode(" ",$buscado);
+
+
+    $encontrados=Collect();
+    if(count($terminos)==1){
+        $encontrados=repuesto::where('repuestos.cod_repuesto_proveedor', 'LIKE', '%'.$buscado. '%')
+                    ->where('repuestos.activo',1)
+                    ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                    ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                    ->get();
+    }
+    if($encontrados->count()>0){
+        $resp['resultado']=true;
+        $resp['repuestos']=$encontrados;
+    }
+
+    return $resp;
+    /*
+    $terminos_encontrados=[];
+    for($i=0;$i<count($terminos);$i++){
+        $hay=repuesto::where('cod_repuesto_proveedor',$terminos[$i])
+        ->where('repuestos.activo',1)
+        ->count();
+        if($hay>0){
+            array_push($terminos_encontrados,$terminos[$i]);
+        }
+    }
+    if(count($terminos_encontrados)>0){
+        $sql="";
+        for($i=0;$i<count($terminos_encontrados);$i++){
+                $sql.="repuestos.cod_repuesto_proveedor LIKE ? AND ";
+        }
+        $sql=$sql." repuestos.activo=?";
+        $param=[];
+        for($i=0;$i<count($terminos_encontrados);$i++){
+            $buscado="%".$terminos_encontrados[$i]."%";
+            array_push($param,$buscado);
+        }
+        array_push($param,1);
+
+        $encontrados=repuesto::whereRaw($sql,$param)
+                        ->join('paises', 'repuestos.id_pais', 'paises.id')
+                        ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                        ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                        ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                        ->get();
+        if($encontrados->count()>0){
+            $resp['resultado']=true;
+            $resp['repuestos']=$encontrados;
+        }
+    }
+    */
+
+}
+    
+public function buscar_en_codAlternador($buscado){
+    $resp['resultado']=false;
+    $buscado=str_replace("-","",$buscado);
+    $terminos=explode(" ",$buscado);
+   
+    $encontrados=Collect();
+    if(count($terminos)==1){
+        $data = regulador_voltaje::select('regulador_voltaje.id_repuesto')
+                    ->where('regulador_voltaje.alternador','LIKE','%'.$buscado.'%')
+                    ->where('regulador_voltaje.activo',1)
+                    ->get()
+                    ->toArray();
+                   
+        if(count($data)>0){
+            $encontrados=repuesto::wherein('repuestos.id',$data)
+                ->where('repuestos.activo',1)
+                ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                ->leftjoin('paises', 'repuestos.id_pais', 'paises.id')
+                ->leftjoin('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                ->leftjoin('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                ->get();
+
+        }
+    }
+    if($encontrados->count()>0){
+        $resp['resultado']=true;
+        $resp['repuestos']=$encontrados;
+    }
+    return $resp;
+}
+
+public function buscar_en_codRectificador($buscado){
+    $resp['resultado']=false;
+    $buscado=str_replace("-","",$buscado);
+    $terminos=explode(" ",$buscado);
+    
+    $encontrados=Collect();
+    if(count($terminos)==1){
+        $data = regulador_voltaje::select('id_repuesto')
+                    ->where('regulador_voltaje.rectificador','LIKE','%'.$buscado.'%')
+                    ->where('regulador_voltaje.activo',1)
+                    ->get()
+                    ->toArray();
+        if(count($data)>0){
+            $encontrados=repuesto::wherein('repuestos.id',$data)
+                ->where('repuestos.activo',1)
+                ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                ->get();
+
+        }
+    }
+    if($encontrados->count()>0){
+        $resp['resultado']=true;
+        $resp['repuestos']=$encontrados;
+    }
+    return $resp;
+}
+
+public function buscar_en_codoem($buscado){
+    try {
+
+        $resp['resultado']=false;
+        $buscado=str_replace("-","",$buscado);
+        $terminos=explode(" ",$buscado);
+        /*
+    
+        $terminos_encontrados=[];
+        for($i=0;$i<count($terminos);$i++){
+            $hay=oem::where('codigo_oem',$terminos[$i])->count();
+            if($hay>0){
+                array_push($terminos_encontrados,$terminos[$i]);
+            }
+        }
+        if(count($terminos_encontrados)>0){
+    
+            $sql="";
+            for($i=0;$i<count($terminos_encontrados);$i++){
+                    $sql.="oems.codigo_oem LIKE ? AND ";
+            }
+            $sql=$sql." oems.activo=?";
+            $param=[];
+            for($i=0;$i<count($terminos_encontrados);$i++){
+                $buscado="%".$terminos_encontrados[$i]."%";
+                array_push($param,$buscado);
+            }
+            array_push($param,1);
+    
+            $oem = oem::select('id_repuestos')
+                    ->whereRaw($sql,$param) //->toSql();
+                    ->get()
+                    ->toArray();
+    
+            if(count($oem)>0){
+                $encontrados=repuesto::wherein('repuestos.id',$oem)
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                    ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                    ->get();
+                if($encontrados->count()>0){
+                    $resp['resultado']=true;
+                    $resp['repuestos']=$encontrados;
+                }
+            }
+    
+    
+    
+        }
+        */
+        $encontrados=Collect();
+        if(count($terminos)==1){
+            $oem = oem::select('id_repuestos')
+                        ->where('oems.codigo_oem','LIKE','%'.$buscado.'%')
+                        ->where('oems.activo',1)
+                        ->get()
+                        ->toArray();
+            if(count($oem)>0){
+                $encontrados=repuesto::wherein('repuestos.id',$oem)
+                    ->where('repuestos.activo',1)
+                    ->where('repuestos.codigo_OEM_repuesto','!=','XPRESS')
+                    ->join('paises', 'repuestos.id_pais', 'paises.id')
+                    ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                    ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                    ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                    ->get();
+    
+            }
+        }
+        if($encontrados->count()>0){
+            $resp['resultado']=true;
+            $resp['repuestos']=$encontrados;
+        }
+        return $resp;
+    } catch (\Exception $e) {
+        //throw $th;
+        return $e->getMessage();
+    }
+
+}
+
+public function buscar_en_codfab($buscado){
+    //repuestos_fabricantes.codigo_fab
+
+    $encontró=false;
+    $resp['resultado']=false;
+    $terminos=explode(" ",$buscado);
+    $encontrados=Collect();
+    //Asumiendo que ingresó solo un término, lo buscamos con el algoritmo del guion
+    if(count($terminos)==1){
+        $encontrados = repuesto::where('repuestos_fabricantes.codigo_fab', 'LIKE', '%'.$buscado. '%')
+                            ->where('repuestos.activo',1)
+                            ->join('paises', 'repuestos.id_pais', 'paises.id')
+                            ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                            ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                            ->join('repuestos_fabricantes', 'repuestos.id', 'repuestos_fabricantes.id_repuestos')
+                            ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos_fabricantes.codigo_fab', 'repuestos.*')                ->groupBy('repuestos.id')
+                            ->get();
+        if($encontrados->count()>0){
+            $resp['resultado']=true;
+            $resp['repuestos']=$encontrados;
+            $encontró=true;
+        }else{
+            $guion="-";
+            $buscado_original=$buscado;
+            $buscado_sin_guiones= str_replace("-","",$buscado);
+            $nf=strpos($buscado_original,$guion);
+            if($nf===false){ //no hay guión, le va poniendo el guión en diferentes posiciones para buscarlo
+                for($i=1;$i<strlen($buscado_original);$i++){
+                    $buskado = substr_replace($buscado_original, $guion, $i, 0); //ERROR al usar caracteres UTF-8 en las búsquedas, ejm PIÑ10
+                    $numfil=fabricante::where('repuestos_fabricantes.codigo_fab','LIKE','%'.$buskado.'%')
+                                        ->where('repuestos_fabricantes.activo',1)
+                                        ->count();
+                    if($numfil>0){
+                        $encontrados = repuesto::where('repuestos_fabricantes.codigo_fab', 'LIKE', '%'.$buskado. '%')
+                                ->where('repuestos.activo',1)
+                                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                                ->join('repuestos_fabricantes', 'repuestos.id', 'repuestos_fabricantes.id_repuestos')
+                                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos_fabricantes.codigo_fab', 'repuestos.*')                ->groupBy('repuestos.id')
+                                ->get();
+                        if($encontrados->count()>0){
+                            $resp['resultado']=true;
+                            $resp['repuestos']=$encontrados;
+                            $encontró=true;
+                        }
+                        break;
+                    }
+                }
+
+            }else{ //hay guión o guiones, lo busca tal cual
+                $encontrados = repuesto::where('repuestos_fabricantes.codigo_fab', 'LIKE', '%'.$buscado_original. '%')
+                                ->where('repuestos.activo',1)
+                                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                                ->join('repuestos_fabricantes', 'repuestos.id', 'repuestos_fabricantes.id_repuestos')
+                                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos_fabricantes.codigo_fab', 'repuestos.*')                ->groupBy('repuestos.id')
+                                ->get();
+                if($encontrados->count()>0){
+                    $resp['resultado']=true;
+                    $resp['repuestos']=$encontrados;
+                    $encontró=true;
+                }else{ //no hay tal cual, lo busca sin guiones
+                    $encontrados = repuesto::where('repuestos_fabricantes.codigo_fab', 'LIKE', '%'.$buscado_sin_guiones. '%')
+                                ->where('repuestos.activo',1)
+                                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                                ->join('repuestos_fabricantes', 'repuestos.id', 'repuestos_fabricantes.id_repuestos')
+                                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos_fabricantes.codigo_fab', 'repuestos.*')                ->groupBy('repuestos.id')
+                                ->get();
+                    if($encontrados->count()>0){
+                        $resp['resultado']=true;
+                        $resp['repuestos']=$encontrados;
+                        $encontró=true;
+                    }
+                }
+            }
+
+        }
+
+
+
+    } // fin 1 término
+
+    return $resp;
+
+    /*
+    if($encontró) return $resp;
+
+    //segunda parte: la búsqueda tiene más de 1 término
+    $terminos_encontrados=[];
+    for($i=0;$i<count($terminos);$i++){
+        $hay=fabricante::where('repuestos_fabricantes.codigo_fab','%'.$terminos[$i].'%')
+                        ->where('repuestos_fabricantes.activo',1)
+                        ->count();
+        if($hay>0){
+            array_push($terminos_encontrados,$terminos[$i]);
+        }
+    }
+    if(count($terminos_encontrados)>0){
+        $sql="";
+        for($i=0;$i<count($terminos_encontrados);$i++){
+            $sql.="repuestos_fabricantes.codigo_fab LIKE ? AND ";
+        }
+        $sql=$sql." repuestos_fabricantes.activo=?";
+        $param=[];
+        for($i=0;$i<count($terminos_encontrados);$i++){
+            $buscado="%".$terminos_encontrados[$i]."%";
+            array_push($param,$buscado);
+        }
+        array_push($param,1);
+
+        $fab = fabricante::select('id_repuestos')
+                ->whereRaw($sql,$param) //->toSql();
+                ->get()
+                ->toArray();
+        if(count($fab)>0){
+            $encontrados=repuesto::wherein('repuestos.id',$fab)
+                ->where('repuestos.activo',1)
+                ->join('paises', 'repuestos.id_pais', 'paises.id')
+                ->join('proveedores', 'repuestos.id_proveedor', 'proveedores.id')
+                ->join('marcarepuestos', 'repuestos.id_marca_repuesto', 'marcarepuestos.id')
+                ->select('proveedores.empresa_nombre_corto', 'paises.nombre_pais', 'marcarepuestos.marcarepuesto', 'repuestos.*')
+                ->get();
+            if($encontrados->count()>0){
+                $resp['resultado']=true;
+                $resp['repuestos']=$encontrados;
+            }
+        }
+
+
+
+    }
+
+    return $resp;
+    */
+}
+
+private function revisar($repuestos,$encontrados){
+    $huy=$encontrados->where('codigo_interno','CZA50')->count();
+    if($repuestos->count()==0){
+        $repuestos=$encontrados;
+    }else{
+        $repuestos=$repuestos->merge($encontrados);
+    }
+    //return $repuestos->unique();
+    return $repuestos;
+}
+
+public function transferir_carrito_completo_totem($cliente_id, $numero_carrito, $nombre_cliente = null, $rut = null, $telefono = null)
+{
+    try {
+
+        $carrito_compra = carrito_virtual_detalle::where('carrito_numero', $numero_carrito)->get();
+
+        $el_id_usuario = 5;
+        $id = 407; // cajero totem
+
+        // Si viene nombre de cliente, es una cotización personalizada
+        if($nombre_cliente) {
+            $titulo = 'COTIZACIÓN: '.$nombre_cliente;
+        } else {
+            $titulo = 'TOTEM '.$numero_carrito;
+        }
+
+        // Calcular totales del carrito para la cotización
+        $total_carrito = $carrito_compra->sum('total_item');
+        $neto_carrito  = (int) round($total_carrito / 1.19);
+        $iva_carrito   = $total_carrito - $neto_carrito;
+
+        // Si es cotización, crear cabecera
+        $cotizacion_id = null;
+        $num_cot = null;
+        if ($nombre_cliente) {
+            $num_cot = $this->dame_correlativo('cotizacion') + 1;
+
+            $c = new cotizacion;
+            $c->num_cotizacion    = $num_cot;
+            $c->nombre_cotizacion = $nombre_cliente;
+            $c->fecha_emision     = Carbon::today()->toDateString();
+            $c->fecha_expira      = Carbon::today()->addDays(21)->toDateString();
+            $c->id_cliente        = 0; // cliente potencial no registrado
+            $c->neto              = $neto_carrito;
+            $c->iva               = $iva_carrito;
+            $c->total             = $total_carrito;
+            $c->activo            = 2;
+            $c->usuarios_id       = $el_id_usuario;
+            $c->save();
+
+            $cotizacion_id = $c->id;
+            $this->actualizar_correlativo('cotizacion', $num_cot);
+
+            // Guardar cliente potencial
+            $cp = new cliente_potencial;
+            $cp->rut          = $rut ?? '';
+            $cp->nombre       = $nombre_cliente;
+            $cp->telefono     = $telefono;
+            $cp->cotizacion_id = $cotizacion_id;
+            $cp->save();
+        }
+
+        foreach($carrito_compra as $cc)
+        {
+            $rep = repuesto::find($cc->repuesto_id);
+
+            // 🔹 determinar local con mayor stock
+            $stock1 = $rep->stock_actual ?? 0;
+            $stock2 = $rep->stock_actual_dos ?? 0;
+            $stock3 = $rep->stock_actual_tres ?? 0;
+
+            $mayor = max($stock1, $stock2, $stock3);
+
+            if ($mayor == $stock1) {
+                $id_local = 1;
+            } elseif ($mayor == $stock2) {
+                $id_local = 3;
+            } else {
+                $id_local = 4;
+            }
+
+            // Si NO es cotización, guardar carrito transferido
+            if (!$cotizacion_id) {
+                $ct = new carrito_transferido;
+                $ct->usuarios_id = $el_id_usuario;
+                $ct->cajeros_id = $id;
+                $ct->cliente_id = $cliente_id;
+                $ct->item = $cc->item;
+                $ct->id_repuestos = $cc->repuesto_id;
+                $ct->id_local = $id_local; // 👈 aquí cambia
+                $ct->id_unidad_venta = $rep->id_unidad_venta;
+                $ct->cantidad = $cc->cantidad;
+                $ct->pu = $cc->pu;
+                $ct->subtotal_item = $cc->subtotal_item;
+                $ct->descuento_item = $cc->descuento_item;
+                $ct->total_item = $cc->total_item;
+                $ct->titulo = $titulo; // 👈 Ahora usa el que se generó arriba
+                $ct->save();
+            }
+
+            // Si es cotización, guardar detalle
+            if ($cotizacion_id) {
+                $cd = new cotizacion_detalle;
+                $cd->id_cotizacion   = $cotizacion_id;
+                $cd->id_repuestos    = $cc->repuesto_id;
+                $cd->id_unidad_venta = $rep->id_unidad_venta;
+                $cd->id_local        = $id_local;
+                $cd->precio_venta    = $cc->pu;
+                $cd->cantidad        = $cc->cantidad;
+                $cd->subtotal        = $cc->subtotal_item;
+                $cd->descuento       = $cc->descuento_item;
+                $cd->total           = $cc->total_item;
+                $cd->activo          = 1;
+                $cd->usuarios_id     = $el_id_usuario;
+                $cd->save();
+            }
+        }
+
+        if ($cotizacion_id) {
+            $oferta = $this->es_oferta_totem($cotizacion_id);
+            return json_encode(['estado' => 'OK', 'cotizacion_id' => $cotizacion_id, 'num_cotizacion' => $num_cot, 'oferta' => $oferta]);
+        }
+
+        return 'OK';
+
+    } catch (\Exception $e) {
+
+        return $e->getMessage();
+
+    }
+}
+
+private function es_oferta_totem($cotizacion_id)
+{
+    $det = cotizacion_detalle::select(
+                'repuestos.id as idrepuesto',
+                'repuestos.oferta',
+                'cotizaciones_detalle.*',
+                'repuestos.id_familia'
+            )
+            ->where('cotizaciones_detalle.id_cotizacion', $cotizacion_id)
+            ->join('repuestos', 'cotizaciones_detalle.id_repuestos', 'repuestos.id')
+            ->get();
+
+    foreach ($det as $d) {
+        if ($d->oferta == 1) {
+            $oferta = oferta_pagina_web::where('id_repuesto', $d->idrepuesto)->first();
+            if ($oferta) {
+                $oferta->hasta = Carbon::parse($oferta->hasta)->format('d-m-Y');
+                return $oferta;
+            }
+        }
+    }
+
+    foreach ($det as $d) {
+        $rep = repuesto::find($d->idrepuesto);
+        $descuento = descuento::where('id_familia', $rep->id_familia)->first();
+        if ($descuento) {
+            $descuento->desde = Carbon::parse($descuento->desde)->format('d-m-Y');
+            $descuento->hasta = Carbon::parse($descuento->hasta)->format('d-m-Y');
+            return $descuento;
+        }
+    }
+
+    return false;
+}
+
+public function borrar_carrito_totem($cual,$numero_carrito){
+    if($cual == 'actual'){
+        $carrito = carrito_virtual::where('numero_carrito',$numero_carrito)->first();
+        $detalle = carrito_virtual_detalle::where('carrito_numero',$numero_carrito)->get();
+        $carrito->activo = 0;
+        
+        if($carrito->save()){
+            return 'OK';
+        }
+
+    }
+}
+
+public function actualizar_cantidad_carrito_totem(Request $request){
+  
+    $item = $request->input('idrep');
+    $cantidad = $request->input('cantidad');
+    $numero_carrito = $request->input('numero_carrito');
+
+    // revisar si existe stock suficiente para la cantidad solicitada
+    $repuesto = repuesto::find($item);
+    $id_familia = $repuesto->id_familia;
+    if (in_array((int) $id_familia, [344, 345], true) && (int) $cantidad !== 1) {
+        return "amortiguador_unidad_lado";
+    }
+    // verificar que si la familia es 24 (bujias) la cantidad minima a agregar sea 3
+    if($id_familia == 24 || $id_familia == 29){
+        if($cantidad < 3){
+            return "bujia_minimo";
+        }
+    }
+    // verificar que si la familia es 532 (valvulas) la cantidad minima a agregar sea 4
+    if($id_familia == 532 || $id_familia == 78){
+        if($cantidad < 4){
+            return "valvula_minimo";
+        }
+    }
+
+    // verificar que si la familia es 374 (disco freno delantero) o 375 (disco freno trasero) la cantidad sea multiplo de 2
+    if($id_familia == 374 || $id_familia == 375){
+        if($cantidad % 2 != 0){
+            return "disco_freno_multiplo";
+        }
+    }
+
+    // verificar que si la familia es 362 (retenes de valvulas)  la cantidad minima a agregar sea 8
+    if($id_familia == 362 || $id_familia == 87 || $id_familia == 392){ 
+        if($cantidad % 8 != 0){
+            return "retene_valvula_multiplo";
+        }
+    }
+    $stock_bodega = $repuesto->stock_actual ?? 0;
+    $stock_bodega_dos = $repuesto->stock_actual_dos ?? 0;
+    $stock_bodega_tres = $repuesto->stock_actual_tres ?? 0; 
+
+    $mayor = max($stock_bodega, $stock_bodega_dos, $stock_bodega_tres);
+
+
+    if ($mayor == $stock_bodega) {
+        // preguntamos si la cantidad es mayor al stock disponible
+        if ($cantidad > $stock_bodega) {
+            return 'STOCK_INSUFICIENTE';
+        }
+    } elseif ($mayor == $stock_bodega_dos) {
+        if ($cantidad > $stock_bodega_dos) {
+            return 'STOCK_INSUFICIENTE';
+        }
+    } else {
+        if ($cantidad > $stock_bodega_tres) {
+            return 'STOCK_INSUFICIENTE';
+        }   
+    }
+
+    $detalle = carrito_virtual_detalle::where('carrito_numero', $numero_carrito)->where('repuesto_id', $item)->first();
+
+    if($detalle){
+        $detalle->cantidad = $cantidad;
+        $detalle->subtotal_item = $detalle->pu * $cantidad;
+        // Aquí podrías recalcular descuento_item y total_item si es necesario
+        if($detalle->save()){
+            return 'OK';
+        }
+    }
+
+    return 'ERROR';
+
+}
 }
 
 

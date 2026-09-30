@@ -12,13 +12,14 @@
       @foreach($repuestos as $r)
                       @php
                             $r->estado == 'Pedido' ? $clase = 'bg-success text-white' : $clase = 'bg-light';
+                            $r->id_modifica_estado == 5 ? $clase = 'bg-primary text-white' :  '';
                       @endphp
                         <tr class="{{$clase}}">
                             <td><a href="javascript:void(0)" style="color: black;" data-target="#modalDetalleRepuesto" data-toggle="modal" onclick="detalle_repuesto({{$r->id}})">{{$r->codigo_interno}}</a> </td>
                             <td>{{$r->fecha_emision}}</td>
                             <td>{{$r->estado}}</td>
                             <td><a class="btn btn-secondary btn-sm" href="javascript:void(0)" onclick="damerepuesto({{$r->id_repuesto}})" data-target="#modalNuevoStockMinimo" data-toggle="modal"><i class="fa-solid fa-arrows-rotate"></i></a></td>
-                            @if($r->estado == 'Pedido')<td><a href="javascript:void(0)" onclick="detalle_pedido({{$r->id_repuesto}})" class="btn btn-warning btn-sm">D</a></td>@endif
+                            @if($r->estado == 'Pedido')<td><a href="javascript:void(0)" onclick="detalle_pedido({{$r->id_repuesto}})" class="btn btn-warning btn-sm">D</a></td> @else <td> </td> @endif
                         </tr>
         @endforeach
     </tbody>

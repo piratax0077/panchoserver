@@ -106,13 +106,13 @@ class gestionUsuarios_controlador extends Controller
 
     public function cambiar_div_vista($permisoId){
         $id = $permisoId;
-        if($id == 3) $opciones = ['Ventas','Cotizaciones','Consignaciones','Busqueda expres','Busqueda cliente','Borrar carrito','Guardar carrito','Recuperar carrito','Transferir carrito','Solo transferir carrito','Nota de crédito','Nota de débito','Arqueo de caja','Pedidos','Vales de mercadería','Vales de consignación','Agregar referencia','Agregar repuesto expres'];
-        if($id == 4) $opciones = ['Facturas de compra','Listas facturas','Buscar repuestos','Stock de repuestos','Ingresados vs vendidos','Guía de despacho','Recepción de guía despacho','Traspaso de mercadería','Recepción de mercadería','Devolución de mercadería','Vista Ofertas','Orden de transporte','Inventario por tienda','Solicitudes','Editar factura de ingreso','Mostrar ofertas web','Ultimos repuestos','Kit de repuestos','Evaluar cotizaciones'];
-        if($id == 5) $opciones = ['Cargar folios','Anulación de folios','Estado DTE'];
+        if($id == 3) $opciones = ['Ventas','Cotizaciones','Consignaciones','Busqueda expres','Busqueda cliente','Borrar carrito','Guardar carrito','Recuperar carrito','Transferir carrito','Solo transferir carrito','Nota de crédito','Nota de débito','Arqueo de caja','Pedidos','Vales de mercadería','Vales de consignación','Agregar referencia','Agregar repuesto expres','Ventas Totem'];
+        if($id == 4) $opciones = ['Facturas de compra','Listas facturas','Buscar repuestos','Stock de repuestos','Ingresados vs vendidos','Guía de despacho','Recepción de guía despacho','Traspaso de mercadería','Recepción de mercadería','Devolución de mercadería','Vista Ofertas','Vista Rep sin stock','Orden de transporte','Inventario por tienda','Solicitudes','Editar factura de ingreso','Mostrar ofertas web','Ultimos repuestos','Kit de repuestos','Evaluar cotizaciones','Stock Crítico','Stock Mínimo','Sin Stock Proveedor','Stock Pendiente'];
+        if($id == 5) $opciones = ['Cargar folios','Anulación de folios','Estado DTE','Ultimos Estados DTE'];
         if($id == 6) $opciones = ['Marca vehículo','Modelo vehículo','Roles de usuario','Familia de repuestos','Marca de repuestos','Modificar repuestos','Catálogo de repuestos','Paises','Proveedores','Formas de pago','Límites de créditos','Días de crédito','Clientes','Estado de cuenta cliente','Cliente express','Parametros','Repuestos relacionados','Usuarios'];
         if($id == 7) $opciones = ['RCOF Boletas','Libro ventas','Libro compras'];
-        if($id == 8) $opciones = ['Ventas diarias','Detalle ventas','Desempeño mensual','Documentos generados','Buscar documentos','Documentos Transbank','Documentos Getnet'];
-        if($id == 9) $opciones = ['Buscar por medidas','Modificar precio','Actualizar precio'];
+        if($id == 8) $opciones = ['Ventas diarias','Detalle ventas','Desempeño mensual','Documentos generados','Buscar documentos','Documentos Transbank','Documentos Transferencias','Documentos Getnet'];
+        if($id == 9) $opciones = ['Buscar por medidas','Modificar precio','Actualizar precio','Ultimas compras'];
         $v = view('fragm.div_permisos',compact('id','opciones'));
         return $v;
     }
@@ -644,6 +644,7 @@ try {
 
     public function update(Request $request){
         $image_path = $request->file('avatar');
+        $image_path_name = null;
         
         if($image_path){
 
@@ -668,7 +669,9 @@ try {
         $user->rut = $rut;
         $user->telefono = $telefono;
         $user->email = $email;
-        $user->image_path = $image_path_name;
+        if ($image_path_name) {
+            $user->image_path = $image_path_name;
+        }
 
         $user->save();
 
@@ -1337,6 +1340,9 @@ try {
                         case'Agregar repuesto expres':
                             $detalle_permiso->path_ruta = '/agregar_expres';
                             break;
+                        case'Ventas Totem':
+                            $detalle_permiso->path_ruta = '/ventas/totem';
+                            break;
                         case 'Facturas de compra':
                             $detalle_permiso->path_ruta = '/factuprodu/crear';
                             break;
@@ -1364,11 +1370,26 @@ try {
                         case 'Recepción de mercadería':
                             $detalle_permiso->path_ruta = '/guiadespacho/recepcion_mercaderia';
                             break;
+                        case 'Stock Crítico':
+                            $detalle_permiso->path_ruta = '/reportes/stock_critico';
+                            break;
+                        case 'Stock Mínimo':
+                            $detalle_permiso->path_ruta = '/reportes/bajo_stock';
+                            break;
+                        case 'Sin Stock Proveedor':
+                            $detalle_permiso->path_ruta = '/reportes/rep_sin_prov';
+                            break;
+                        case 'Stock Pendiente':
+                            $detalle_permiso->path_ruta = '/reportes/stock_pendiente';
+                            break;
                         case 'Devolución de mercadería':
                             $detalle_permiso->path_ruta = '/guiadespacho/devolucion_mercaderia';
                             break;
                         case 'Vista Ofertas':
                             $detalle_permiso->path_ruta = '/ventas/ofertas';
+                            break;
+                        case 'Vista Rep sin stock':
+                            $detalle_permiso->path_ruta = '/reportes/rep_sin_stock';
                             break;
                         case 'Orden de transporte':
                             $detalle_permiso->path_ruta = '/ot';
@@ -1396,6 +1417,9 @@ try {
                             break;
                         case 'Estado DTE':
                             $detalle_permiso->path_ruta = '/sii/estadodte';
+                            break;
+                        case 'Ultimos Estados DTE':
+                            $detalle_permiso->path_ruta = '/sii/ultimosestadodte';
                             break;
                         case 'Kit de repuestos':
                             $detalle_permiso->path_ruta = '/ventas/armar-kit';
@@ -1481,6 +1505,9 @@ try {
                         case 'Documentos Getnet':
                             $detalle_permiso->path_ruta = '/reportes/getnet';
                             break;
+                        case 'Documentos Transferencias':
+                            $detalle_permiso->path_ruta = '/reportes/transferencias';
+                            break;
                         case 'Buscar por medidas':
                             $detalle_permiso->path_ruta = '/repuesto/buscar-medida';
                             break;
@@ -1489,6 +1516,9 @@ try {
                             break;
                         case 'Actualizar precio':
                             $detalle_permiso->path_ruta = '/actualizar-precio';
+                            break;
+                        case 'Ultimas compras':
+                            $detalle_permiso->path_ruta = '/reportes/ultimas-compras';
                             break;
                         default:
                             $detalle_permiso->path_ruta = '/';

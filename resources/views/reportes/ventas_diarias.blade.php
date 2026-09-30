@@ -3,6 +3,93 @@
 @section('javascript')
 <script type="text/javascript">
 
+
+    let resumen_diario_desbloqueado = false;
+
+    function solicitar_clave_resumen_diario(){
+        Vue.swal({
+            title: 'Contenido protegido',
+            text: 'Ingrese su contraseña para visualizar los indicadores de rentabilidad.',
+            input: 'password',
+            inputPlaceholder: 'Contraseña',
+            confirmButtonText: '<i class="fa fa-unlock"></i> Desbloquear',
+            cancelButtonText: 'Cancelar',
+            showCancelButton: true,
+            showLoaderOnConfirm: true,
+            allowOutsideClick: false,
+            inputAttributes: {
+                autocapitalize: 'off',
+                autocomplete: 'current-password'
+            },
+            inputValidator: function(valor){
+                if(!valor || !valor.trim()){
+                    return 'Debe ingresar su contraseña.';
+                }
+            },
+            preConfirm: function(clave){
+                return $.ajax({
+                    type: 'POST',
+                    url: '{{ url("/clave") }}',
+                    data: {
+                        clave: clave
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    }
+                }).then(function(resp){
+                    if(resp !== 'OK'){
+                        throw new Error('La contraseña ingresada no es válida.');
+                    }
+
+                    return resp;
+                }).catch(function(error){
+                    let mensaje = 'No fue posible validar la contraseña.';
+
+                    if(error && error.message){
+                        mensaje = error.message;
+                    }
+
+                    Vue.swal.showValidationMessage(mensaje);
+                });
+            }
+        }).then(function(resultado){
+            if(!resultado.isConfirmed){
+                return;
+            }
+
+            resumen_diario_desbloqueado = true;
+
+            $('#bloque_resumen_diario_protegido')
+                .stop(true, true)
+                .slideDown(200);
+
+            $('#btn_ver_resumen')
+                .removeClass('btn-outline-secondary')
+                .addClass('btn-outline-danger')
+                .html('<i class="fa fa-lock"></i> Ocultar')
+                .attr('onclick', 'bloquear_resumen_diario()');
+
+            Vue.swal({
+                icon: 'success',
+                title: 'Indicadores desbloqueados',
+                timer: 1200,
+                showConfirmButton: false
+            });
+        });
+    }
+
+    function bloquear_resumen_diario(){
+        resumen_diario_desbloqueado = false;
+
+        $('#bloque_resumen_diario_protegido').hide();
+
+        $('#btn_ver_resumen')
+            .removeClass('btn-outline-danger')
+            .addClass('btn-outline-secondary')
+            .html('<i class="fa fa-key"></i> Ver indicadores')
+            .attr('onclick', 'solicitar_clave_resumen_diario()');
+    }
+
     function mostrar(){
         let fecha=document.getElementById("fecha").value;
         let url='{{url("/reportes/totales")}}'+'/'+fecha;
@@ -429,87 +516,47 @@
 @endsection
 @section('style')
 <style>
-    .contenedor{
-        margin: 0px;
-        display:grid;
-        grid-template-columns: repeat(6,1fr);
-        grid-template-rows: 30px 40px auto;
-        grid-gap: 5px;
-    }
-    #titulo{
-        grid-column: 1/7;
-        background-color: cornflowerblue;
-    }
-    #botones{
-        grid-column: 1/7;
-        grid-row: 2/3;
-        background-color:gainsboro;
-        display:grid;
-        grid-template-columns: repeat(6,1fr);
-        grid-auto-flow: column;
-    }
-    #fecha_reporte{
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-auto-flow: column;
-        grid-column: 1/2;
-    }
-    #btn_mostrar{
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-column: 2/3;
-    }
-    #btn_imprimir{
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-column: 3/4;
-    }
-    #cuerpo{
-        grid-column:1/7;
-        grid-row:3/4;
-        display:grid;
-        grid-template-columns: 65% 35%;
-        grid-auto-flow: column;
-    }
-    #totales{
-        grid-column:1/2;
-    }
-    #detalle{
-        grid-column:2/3;
-    }
-    #fecha_pago_div{
-        align-self:flex-start;
-        justify-self: center;
-        display:grid;
-        grid-auto-flow: column;
-        width: 65%;
-    }
+.ventas-diarias-header{background:#6495ed;color:#fff;padding:15px 20px;border-radius:4px 4px 0 0}
+.ventas-diarias-filtros{background:#fff;border:1px solid #dfe3e8;border-top:0;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ventas-diarias-contenido{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,34%);gap:16px;align-items:start}
+#totales,#detalle{min-width:0}.estado-carga-diaria{display:none;padding:30px;text-align:center;color:#6c757d;font-weight:600}
+#fecha_pago_div{width:100%;margin-bottom:15px}
+@media(max-width:1100px){.ventas-diarias-contenido{grid-template-columns:1fr}}
 </style>
 @endsection
 @section('contenido_ingresa_datos')
-    <div class="contenedor">
-        <div class="titulazo">
-            <center><h4>Reporte Ventas Diarias</h4></center>
-        </div>
-        <div id="botones">
-            <div id="fecha_reporte">
-                <label for="fecha">Fecha:</label>
-                <input type="date" name="fecha" value='<?php echo date("Y-m-d"); ?>' id="fecha" class="form-control  form-control-sm">
-            </div>
-            <div id="btn_mostrar"><button class="btn btn-sm btn-success" onclick="mostrar()">MOSTRAR</button></div>
-            <div id="btn_imprimir"><button class="btn btn-sm btn-primary" onclick="imprimir()">IMPRIMIR</button></div>
-        </div>
-        <div id="cuerpo">
-            <div id="totales">totales</div>
-            <div id="detalle">detalle</div>
-        </div>
-        <a name="fin_pagina"></a>
+<div class="container-fluid">
+    <div class="ventas-diarias-header">
+        <h4 class="mb-1"><i class="fa fa-line-chart"></i> Ventas diarias</h4>
+        <small>Ventas, costos, utilidad, medios de pago y documentos del día.</small>
     </div>
-
-    <!-- MODAR PAGAR-DELIVERY -->
+    <div class="ventas-diarias-filtros">
+        <div class="row align-items-end">
+            <div class="col-md-4 col-sm-6">
+                <label for="fecha"><strong>Fecha del informe</strong></label>
+                <input type="date" name="fecha" value="<?php echo date('Y-m-d'); ?>" id="fecha" class="form-control">
+            </div>
+            <div class="col-md-4 col-sm-6 mt-3 mt-sm-0">
+                <button type="button" class="btn btn-success" onclick="mostrar()">
+                    <i class="fa fa-search"></i> Consultar
+                </button>
+                <button type="button" class="btn btn-primary ml-2" onclick="imprimir()">
+                    <i class="fa fa-print"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="estado_carga_diaria" class="estado-carga-diaria">
+        <i class="fa fa-spinner fa-spin fa-2x"></i>
+        <div class="mt-2">Calculando el resumen diario...</div>
+    </div>
+    <div class="ventas-diarias-contenido">
+        <div id="totales"></div>
+        <div id="detalle"></div>
+    </div>
+    <a name="fin_pagina"></a>
+</div>
+<!-- MODAR PAGAR-DELIVERY -->
     <div class="modal fade" id="pagar-delivery-modal" tabindex="-1" role="dialog" aria-labelledby="pagar-delivery-label" aria-hidden="true">
         <div class="modal-dialog" role="document">
           <div class="modal-content">
@@ -536,4 +583,5 @@
           </div>
         </div>
       </div>
+
 @endsection

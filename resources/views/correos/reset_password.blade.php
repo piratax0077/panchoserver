@@ -2,14 +2,17 @@
 <html lang="es">
     <body>
         <h1>PANCHO REPUESTOS - ARICA</h1>
-        <p>Buen día, {{$asunto}}</p>
-   
-        <p>Para cambiar su contraseña de forma segura acceda al siguiente <a href="https://panchorepuestos.cl/password/reset_/{{$token}}">LINK </a></p>
-        <h5>Su solicitud para cambio de contraseña esta en proceso.</h5>
+        <p>Recibimos una solicitud de restablecimiento de contraseña.</p>
+
+        <p>
+            Para crear una nueva contraseña, acceda al siguiente
+            <a href="{{ $resetUrl }}">enlace de recuperación</a>.
+        </p>
+        <p>Si usted no realizó esta solicitud, puede ignorar este correo.</p>
         
         <hr>
         <i>Cordialmente,</i>
-        <h5>SISTEMA INFORMATICA<br>
+        <h5>SISTEMA INFORMÁTICA<br>
         PANCHO REPUESTOS<br>
         ARICA</h5><br><br>
        

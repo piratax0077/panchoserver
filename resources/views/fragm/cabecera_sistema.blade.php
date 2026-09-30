@@ -1,91 +1,113 @@
-<!--Si existen permisos es un usuario con permisos especiales -->
+@php
+  $usuarioCabecera = Auth::user();
+  $rolCabecera = $usuarioCabecera->rol->nombrerol;
+  $permisosVenta = $usuarioCabecera->dame_permisos_venta();
+  $permisosInventario = $usuarioCabecera->dame_permisos_inventario();
+  $permisosSii = $usuarioCabecera->dame_permisos_sii();
+  $permisosLibros = $usuarioCabecera->dame_permisos_libros();
+  $permisosMantenimiento = $usuarioCabecera->dame_permisos_mantenimiento();
+  $permisosReportes = $usuarioCabecera->dame_permisos_reportes();
+  $permisosBusquedaRepuesto = $usuarioCabecera->dame_permisos_busqueda_repuesto();
+  $tienePermisosEspeciales = $usuarioCabecera->permisos->isNotEmpty();
+  $notificacionesCabecera = [
+    '/reportes/stock_critico' => 'cantidad_stock_critico',
+    '/reportes/bajo_stock' => 'cantidad_stock_minimo',
+    '/reportes/rep_sin_prov' => 'cantidad_sin_prov',
+    '/reportes/stock_pendiente' => 'cantidad_stock_pendiente',
+  ];
+  $rutasOcultasVenta = [
+    '/agregar_expres', '/agregar_referencia', '/solo_carritos_transferidos',
+    '/cotizaciones', '/consignaciones', '/busqueda_expres', '/busqueda_cliente',
+    '/borrar_carrito', '/guardar_carrito', '/recuperar_carrito', '/transferir_carrito',
+  ];
+  $rutasOcultasInventario = [
+    '/editar_factura', '/reportes/bajo_stock', '/reportes/rep_sin_prov',
+    '/reportes/stock_critico', '/ofertas_web', '/ultimos_repuestos', '/ventas/cotizaciones',
+  ];
+  $rutasOcultasRepuestos = [
+    '/repuesto/modificar-precio', '/actualizar-precio', '/reportes/ultimas-compras',
+  ];
+@endphp
 
-<script type="text/javascript">
-  function logout(event){
-    // event.preventDefault();
-    let user_server = window.localStorage.getItem('user');
-    alert(user_server);
-  }
-</script>
-
-@if(count(Auth::user()->permisos) > 0)
-<nav class="navbar navbar-expand-lg navbar-light bg-light" id="navHeader" >
+{{-- Los permisos se cargan una sola vez para evitar consultas repetidas desde Blade. --}}
+@if($tienePermisosEspeciales)
+<nav class="navbar navbar-expand-lg navbar-light bg-light" id="navHeader">
   <a href="/home"><img src="{{asset('storage/imagenes/logoOficial.jpeg')}}" alt="" srcset="" class="logoHeader"></a>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarPermisosContent" aria-controls="navbarPermisosContent" aria-expanded="false" aria-label="Abrir navegación">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <div class="collapse navbar-collapse" id="navbarPermisosContent">
     <ul class="navbar-nav mr-auto">
-      @if(Auth::user()->dame_permisos_venta()->count() > 0)
+      @if($permisosVenta->isNotEmpty())
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Ventas</a>
-          
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuVentasPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Ventas</a>
+
+          <div class="dropdown-menu" aria-labelledby="menuVentasPermisos">
             {{-- <a class="dropdown-item" href="/ventas">Ventas (Fact-Bole)</a>
             <a class="dropdown-item" href="/notacredito">Nota de Crédito</a> --}}
-            @foreach(Auth::user()->dame_permisos_venta() as $permiso)
-              @if($permiso->path_ruta !== '/agregar_expres' && $permiso->path_ruta !== '/agregar_referencia' && $permiso->path_ruta !== '/solo_carritos_transferidos' && $permiso->path_ruta !== '/cotizaciones' && $permiso->path_ruta !== '/consignaciones' && $permiso->path_ruta !== '/busqueda_expres' && $permiso->path_ruta !== '/busqueda_cliente' && $permiso->path_ruta !== '/borrar_carrito' && $permiso->path_ruta !== '/guardar_carrito' && $permiso->path_ruta !== '/recuperar_carrito' && $permiso->path_ruta !== '/transferir_carrito')<a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> @endif
+            @foreach($permisosVenta as $permiso)
+              @if(!in_array($permiso->path_ruta, $rutasOcultasVenta, true))<a class="dropdown-item" href="{{ $permiso->path_ruta }}">{{ $permiso->descripcion }}</a> @endif
             @endforeach
           </div>
         </li>
       @endif
-      @if(Auth::user()->dame_permisos_inventario()->count() > 0)
+       @if($permisosInventario->isNotEmpty())
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuInventariosPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
+            <div class="dropdown-menu" aria-labelledby="menuInventariosPermisos">
                   {{-- <a class="dropdown-item" href="/factuprodu/crear">Facturas de Compra</a>
                   <a class="dropdown-item" href="/compras/listar">Listar Facturas (Compras)</a>
                   <a class="dropdown-item" href="/compras/listar">Orden de transporte</a> --}}
-                  @foreach(Auth::user()->dame_permisos_inventario() as $permiso)
-                    @if($permiso->path_ruta !== '/editar_factura' && $permiso->path_ruta !== '/ofertas_web' && $permiso->path_ruta !== '/ultimos_repuestos' && $permiso->path_ruta !== '/ventas/cotizaciones')<a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a>  @endif
+                   @foreach($permisosInventario as $permiso)
+                    @if(!in_array($permiso->path_ruta, $rutasOcultasInventario, true))<a class="dropdown-item" href="{{ $permiso->path_ruta }}">{{ $permiso->descripcion }}</a> @endif
                   @endforeach
             </div>
           </li>
         
       @endif
-    @if(Auth::user()->dame_permisos_sii()->count() > 0)
+    @if($permisosSii->isNotEmpty())
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">SII</a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-            @foreach(Auth::user()->dame_permisos_sii() as $permiso)
-            <a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> 
+          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuSiiPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">SII</a>
+          <div class="dropdown-menu" aria-labelledby="menuSiiPermisos">
+            @foreach($permisosSii as $permiso)
+            @if($permiso->path_ruta !== '/sii/ultimosestadodte') <a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> @endif
             @endforeach
           </div>
         </li>
     @endif   
-    @if(Auth::user()->dame_permisos_libros()->count() > 0)
+    @if($permisosLibros->isNotEmpty())
         <li class="nav-item dropdown">
-          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="navbarDropdownLibroLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Libros</a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownLibroLink">
-            @foreach(Auth::user()->dame_permisos_libros() as $permiso)
+          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="menuLibrosPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Libros</a>
+          <div class="dropdown-menu" aria-labelledby="menuLibrosPermisos">
+            @foreach($permisosLibros as $permiso)
             <a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> 
             @endforeach
           </div>
         </li>
     @endif
-    @if(Auth::user()->dame_permisos_mantenimiento()->count() > 0)
+    @if($permisosMantenimiento->isNotEmpty())
     @php $opt = true; @endphp
-    @foreach(Auth::user()->dame_permisos_mantenimiento() as $permiso)
+    @foreach($permisosMantenimiento as $permiso)
     @if($permiso->path_ruta !== '/modificarRepuesto')
       @php $opt = false; @endphp
     @endif
     @endforeach
     @if($opt == false)
         <li class="nav-item dropdown">
-          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="navbarDropdownLibroLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Mantenimiento</a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownLibroLink">
-            @foreach(Auth::user()->dame_permisos_mantenimiento() as $permiso)
+          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="menuMantenimientoPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Mantenimiento</a>
+          <div class="dropdown-menu" aria-labelledby="menuMantenimientoPermisos">
+            @foreach($permisosMantenimiento as $permiso)
             @if($permiso->path_ruta !== '/modificarRepuesto')<a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> @endif
             @endforeach
           </div>
         </li>
         @endif
     @endif   
-    @if(Auth::user()->dame_permisos_reportes()->count() > 0)
+    @if($permisosReportes->isNotEmpty())
         <li class="nav-item dropdown">
-          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="navbarDropdownReportesLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Reportes</a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownReportesLink">
-            @foreach(Auth::user()->dame_permisos_reportes() as $permiso)
+          <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="menuReportesPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Reportes</a>
+          <div class="dropdown-menu" aria-labelledby="menuReportesPermisos">
+            @foreach($permisosReportes as $permiso)
             <a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> 
             @endforeach
           </div>
@@ -96,89 +118,144 @@
         <a href="" class="nav-link dropdown-toggle" id="navbarDroprdownPruebaLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Repuestos</a>
         <div class="dropdown-menu" aria-labelledby="navbarDroprdownPruebaLink">
           <a href="/repuesto/buscar" class="dropdown-item">Busqueda</a>
-          @if(Auth::user()->dame_permisos_busqueda_repuesto()->count() > 0)  
-            @foreach(Auth::user()->dame_permisos_busqueda_repuesto() as $permiso)
-            @if($permiso->path_ruta !== '/repuesto/modificar-precio' && $permiso->path_ruta !== '/actualizar-precio')<a class="dropdown-item" href="{{$permiso->path_ruta}}">{{$permiso->descripcion}}</a> @endif
+          @if($permisosBusquedaRepuesto->isNotEmpty())
+            @foreach($permisosBusquedaRepuesto as $permiso)
+            @if(!in_array($permiso->path_ruta, $rutasOcultasRepuestos, true))<a class="dropdown-item" href="{{ $permiso->path_ruta }}">{{ $permiso->descripcion }}</a> @endif
             @endforeach
           @endif
         </div>
       </li>
     
     </ul>
-    @if(Auth::user()->image_path)
-    @if(Session::get('ofertas') == 'SI') <a href="javascript:void(0)" onclick="dameofertas()" ><i class="fa-solid fa-bell mr-2 text-danger" style="font-size: 14px;">Ofertas y Descuentos</i></a> @endif
-        <img src="{{url('usuarios/avatar/'.Auth::user()->image_path)}}" alt="" id="logo">
-      
-      @endif
-      @if(Auth::user()->rol->nombrerol !== "Bodeguer@")
+
+@if(
+    $permisosInventario
+        ->whereIn('path_ruta', array_keys($notificacionesCabecera))
+        ->count() > 0
+)
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle d-flex align-items-center"
+       href="javascript:void(0)"
+       id="menuNotificacionesPermisos"
+       data-toggle="dropdown"
+       aria-haspopup="true"
+       aria-expanded="false">
+
+        <img src="{{ asset('storage/imagenes/campana.png') }}"
+             alt=""
+             style="width: 25px;" class="mr-1">
+
+        Notificaciones
+    </a>
+
+    <div class="dropdown-menu dropdown-menu-right"
+         aria-labelledby="menuNotificacionesPermisos">
+
+        @foreach($permisosInventario as $permiso)
+
+            @if(isset($notificacionesCabecera[$permiso->path_ruta]))
+
+                <a href="{{ $permiso->path_ruta }}"
+                   class="dropdown-item d-flex justify-content-between align-items-center">
+
+                    {{ $permiso->descripcion }}
+
+                    <span class="d-none badge badge-warning"
+                          id="{{ $notificacionesCabecera[$permiso->path_ruta] }}">
+                    </span>
+
+                </a>
+
+            @endif
+
+        @endforeach
+
+    </div>
+</li>
+
+@endif
+
+    @if(Session::get('ofertas') == 'SI')
+    <button type="button" class="btn btn-link nav-link" onclick="dameofertas()"><i class="fa-solid fa-bell mr-1" aria-hidden="true"></i>Ofertas</button>
+    @endif
+
+      @if($rolCabecera !== "Bodeguer@")
       <div class="d-none text-white letra_pequeña" id="porcentaje_ventas"></div>
       @endif
-    <ul class="navbar-nav">
+      <ul class="navbar-nav">
         
-      <li class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuUser" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">{{Auth::user() -> name}} ({{Auth::user()->rol->nombrerol}})</a>
-          <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuUser">
-            {{-- <a href="{{url('usuarios/edit/'.Auth::user()->id)}}" class="dropdown-item">Editar usuario</a> --}}
-            <a href="/cambiarclave" class="dropdown-item">Cambiar clave</a>
-            <form action="/logout" method="post">
+        <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle d-flex align-items-center" href="javascript:void(0)" id="menuUsuarioPermisos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú de usuario">
+          @if($usuarioCabecera->image_path)
+            <img src="{{ url('usuarios/avatar/'.$usuarioCabecera->image_path) }}" alt="Foto de {{ $usuarioCabecera->name }}" id="logo">
+          @else
+            <i class="fas fa-user-circle fa-2x" aria-hidden="true"></i>
+          @endif
+        </a>
+            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="menuUsuarioPermisos">
+              <span class="dropdown-item-text text-center">{{ $usuarioCabecera->name }} ({{ $rolCabecera }})</span>
+              @if($rolCabecera === "Administrador") <a href="{{url('usuarios/edit/'.$usuarioCabecera->id)}}" class="dropdown-item">Editar usuario</a> @endif
+              <a href="/cambiarclave" class="dropdown-item">Cambiar clave</a>
+              <form action="/logout" method="post">
               @csrf
                 <button class="dropdown-item" type="submit" style="color: white;">Salir</button>
               </form>
-            
-          </div>
-      </li>
-      </ul>
+            </div>
+        </li>
+        </ul>
     </div>
     
 </nav>
 <!--Sino es un usuario con un rol definido -->
 @else
-  <nav class="navbar navbar-expand-lg navbar-light bg-light" id="navHeader" >
+  <nav class="navbar navbar-expand-lg navbar-light bg-light" id="navHeader">
     <a href="/home"><img src="{{asset('storage/imagenes/logoOficial.jpeg')}}" alt="" srcset="" class="logoHeader"></a>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" style="border-color: white;">
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarRolesContent" aria-controls="navbarRolesContent" aria-expanded="false" aria-label="Abrir navegación" style="border-color: white;">
       <span class="navbar-toggler-icon"></span>
     </button>
   
-    <div class="collapse navbar-collapse" id="navbarSupportedContent" style="background: black; z-index: 100;">
+    <div class="collapse navbar-collapse" id="navbarRolesContent" style="background: black; z-index: 100;">
       <ul class="navbar-nav mr-auto" style="font-size: 13px;">
-       @if (Auth::user()->rol->nombrerol !== "contabilidad" && Auth::user()->rol->nombrerol !== "jefe de bodega")
+       @if(!in_array($rolCabecera, ["contabilidad", "jefe de bodega"], true))
        <li class="nav-item dropdown">
-        @if(Auth::user()->rol->nombrerol !== "Bodeguer@") 
-        <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Ventas</a> @endif
-        <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+        @if($rolCabecera !== "Bodeguer@")
+         <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuVentasRol" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Ventas</a> @endif
+         <div class="dropdown-menu" aria-labelledby="menuVentasRol">
           <a class="dropdown-item" href="/ventas">Ventas (Fact-Bole)</a>
-          @if(Auth::user()->rol->nombrerol === "Cajer@" || Auth::user()->rol->nombrerol === "Administrador")
+          @if(in_array($rolCabecera, ["Cajer@", "Administrador"], true))
           <a class="dropdown-item" href="/notacredito">Nota de Crédito</a>
           <a class="dropdown-item" href="/notadebito">Nota de Débito</a>
           <a class="dropdown-item" href="/ventas/arqueocaja">Arqueo de caja</a>
           <a class="dropdown-item" href="/ventas/pedidos_nuevo">Pedidos</a>
           <a class="dropdown-item" href="/ventas/vale_por_mercaderia">Vale por mercadería</a>
           @endif
-          @if(Auth::user()->id === 5 || Auth::user()->id == 16)
+          @if(in_array($usuarioCabecera->id, [5, 16], true))
           <a class="dropdown-item" href="/ventas/metas">Metas</a>
           @endif
         </div>
     </li>  
        @endif
         
-      @if(Auth::user()->rol->nombrerol == "Encargado de RRHH")
+      @if($rolCabecera === "Encargado de RRHH")
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Recursos humanos</a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+          <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuRecursosHumanos" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Recursos humanos</a>
+          <div class="dropdown-menu" aria-labelledby="menuRecursosHumanos">
             <a class="dropdown-item" href="#">Dias trabajados</a>
             <a class="dropdown-item" href="#">Datos del trabajador</a>
           </div>
         </li>
       @endif
       
-          @if (Auth::user()->rol->nombrerol == "Administrador" || Auth::user()->rol->nombrerol == "Bodeguer@" || Auth::user()->rol->nombrerol == "bodega-venta" || Auth::user()->rol->nombrerol == "jefe de bodega" )
+          @if(in_array($rolCabecera, ["Administrador", "Bodeguer@", "bodega-venta", "jefe de bodega"], true))
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-            <a class="dropdown-item" href="/factuprodu/crear">Facturas de Compra</a>
+            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuInventariosRol" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
+            <div class="dropdown-menu" aria-labelledby="menuInventariosRol">
+            <a class="dropdown-item" href="/factuprodu/crear">Facturas de Compra sin XML</a>
+            <a class="dropdown-item" href="/factuprodu/crear_importacion">Facturas de Compra con XML</a>
             <a class="dropdown-item" href="/compras/listar">Listar Facturas (Compras)</a>
             <a class="dropdown-item" href="/compras/listar_por_factura">Buscar Factura (Compras)</a>
-            @if(Auth::user()->rol->nombrerol == "Administrador") 
+            @if($rolCabecera === "Administrador")
               <a href="/repuesto" class="dropdown-item">Buscar repuesto</a>
               <a class="dropdown-item" href="/repuesto/stockrepuesto">Stock de Repuestos</a>
               <a href="/repuesto/ingresados_vendidos" class="dropdown-item">Ingresados vs Vendidos</a>
@@ -187,6 +264,7 @@
               <a href="/ticket" class="dropdown-item">Ticket</a>
               <a href="/ventas/armar-kit" class="dropdown-item">Kit de repuestos</a>
               <a href="/ventas/cotizaciones" class="dropdown-item">Evaluar cotizaciones</a>
+              <a href="/ventas/totem" class="dropdown-item">Revisión Carritos</a>
             @endif
             <a href="/guiadespacho" class="dropdown-item">Guía de despacho</a>
             
@@ -194,10 +272,10 @@
             <a href="/guiadespacho/recepcion_mercaderia" class="dropdown-item">Recepción de mercadería</a>
             <a href="/guiadespacho/devolucion_mercaderia" class="dropdown-item">Devoluciones</a>
             <a class="dropdown-item" href="/ot">Orden de transporte</a>
-            @if(Auth::user()->rol->nombrerol == "Administrador")
+            @if($rolCabecera === "Administrador")
               <a class="dropdown-item" href="/inventario">Inventario por tienda</a>
             @endif
-            @if(Auth::user()->rol->nombrerol == "jefe de bodega" ||Auth::user()->rol->nombrerol == "Administrador" ) 
+            @if(in_array($rolCabecera, ["jefe de bodega", "Administrador"], true))
               <a href="/solicitudes" class="dropdown-item">Solicitudes</a> 
             @endif
           </div>
@@ -205,19 +283,19 @@
               
           @endif
 
-          @if(Auth::user()->name == "Marveise Albarracin")
+          @if($usuarioCabecera->name === "Marveise Albarracin")
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuInventarioRecepcionEspecial" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Inventarios</a>
+            <div class="dropdown-menu" aria-labelledby="menuInventarioRecepcionEspecial">
               <a href="/guiadespacho/recepcion_mercaderia" class="dropdown-item">Recepción de mercadería</a>
             </div>
           </li>
           @endif
           
-          @if (Auth::user()->rol->nombrerol == "Administrador" || Auth::user()->rol->nombrerol == "contabilidad")
+          @if(in_array($rolCabecera, ["Administrador", "contabilidad"], true))
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">SII</a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuSiiRol" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">SII</a>
+            <div class="dropdown-menu" aria-labelledby="menuSiiRol">
             <a class="dropdown-item" href="/sii/cargarfolios">Cargar Folios</a>
             <a class="dropdown-item" href="/sii/anularfolios">Anulación de folios</a>
             <a class="dropdown-item" href="/sii/estadodte">Estado DTE</a>
@@ -229,10 +307,10 @@
 
          
           
-          @if(Auth::user()->rol->nombrerol == "Administrador")
+          @if($rolCabecera === "Administrador")
           <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Mantenimiento</a>
-              <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+              <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuMantenimientoAdmin" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Mantenimiento</a>
+              <div class="dropdown-menu" aria-labelledby="menuMantenimientoAdmin">
                   <a class="dropdown-item" href="/marcavehiculo">Marca Vehículos</a>
                   <a class="dropdown-item" href="/modelovehiculo">Modelo Vehículos</a>
                   <a class="dropdown-item" href="/rol">Roles de Usuario</a>
@@ -240,6 +318,7 @@
                   <a class="dropdown-item" href="/marcarepuesto">Marca de Repuestos</a>
                   <a class="dropdown-item" href="/repuesto/listar-oems">Clonar OEMs</a>
                   <a href="/repuesto/clonaciones" class="dropdown-item">Clonaciones</a>
+                  <a href="/repuesto/clonaciones_rv" class="dropdown-item">Clonaciones RV</a>
                   {{-- <a class="dropdown-item" href="/repuesto/modificar">Modificar Repuestos</a> --}}
                   <a class="dropdown-item" href="/repuesto">Catálogo de Repuestos</a>
                   <a class="dropdown-item" href="/pais">Países</a>
@@ -262,10 +341,10 @@
               </div>
           </li>
           @endif
-          @if(Auth::user()->rol->nombrerol == "bodega-venta" || Auth::user()->rol->nombrerol == "vendedor" || Auth::user()->rol->nombrerol == "Cajer@")
+          @if(in_array($rolCabecera, ["bodega-venta", "vendedor", "Cajer@"], true))
           <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Mantenimiento</a>
-              <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+              <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="menuMantenimientoBasico" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Mantenimiento</a>
+              <div class="dropdown-menu" aria-labelledby="menuMantenimientoBasico">
                   
                   <a class="dropdown-item" href="/clientes">Agregar Clientes</a>
                   
@@ -273,26 +352,28 @@
               </div>
           </li>
           @endif
-          @if(Auth::user()->rol->nombrerol == "Administrador" || Auth::user()->rol->nombrerol == "contabilidad")
+          @if(in_array($rolCabecera, ["Administrador", "contabilidad"], true))
           <li class="nav-item dropdown">
             <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="navbarDropdownLibroLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Libros</a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdownLibroLink">
               <a class="dropdown-item" href="/rcof/">RCOF Boletas</a>
-              <a class="dropdown-item" href="/libro/ventas">Libro Ventas</a>
+              @if($usuarioCabecera->id !== 75) <a class="dropdown-item" href="/libro/ventas">Libro Ventas</a> @endif
               <a class="dropdown-item" href="/libro/compras">Libro Compras</a>
             </div>
           </li>
           @endif
-          @if(Auth::user()->rol->nombrerol == "Administrador")
+          @if($rolCabecera === "Administrador")
           <li class="nav-item dropdown">
             <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="navbarDropdownReportesLink" data-toggle="dropdown" aria-haspopup="false" aria-expanded="false">Reportes</a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdownReportesLink">
               <a class="dropdown-item" href="/reportes/ventasdiarias">Ventas diarias</a>
               <a class="dropdown-item" href="/usuarios/rendimiento">Desempeño mensual</a>
+               <a class="dropdown-item" href="/reportes/informe-rentabilidad">Informe Rentabilidad (prueba)</a>
               <a class="dropdown-item" href="/reportes/documentosgenerados">Documentos generados</a>
               <a class="dropdown-item" href="/reportes/documentosgenera2">Buscar documentos</a>
               <a class="dropdown-item" href="/reportes/transbank">Documentos Banco Estado</a>
               <a class="dropdown-item" href="/reportes/getnet">Documentos Getnet</a>
+              <a class="dropdown-item" href="/reportes/transferencias">Documentos Transferencias</a>
               <a class="dropdown-item" href="/ventas/ventas_online">Ventas Online</a>
             </div>
           </li>
@@ -310,32 +391,83 @@
             <a class="dropdown-item" href="/ventas/detalle_ventas">Detalle Ventas</a>
           </li>
       </ul>
-      @if(Auth::user()->image_path)
-      @if(Auth::user()->rol->nombrerol == "Administrador")
-      <a href="/reportes/rep_sin_prov" class="d-flex align-items-center mx-3 text-decoration-none" style="font-size: 13px;">
-        <img src="{{asset('storage/imagenes/campana.png')}}" alt="" style="width: 30px;">Sin Stock Prov <span class="d-none badge badge-warning" id="cantidad_sin_prov"></span>
-      </a>
-      <a href="/reportes/bajo_stock" class="d-flex align-items-center mx-3 text-decoration-none" style="font-size: 13px;">
-        <img src="{{asset('storage/imagenes/campana.png')}}" alt="" style="width: 30px;">Stock Mínimo <span class="d-none badge badge-warning" id="cantidad_stock_minimo"></span>
-      </a> 
-      
-      <a href="javascript:void(0)" onclick="dameofertas()" class="d-flex mx-3 align-items-center text-decoration-none" style="font-size: 13px;" >
-        <img src="{{asset('storage/imagenes/campana.png')}}" alt="" style="width: 30px;">Ofertas
-      </a>
-      @endif
-        <img src="{{url('usuarios/avatar/'.Auth::user()->image_path)}}" alt="" id="logo">
-      
-      @endif
-      @if(Auth::user()->rol->nombrerol !== "Bodeguer@")
+       @if($rolCabecera !== "vendedor" || $usuarioCabecera->id == 250)
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle d-flex align-items-center"
+       href="javascript:void(0)"
+       id="menuNotificacionesRoles"
+       data-toggle="dropdown"
+       aria-haspopup="true"
+       aria-expanded="false">
+
+        <img src="{{ asset('storage/imagenes/campana.png') }}"
+             alt=""
+             style="width: 25px;"
+             class="mr-1">
+
+        Notificaciones
+    </a>
+
+    <div class="dropdown-menu dropdown-menu-right"
+         aria-labelledby="menuNotificacionesRoles">
+
+        <a href="/reportes/rep_sin_prov"
+           class="dropdown-item d-flex justify-content-between align-items-center">
+            Sin Stock Prov
+            <span class="d-none badge badge-warning"
+                  id="cantidad_sin_prov"></span>
+        </a>
+
+        <a href="/reportes/bajo_stock"
+           class="dropdown-item d-flex justify-content-between align-items-center">
+            Stock Mínimo
+            <span class="d-none badge badge-warning"
+                  id="cantidad_stock_minimo"></span>
+        </a>
+
+        <a href="/reportes/stock_critico"
+           class="dropdown-item d-flex justify-content-between align-items-center">
+            Stock Crítico
+            <span class="d-none badge badge-warning"
+                  id="cantidad_stock_critico"></span>
+        </a>
+
+        <a href="/reportes/stock_pendiente"
+           class="dropdown-item d-flex justify-content-between align-items-center">
+            Stock Pendiente
+            <span class="d-none badge badge-warning"
+                  id="cantidad_stock_pendiente"></span>
+        </a>
+
+        <div class="dropdown-divider"></div>
+
+        <a href="javascript:void(0)"
+           onclick="dameofertas()"
+           class="dropdown-item">
+            Ofertas
+        </a>
+
+    </div>
+</li>
+
+@endif
+      @if($rolCabecera !== "Bodeguer@")
       <div class="d-none text-white letra_pequeña" id="porcentaje_ventas"></div>
       @endif
       <ul class="navbar-nav">
         
       <li class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="navbarDropdownMenuUser" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"></a>
-          <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuUser">
-            <span class="text-center">{{Auth::user() -> name}}  ({{Auth::user()->rol->nombrerol}})</span> 
-            @if(Auth::user()->rol->nombrerol === "Administrador") <a href="{{url('usuarios/edit/'.Auth::user()->id)}}" class="dropdown-item">Editar usuario</a> @endif
+      <a class="nav-link dropdown-toggle d-flex align-items-center" href="javascript:void(0)" id="menuUsuarioRol" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú de usuario">
+        @if($usuarioCabecera->image_path)
+          <img src="{{ url('usuarios/avatar/'.$usuarioCabecera->image_path) }}" alt="Foto de {{ $usuarioCabecera->name }}" id="logo">
+        @else
+          <i class="fas fa-user-circle fa-2x" aria-hidden="true"></i>
+        @endif
+      </a>
+          <div class="dropdown-menu dropdown-menu-right" aria-labelledby="menuUsuarioRol">
+            <span class="dropdown-item-text text-center">{{ $usuarioCabecera->name }} ({{ $rolCabecera }})</span>
+            @if($rolCabecera === "Administrador") <a href="{{url('usuarios/edit/'.$usuarioCabecera->id)}}" class="dropdown-item">Editar usuario</a> @endif
             <a href="/cambiarclave" class="dropdown-item">Cambiar clave</a>
             <form action="/logout" method="post">
             @csrf

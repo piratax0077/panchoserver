@@ -265,9 +265,9 @@ class ClsSii
 
     public static function dame_firma()
     {
-        $clave1="Pan831";
+        $clave1="panxo2025";
         $clave2="Administrador2023";
-        $archivo_firma=base_path().'/cert/josetroncoso2023.p12';
+        $archivo_firma=base_path().'/cert/cert_2026.p12';
         if(is_readable($archivo_firma))
         {
             $firma_config=['file'=>$archivo_firma,'pass'=>$clave1];

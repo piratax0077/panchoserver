@@ -28,6 +28,7 @@
         "datatables.net-dt": "^1.13.8",
         "popper.js": "^1.16.1",
         "qrious": "^4.0.2",
+        "select2": "^4.0.13",
         "sweetalert2": "^9.15.1",
         "vue-sweetalert2": "^3.0.5",
         "vuex": "^3.4.0"

@@ -125,6 +125,14 @@
 @section('contenido')
 <h3 class="titulazo">Metas</h3>
 @php
+use Carbon\Carbon;
+    setlocale(LC_TIME, 'es_ES.UTF-8', 'es_ES', 'Spanish_Spain', 'Spanish');
+
+    $meses = [];
+    for ($i = 1; $i <= 12; $i++) {
+        $meses[$i] = Carbon::create()->month($i)->translatedFormat('F');
+    }
+    $mes = Carbon::now()->translatedFormat('F');
  $año_actual=date("Y");
 @endphp
 <div class="container-fluid">
@@ -132,11 +140,11 @@
         <div id="periodo">
             <label for="periodo_mes">Periodo:</label>
             <select name="periodo_mes" id="periodo_mes" class="form-control form-control-sm">
-                @for ($i = 1; $i <= 12; $i++)
-                    <option value="{{ $i }}" {{ (date('n') == $i) ? 'selected' : '' }}>
-                        {{ strftime('%B', mktime(0, 0, 0, $i, 1)) }}
+                @foreach ($meses as $numero => $nombre)
+                    <option value="{{ $numero }}" {{ (date('n') == $numero) ? 'selected' : '' }}>
+                        {{ ucfirst($nombre) }}
                     </option>
-                @endfor
+                @endforeach
             </select>
             <select name="periodo_año" id="periodo_año" class="form-control form-control-sm">
                 @for($an=2020;$an<=$año_actual;$an++)
@@ -179,7 +187,7 @@
         </div>
         <div class="col-md-3">
             <div class="info">
-                <h4>Meta de ventas - {{date('F')}} {{date('Y')}}</h4>
+                <h4>Meta de ventas - {{ ucfirst($mes) }} {{ date('Y') }}</h4>
                 @if(isset($meta))
                 <table class="table">
                     <tbody>
@@ -262,44 +270,52 @@
                 <table class="table table-striped table-hover">
                     <thead>
                         <tr>
-                            <th>Fecha</th>
-                            <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Precio</th>
-                            <th>Total</th>
+                            <th>Mes</th>
+                            <th>Inicial</th>
+                            <th>Mitad</th>
+                            <th>Final</th>
+                            <th>Ventas Neto</th>
+                            <th>Ventas IVA</th>
+                            <th>Ventas Total</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td>2021-09-01</td>
-                            <td>Producto 1</td>
-                            <td>10</td>
-                            <td>100</td>
-                            <td>1000</td>
-                        </tr>
-                        <tr>
-                            <td>2021-09-01</td>
-                            <td>Producto 2</td>
-                            <td>5</td>
-                            <td>200</td>
-                            <td>1000</td>
-                        </tr>
-                        <tr>
-                            <td>2021-09-01</td>
-                            <td>Producto 3</td>
-                            <td>2</td>
-                            <td>300</td>
-                            <td>600</td>
+                            <td><span id="mes_modal"></span></td>
+                            <td><span id="meta_inicial_modal"></span></td>
+                            <td><span id="meta_mitad_modal"></span></td>
+                            <td><span id="meta_final_modal"></span></td>
+                            <td><span id="ventas_neto_modal"></span></td>
+                            <td><span id="ventas_iva_modal"></span></td>
+                            <td><span id="ventas_total_modal"></span></td>
                         </tr>
                     </tbody>
                 </table>
+            
+                <!-- Nueva sección para porcentajes -->
+                <div class="row text-center mt-3">
+                    <div class="col-md-4">
+                        <h6>Avance Inicial</h6>
+                        <p><span id="porcentaje_inicial_modal" class="badge bg-primary fs-5"></span></p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Avance Mitad</h6>
+                        <p><span id="porcentaje_mitad_modal" class="badge bg-warning text-dark fs-5"></span></p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Avance Final</h6>
+                        <p><span id="porcentaje_modal" class="badge bg-success fs-5"></span></p>
+                    </div>
+                </div>
             </div>
+            
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger" data-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
+
 @if(isset($meta))
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -409,7 +425,11 @@ function eliminar_meta(id){
     });
 }
 
-function buscar_meta_mensual(id){
+
+</script>
+@endif
+<script>
+    function buscar_meta_mensual(id){
     Vue.swal({
         title: 'Buscar',
         text: '¿Desea buscar la meta seleccionada?',
@@ -430,9 +450,25 @@ function buscar_meta_mensual(id){
                     console.log(data);
                     if(data.mensaje=='OK'){
                         let meta = data.meta;
-                        $('#meta_inicial').val(meta.meta_inicial);
-                        $('#meta_mitad').val(meta.meta_mitad);
-                        $('#meta_final').val(meta.meta);
+                        // Formateador para CLP (puedes cambiar la configuración según tu moneda)
+                        const formatearMoneda = new Intl.NumberFormat('es-CL', {
+                            style: 'currency',
+                            currency: 'CLP',
+                            minimumFractionDigits: 0
+                        });
+                        const formatearPorcentaje = (valor) => `${valor.toFixed(2)}%`;
+                        $('#meta_inicial_modal').html(formatearMoneda.format(meta.meta_inicial));
+                        $('#meta_mitad_modal').html(formatearMoneda.format(meta.meta_mitad));
+                        $('#meta_final_modal').html(formatearMoneda.format(meta.meta));
+                        $('#ventas_neto_modal').html(formatearMoneda.format(data.total_neto));
+                        $('#ventas_iva_modal').html(formatearMoneda.format(data.iva_total));
+                        $('#ventas_total_modal').html(formatearMoneda.format(data.total));
+
+                        $('#porcentaje_inicial_modal').html(formatearPorcentaje(data.porcentaje_inicial));
+                        $('#porcentaje_mitad_modal').html(formatearPorcentaje(data.porcentaje_mitad));
+                        $('#porcentaje_modal').html(formatearPorcentaje(data.porcentaje));
+
+                        $('#modalVentas').modal('show');
                     }else{
                         Vue.swal({
                             title: 'Error',
@@ -446,5 +482,4 @@ function buscar_meta_mensual(id){
     });
 }
 </script>
-@endif
 @endsection

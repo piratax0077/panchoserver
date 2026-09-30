@@ -39,7 +39,7 @@
             <td>{{$rep->medidas}}</td>
             <td>{{$rep->marcarepuesto}}</td>
             <td>{{$rep->nombre_pais}}</td>
-            <td class="text-center">{{$rep->stock_actual + $rep->stock_actual_dos + $rep->stock_actual_tres}}</td>
+            <td class="text-center">{{\App\Services\StockPorLocalService::total($rep)}}</td>
             <td >{{$rep->estado}}</td>
             <td><a href="javascript:void(0)" onclick="damerepuesto({{$rep->id}})" class="btn btn-sm btn-secondary" data-target="#modalNuevoStockMinimo" data-toggle="modal"><i class="fa-solid fa-arrows-rotate"></i></button></td>
         </tr>

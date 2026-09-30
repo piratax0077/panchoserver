@@ -13,12 +13,18 @@ use App\nota_de_credito;
 use App\nota_de_debito;
 use App\guia_de_despacho;
 use App\formapago;
+use App\importaciones_excel;
 use App\registro_login;
 use App\repuesto;
 use App\pago;
 use App\User;
 use App\local;
 use App\permissions_detail;
+use App\boleta_detalle;
+use App\factura_detalle;
+use App\compras_cab;
+use App\compras_det;
+use App\proveedor;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\ventasDiariasExports;
 use App\Exports\ventasDiariasExportsGetnet;
@@ -30,6 +36,10 @@ use App\retiro_tienda;
 use App\despacho_domicilio;
 use Carbon\Carbon; // para tratamiento de fechas
 use App\stock_minimo;
+
+// DB
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 use Illuminate\Support\Facades\Auth;
 
@@ -97,10 +107,11 @@ class reportes_controlador extends Controller
 
     public function buscar_documentos($info)
     {
+    
         list($opcion, $buscado) = explode("&", $info);
         $buscado = str_replace("_slash_", "/", $buscado);
         $buscado = str_replace("_ampersand_", "&", $buscado);
-
+    
         //RESPUESTA
         $respuesta_registro = [];
         $respuesta = [];
@@ -110,7 +121,7 @@ class reportes_controlador extends Controller
 
         try {
 
-
+      
             switch ($opcion) {
                 case "documento":
                     //boleta
@@ -140,7 +151,7 @@ class reportes_controlador extends Controller
                                     $orden_nivel2 += 10;
                                 }
                             } else {
-                                $respuesta_registro = ['orden' => $orden_nivel2, 'documento' => 'Crédito', 'fecha' => $bol->fecha_emision, 'referencia' => '', 'monto' => $bol->total, 'activo' => $bol->activo, 'es_pago' => 0, 'xml' => $bol->url_xml];
+                                $respuesta_registro = ['orden' => $orden_nivel2, 'documento' => 'Crédito', 'fecha' => $bol->fecha_emision, 'referencia' => '', 'monto' => $bol->total, 'activo' => $bol->activo, 'es_pago' => 0, 'xml' => $bol->url_xml, 'id_doc' => $bol->id, 'tipo_doc' => 'bo'];
                                 array_push($respuesta, $respuesta_registro);
                                 $orden_nivel2 += 10;
                             }
@@ -190,7 +201,7 @@ class reportes_controlador extends Controller
                                     $orden_nivel2 += 10;
                                 }
                             } else {
-                                $respuesta_registro = ['orden' => $orden_nivel2, 'documento' => 'Crédito', 'fecha' => $fac->fecha_emision, 'referencia' => '', 'monto' => $fac->total, 'activo' => $fac->activo, 'es_pago' => 0, 'xml' => $fac->url_xml];
+                                $respuesta_registro = ['orden' => $orden_nivel2, 'documento' => 'Crédito', 'fecha' => $fac->fecha_emision, 'referencia' => '', 'monto' => $fac->total, 'activo' => $fac->activo, 'es_pago' => 0, 'xml' => $fac->url_xml, 'id_doc' => $fac->id, 'tipo_doc' => 'fa'];
                                 array_push($respuesta, $respuesta_registro);
                                 $orden_nivel2 += 10;
                             }
@@ -663,371 +674,472 @@ class reportes_controlador extends Controller
         return $v;
     }
 
-    public function reporte_pagos_mensuales($fecha){
+    public function reporte_pagos_mensuales($periodo)
+    {
         try {
-         
-            $fecha_separada = explode("-",$fecha);
-            $year = $fecha_separada[0];
-            $mes = $fecha_separada[1];
-    
-            switch($mes){
-                case '01':
-                    $nombre_mes = 'ENERO';
-                    break;
-                case '02':
-                    $nombre_mes = 'FEBRERO';
-                    break;
-                case '03':
-                    $nombre_mes = 'MARZO';
-                    break;
-                case '04':
-                    $nombre_mes = 'ABRIL';
-                    break;
-                case '05':
-                    $nombre_mes = 'MAYO';
-                    break;
-                case '06':
-                    $nombre_mes = 'JUNIO';
-                    break;
-                case '07':
-                    $nombre_mes = 'JULIO';
-                    break;
-                case '08':
-                    $nombre_mes = 'AGOSTO';
-                    break;
-                case '09':
-                    $nombre_mes = 'SEPTIEMBRE';
-                    break;
-                case '10':
-                    $nombre_mes = 'OCTUBRE';
-                    break;
-                case '11':
-                    $nombre_mes = 'NOVIEMBRE';
-                    break;
-                case '12':
-                    $nombre_mes = 'DICIEMBRE';
-                    break;
+            /*
+             * El parámetro esperado es YYYY-MM.
+             * Se mantiene compatibilidad con YYYY-MM-DD.
+             */
+            if (!preg_match('/^\d{4}-\d{2}(-\d{2})?$/', (string) $periodo)) {
+                abort(422, 'El período seleccionado no es válido.');
             }
 
-            
-    
-            // $usuarios = User::select('id', 'name')
-            //     ->where('activo', 1)
-            //     ->where('id',9)
-            //     ->orWhere('id',5)
-            //     ->orWhere('id',6)
-            //     ->orWhere('id',8)
-            //     ->orWhere('id',12)
-            //     ->orWhere('id',17)
-            //     ->orderBy('name')
-            //     ->get();
-            $fecha_salida_jorge = "2023-03-20";
-            $fecha_salida_marveise = "2023-07-14";
-            if($fecha > $fecha_salida_marveise){
-                $u = User::select('users.id','users.name','users.activo')
-                                ->leftjoin('permissions_detail','permissions_detail.usuarios_id','users.id')
-                                
-                                ->where('users.role_id',13)
-                                // ->where('id',9)
-                                ->orWhere('users.id',4)
-                                ->orWhere('users.id',5)
-                                ->orWhere('users.id',6)
-                                ->orWhere('users.id',12)
-                                // ->orWhere('id',16)
-                                ->orWhere('users.id',17)
-                                ->orWhere('users.id',34)
-                                ->orWhere('users.id',72)
-                                ->orWhere('permissions_detail.permission_id',3)
-                                ->where('users.activo', 1)
-                                ->orderBy('users.name')
-                                ->groupBy('users.name')
-                                ->get();
-            $usuarios = [];
-            foreach($u as $user){
-                //Sacamos al usuario jorge Saavedra
-                if($user->id !== 9){
-                    array_push($usuarios, $user);
+            $fechaPeriodo = Carbon::createFromFormat(
+                strlen($periodo) === 7 ? 'Y-m' : 'Y-m-d',
+                $periodo
+            );
+
+            $fechaInicio = $fechaPeriodo->copy()->startOfMonth()->format('Y-m-d');
+            $fechaTermino = $fechaPeriodo->copy()->endOfMonth()->format('Y-m-d');
+            $nombreMes = mb_strtoupper(
+                $fechaPeriodo->locale('es')->translatedFormat('F')
+            );
+            $anio = $fechaPeriodo->year;
+
+            $porcentajeIVA = (float) Session::get('PARAM_IVA', 0.19);
+            $factorIVA = 1 + $porcentajeIVA;
+
+            /*
+             * Las ventas se obtienen desde los detalles, aplicando los
+             * mismos criterios utilizados por el informe de rentabilidad.
+             */
+            $facturas = factura_detalle::from('facturas_detalle as fd')
+                ->select(
+                    DB::raw("'FACTURA' as tipo_documento"),
+                    DB::raw("'fa' as codigo_documento"),
+                    'f.id as id_documento',
+                    'f.num_factura as numero_documento',
+                    'f.fecha_emision',
+                    'fd.id_repuestos',
+                    'fd.usuarios_id as id_vendedor',
+                    'u.name as vendedor',
+                    'fd.precio_venta',
+                    'fd.pu_neto',
+                    'fd.cantidad',
+                    'fd.descuento',
+                    'fd.total'
+                )
+                ->join('facturas as f', 'f.id', '=', 'fd.id_factura')
+                ->leftJoin('users as u', 'u.id', '=', 'fd.usuarios_id')
+                ->whereBetween('f.fecha_emision', [$fechaInicio, $fechaTermino])
+                ->where('f.activo', 1)
+                ->where('fd.activo', 1)
+                ->where('f.es_credito', 0)
+                ->whereIn('f.estado_sii', ['ACEPTADO', 'REPARO'])
+                ->get();
+
+            $boletas = boleta_detalle::from('boletas_detalle as bd')
+                ->select(
+                    DB::raw("'BOLETA' as tipo_documento"),
+                    DB::raw("'bo' as codigo_documento"),
+                    'b.id as id_documento',
+                    'b.num_boleta as numero_documento',
+                    'b.fecha_emision',
+                    'bd.id_repuestos',
+                    'bd.usuarios_id as id_vendedor',
+                    'u.name as vendedor',
+                    'bd.precio_venta',
+                    'bd.pu_neto',
+                    'bd.cantidad',
+                    'bd.descuento',
+                    'bd.total'
+                )
+                ->join('boletas as b', 'b.id', '=', 'bd.id_boleta')
+                ->leftJoin('users as u', 'u.id', '=', 'bd.usuarios_id')
+                ->whereBetween('b.fecha_emision', [$fechaInicio, $fechaTermino])
+                ->where('b.activo', 1)
+                ->where('bd.activo', 1)
+                ->where('b.es_credito', 0)
+                ->whereIn('b.estado_sii', ['ACEPTADO', 'REPARO'])
+                ->get();
+
+            $ventas = $facturas->concat($boletas);
+            $cacheCostos = [];
+            $documentos = [];
+            $vendedores = [];
+
+            $resumen = [
+                'venta_bruta' => 0,
+                'venta_neta' => 0,
+                'costo_productos_vendidos' => 0,
+                'utilidad_bruta' => 0,
+                'margen_bruto' => 0,
+                'cantidad_documentos' => 0,
+                'cantidad_facturas' => 0,
+                'cantidad_boletas' => 0,
+                'cantidad_unidades' => 0,
+                'venta_sin_costo' => 0,
+                'cantidad_items_sin_costo' => 0,
+            ];
+
+            foreach ($ventas as $venta) {
+                $cantidad = (float) $venta->cantidad;
+                $precioVenta = (float) $venta->precio_venta;
+                $precioNeto = (float) $venta->pu_neto;
+                $descuentoBruto = (float) $venta->descuento;
+                $totalDetalle = (float) $venta->total;
+
+                if ($precioNeto > 0) {
+                    $ventaNeta = ($precioNeto * $cantidad)
+                        - ($descuentoBruto / $factorIVA);
+                } elseif ($totalDetalle > 0) {
+                    $ventaNeta = $totalDetalle / $factorIVA;
+                } else {
+                    $ventaNeta = (
+                        ($precioVenta * $cantidad) - $descuentoBruto
+                    ) / $factorIVA;
+                }
+
+                $ventaBruta = $totalDetalle > 0
+                    ? $totalDetalle
+                    : (($precioVenta * $cantidad) - $descuentoBruto);
+
+                $ventaNeta = max(0, round($ventaNeta, 2));
+                $ventaBruta = max(0, round($ventaBruta, 2));
+
+                $claveCosto = $venta->id_repuestos . '_' . $venta->fecha_emision;
+
+                if (!array_key_exists($claveCosto, $cacheCostos)) {
+                    $cacheCostos[$claveCosto] =
+                        $this->obtenerCostoHistoricoRepuesto(
+                            $venta->id_repuestos,
+                            $venta->fecha_emision
+                        );
+                }
+
+                $costoHistorico = $cacheCostos[$claveCosto];
+                $tieneCosto = !is_null($costoHistorico);
+                $costoTotal = $tieneCosto
+                    ? ((float) $costoHistorico['costo_unitario'] * $cantidad)
+                    : 0;
+
+                $utilidad = $tieneCosto ? $ventaNeta - $costoTotal : 0;
+
+                $resumen['venta_bruta'] += $ventaBruta;
+                $resumen['venta_neta'] += $ventaNeta;
+                $resumen['cantidad_unidades'] += $cantidad;
+
+                if ($tieneCosto) {
+                    $resumen['costo_productos_vendidos'] += $costoTotal;
+                    $resumen['utilidad_bruta'] += $utilidad;
+                } else {
+                    $resumen['venta_sin_costo'] += $ventaNeta;
+                    $resumen['cantidad_items_sin_costo']++;
+                }
+
+                $claveDocumento = $venta->codigo_documento . '_' . $venta->id_documento;
+                $documentos[$claveDocumento] = $venta->codigo_documento;
+
+                $idVendedor = $venta->id_vendedor ?: 0;
+                $nombreVendedor = trim((string) $venta->vendedor)
+                    ?: 'SIN VENDEDOR';
+
+                if (!isset($vendedores[$idVendedor])) {
+                    $vendedores[$idVendedor] = [
+                        'id_vendedor' => $idVendedor,
+                        'vendedor' => $nombreVendedor,
+                        'venta_bruta' => 0,
+                        'venta_neta' => 0,
+                        'costo_productos_vendidos' => 0,
+                        'utilidad_bruta' => 0,
+                        'margen_bruto' => 0,
+                        'cantidad_unidades' => 0,
+                        'documentos' => [],
+                        'cantidad_documentos' => 0,
+                        'venta_sin_costo' => 0,
+                    ];
+                }
+
+                $vendedores[$idVendedor]['venta_bruta'] += $ventaBruta;
+                $vendedores[$idVendedor]['venta_neta'] += $ventaNeta;
+                $vendedores[$idVendedor]['cantidad_unidades'] += $cantidad;
+                $vendedores[$idVendedor]['documentos'][$claveDocumento] = true;
+
+                if ($tieneCosto) {
+                    $vendedores[$idVendedor]['costo_productos_vendidos'] +=
+                        $costoTotal;
+                    $vendedores[$idVendedor]['utilidad_bruta'] += $utilidad;
+                } else {
+                    $vendedores[$idVendedor]['venta_sin_costo'] += $ventaNeta;
                 }
             }
-            }else{
-                $usuarios = User::select('users.id','users.name')
-                                ->leftjoin('permissions_detail','permissions_detail.usuarios_id','users.id')
-                                
-                                ->where('users.activo', 1)
-                                ->where('users.role_id',13)
-                                // ->where('id',9)
-                                ->orWhere('users.id',4)
-                                ->orWhere('users.id',5)
-                                ->orWhere('users.id',6)
-                                ->orWhere('users.id',8)
-                                ->orWhere('users.id',12)
-                                // ->orWhere('id',16)
-                                ->orWhere('users.id',17)
-                                ->orWhere('users.id',34)
-                                ->orWhere('permissions_detail.permission_id',3)
-                                ->orderBy('users.name')
-                                ->groupBy('users.name')
-                                ->get();
+
+            foreach ($documentos as $tipoDocumento) {
+                if ($tipoDocumento === 'fa') {
+                    $resumen['cantidad_facturas']++;
+                } else {
+                    $resumen['cantidad_boletas']++;
+                }
             }
-    
-            $formas_pago = formapago::where('activo', 1)->orderBy('id')->get();
-            //$formas_pago: id, formapago
-            $fp_array = $formas_pago->toArray();
-  
-            
-            foreach ($usuarios as $usuario) {
-                $totales[$usuario->name]['delivery'] = 0;
-                foreach ($formas_pago as $forma) {
-                    $pago_bol = pago::select('pagos.*', 'boletas.id as id_boleta', 'boletas.num_boleta as num_boleta', 'boletas.es_delivery')
-                        ->join('boletas', 'pagos.id_doc', 'boletas.id')
-                        ->where('pagos.activo', 1)
-                        ->whereYear('pagos.fecha_pago',$year)
-                        ->whereMonth('pagos.fecha_pago','=', $mes)
-                        ->where('pagos.usuarios_id', $usuario->id)
-                        ->where('pagos.id_forma_pago', $forma->id)
-                        ->where('pagos.tipo_doc', 'bo')
-                        ->get();
-                    $pago_bol_resta = 0;
-                    $pago_bol_rechazados = 0;
-                    $pago_bol_delivery = 0;
-                    if ($pago_bol->count() > 0) {
-    
-                        foreach ($pago_bol as $pb) {
-                            $nc = nota_de_credito::where('activo', 1)
-                                ->where('docum_referencia', 'LIKE', 'bo*' . $pb->num_boleta . '%')
-                                ->first();
-                            if (!is_null($nc)) {
-                                $pago_bol_resta += $pb->monto;
-                            }
-    
-                            $bol_rech = boleta::where('activo', 1)
-                                ->where('estado_sii', '<>', 'ACEPTADO')
-                                ->where('id', $pb->id_doc)
-                                ->first();
-                            if (!is_null($bol_rech)) {
-                                $pago_bol_rechazados += $pb->monto;
-                            }
-    
-                            if ($pb->es_delivery == 2) { //delivery pagado
-                                $pago_bol_delivery += $pb->monto;
-                                $totales[$usuario->name]['delivery'] += $pb->monto;
-                            }
-                        }
-                    }
-                    //Resta deliverys, notas de crédito y rechazados de la misma fecha
-                    $boletas[$usuario->name][$forma->formapago] = $pago_bol->sum('monto') - $pago_bol_delivery - $pago_bol_resta - $pago_bol_rechazados;
-    
-    
-                    $pago_fac = pago::select('pagos.*', 'facturas.id as id_factura', 'facturas.num_factura as num_factura', 'facturas.es_delivery')
-                        ->join('facturas', 'pagos.id_doc', 'facturas.id')
-                        ->where('pagos.activo', 1)
-                        ->whereYear('pagos.fecha_pago', $year)
-                        ->whereMonth('pagos.fecha_pago','=',$mes)
-                        ->where('pagos.usuarios_id', $usuario->id)
-                        ->where('pagos.id_forma_pago', $forma->id)
-                        ->where('pagos.tipo_doc', 'fa')
-                        ->get();
-    
-                    $pago_fac_resta = 0;
-                    $pago_fac_rechazados = 0;
-                    $pago_fac_delivery = 0;
-                    if ($pago_fac->count() > 0) {
-    
-                        foreach ($pago_fac as $pf) {
-                            $nc = nota_de_credito::where('activo', 1)
-                                ->where('docum_referencia', 'LIKE', 'fa*' . $pf->num_factura . '%')
-                                ->first();
-                            if (!is_null($nc)) {
-                                $pago_fac_resta += $pf->monto;
-                            }
-    
-                            $fac_rech = factura::where('activo', 1)
-                                ->where('estado_sii', '<>', 'ACEPTADO')
-                                ->where('id', $pf->id_doc)
-                                ->first();
-                            if (!is_null($fac_rech)) {
-                                $pago_fac_rechazados += $pf->monto;
-                            }
-    
-                            if ($pf->es_delivery == 2) { //delivery pagado
-                                $pago_fac_delivery += $pf->monto;
-                                $totales[$usuario->name]['delivery'] += $pf->monto;
-                            }
-                        }
-                    }
-                    //Resta notas de crédito y rechazados de la misma fecha
-                    $facturas[$usuario->name][$forma->formapago] = $pago_fac->sum('monto') - $pago_fac_delivery - $pago_fac_resta - $pago_fac_rechazados;
-    
-                    $totales[$usuario->name][$forma->formapago] = $boletas[$usuario->name][$forma->formapago] + $facturas[$usuario->name][$forma->formapago];
-                } //fin forma pago
-    
-            } //fin usuarios
 
+            $resumen['cantidad_documentos'] = count($documentos);
+            $ventaConCosto = $resumen['venta_neta'] - $resumen['venta_sin_costo'];
+            $resumen['margen_bruto'] = $ventaConCosto > 0
+                ? ($resumen['utilidad_bruta'] / $ventaConCosto) * 100
+                : 0;
 
-    
-            $notcred = nota_de_credito::select('notas_de_credito.*', 'users.name as usuario', 'users.id as id_user')
+            foreach ($vendedores as &$vendedor) {
+                $vendedor['cantidad_documentos'] = count($vendedor['documentos']);
+                unset($vendedor['documentos']);
+
+                $ventaConCostoVendedor =
+                    $vendedor['venta_neta'] - $vendedor['venta_sin_costo'];
+
+                $vendedor['margen_bruto'] = $ventaConCostoVendedor > 0
+                    ? (
+                        $vendedor['utilidad_bruta']
+                        / $ventaConCostoVendedor
+                    ) * 100
+                    : 0;
+
+                foreach ([
+                    'venta_bruta',
+                    'venta_neta',
+                    'costo_productos_vendidos',
+                    'utilidad_bruta',
+                    'venta_sin_costo',
+                    'margen_bruto'
+                ] as $campo) {
+                    $vendedor[$campo] = round($vendedor[$campo], 2);
+                }
+            }
+            unset($vendedor);
+
+            $vendedores = collect($vendedores)
+                ->sortByDesc('venta_neta')
+                ->values();
+
+            /*
+             * Resumen de medios de pago del período.
+             */
+            $pagosPorForma = pago::select(
+                    'formapago.formapago',
+                    DB::raw('COUNT(pagos.id) as operaciones'),
+                    DB::raw('SUM(pagos.monto) as total')
+                )
+                ->join('formapago', 'formapago.id', '=', 'pagos.id_forma_pago')
+                ->where('pagos.activo', 1)
+                ->whereBetween('pagos.fecha_pago', [$fechaInicio, $fechaTermino])
+                ->whereIn('pagos.tipo_doc', ['bo', 'fa'])
+                ->groupBy('pagos.id_forma_pago', 'formapago.formapago')
+                ->orderByDesc('total')
+                ->get();
+
+            $totalCobrado = (float) $pagosPorForma->sum('total');
+
+            $getnet = pago::selectRaw(
+                    'id_forma_pago, COUNT(*) as operaciones, SUM(monto) as total'
+                )
+                ->where('activo', 1)
+                ->where('referencia_pago', 2)
+                ->whereBetween('fecha_pago', [$fechaInicio, $fechaTermino])
+                ->whereIn('tipo_doc', ['bo', 'fa'])
+                ->whereIn('id_forma_pago', [2, 5])
+                ->groupBy('id_forma_pago')
+                ->get();
+
+            $resumenGetnet = [
+                'total' => round((float) $getnet->sum('total'), 2),
+                'operaciones' => (int) $getnet->sum('operaciones'),
+                'credito' => round(
+                    (float) optional($getnet->firstWhere('id_forma_pago', 2))->total,
+                    2
+                ),
+                'debito' => round(
+                    (float) optional($getnet->firstWhere('id_forma_pago', 5))->total,
+                    2
+                ),
+                'porcentaje_total' => $totalCobrado > 0
+                    ? round(
+                        ((float) $getnet->sum('total') / $totalCobrado) * 100,
+                        2
+                    )
+                    : 0,
+            ];
+
+            $notasCredito = nota_de_credito::select(
+                    'notas_de_credito.*',
+                    'users.name as usuario'
+                )
+                ->leftJoin(
+                    'users',
+                    'users.id',
+                    '=',
+                    'notas_de_credito.usuarios_id'
+                )
+                ->whereBetween(
+                    'notas_de_credito.fecha_emision',
+                    [$fechaInicio, $fechaTermino]
+                )
                 ->where('notas_de_credito.activo', 1)
-                ->where('notas_de_credito.estado_sii', 'ACEPTADO')
-                ->whereYear('notas_de_credito.fecha_emision',$year)
-                ->whereMonth('notas_de_credito.fecha_emision','=', $mes)
-                ->join('users', 'notas_de_credito.usuarios_id', 'users.id')
+                ->whereIn(
+                    'notas_de_credito.estado_sii',
+                    ['ACEPTADO', 'REPARO']
+                )
+                ->orderByDesc('notas_de_credito.fecha_emision')
                 ->get();
-                $notcred_total = 0;
-                if ($notcred->count() > 0) {
-                    foreach ($notcred as $nc) {
-                        list($tipo_doc, $num_doc, $fecha_doc) = explode("*", $nc->docum_referencia);
-                        //Sumar solo las NC que son anteriores a la fecha
-                        if ($fecha_doc <> $fecha) {
-                            $notcred_total += $nc->total;
-                        }
-        
-                        //Agregar la forma de pago en url_pdf temporalmente no mas
-                        if ($tipo_doc == 'bo') {
-                            $id_bol = boleta::where('num_boleta', $num_doc)->value('id');
-                            $pagos_boleta = pago::where('id_doc', $id_bol)
-                                ->where('tipo_doc', 'bo')
-                                ->get();
-                            if ($pagos_boleta->count() == 0) {
-                                $nc->url_pdf = "Crédito";
-                                $nc->save();
-                            }
-                            if ($pagos_boleta->count() > 0) $nc->url_pdf = "MultiPago";
-                            if ($pagos_boleta->count() == 1) {
-                                foreach ($pagos_boleta as $pagbol) {
-                                    for ($i = 0; $i < count($fp_array); $i++) {
-                                        if ($pagbol->id_forma_pago == $fp_array[$i]['id']) {
-                                            $nc->url_pdf = $fp_array[$i]['formapago'];
-                                            $nc->save();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-        
-                        if ($tipo_doc == 'fa') {
-                            $id_fac = factura::where('num_factura', $num_doc)->value('id');
-                            $pagos_factura = pago::where('id_doc', $id_fac)
-                                ->where('tipo_doc', 'fa')
-                                ->get();
-                            if ($pagos_factura->count() == 0) {
-                                $nc->url_pdf = "Crédito";
-                                $nc->save();
-                            }
-                            if ($pagos_factura->count() > 0) $nc->url_pdf = "MultiPago";
-                            if ($pagos_factura->count() == 1) {
-        
-                                foreach ($pagos_factura as $pagfac) {
-                                    for ($i = 0; $i < count($fp_array); $i++) {
-                                        if ($pagfac->id_forma_pago == $fp_array[$i]['id']) {
-                                            $nc->url_pdf = $fp_array[$i]['formapago'];
-                                            $nc->save();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                $bol_rech = boleta::select('boletas.id', 'boletas.num_boleta as num_doc', 'boletas.total', 'boletas.resultado_envio as resultado', 'boletas.url_xml as xml', 'boletas.estado_sii', 'boletas.url_pdf', 'users.name as usuario')
-                ->join('users', 'boletas.usuarios_id', 'users.id')
-                ->where('boletas.activo', 1)
-                ->where('boletas.estado_sii', '<>', 'ACEPTADO')
-                ->whereYear('boletas.fecha_emision',$year)
-                ->whereMonth('boletas.fecha_emision','=', $mes)
-                ->get();
-    
-            //Si hay pagos en los documentos rechazados, los desactivamos
-            foreach ($bol_rech as $br) {
-                $cómo_pagó = "Crédito";
-                $pbr = pago::where('tipo_doc', 'bo')
-                    ->where('id_doc', $br->id)
-                    ->get();
-    
-                //Desactivamos cada pago.
-                if ($pbr->count() > 0 && $br->estado_sii == 'RECHAZADO') {
-                    foreach ($pbr as $pbr_temp) {
-                        $pbr_temp->activo = 0;
-                        $pbr_temp->save();
-                    }
-                }
-    
-                //Agregamos la forma de pago
-                if ($pbr->count() == 1) {
-                    $pbr_1 = pago::where('tipo_doc', 'bo')
-                        ->where('id_doc', $br->id)
-                        ->first();
-    
-                    for ($i = 0; $i < count($fp_array); $i++) {
-                        if ($pbr_1->id_forma_pago == $fp_array[$i]['id']) {
-                            $cómo_pagó = $fp_array[$i]['formapago'];
-                        }
-                    }
-                }
-    
-                if ($pbr->count() > 1) $cómo_pagó = "MultiPago";
-                $br->url_pdf = $cómo_pagó;
-                $br->save();
-            }
-    
-            $fac_rech = factura::select('facturas.id', 'facturas.num_factura as num_doc', 'facturas.total', 'facturas.resultado_envio as resultado', 'facturas.url_xml as xml', 'facturas.estado_sii', 'facturas.url_pdf', 'users.name as usuario')
-                ->join('users', 'facturas.usuarios_id', 'users.id')
-                ->where('facturas.activo', 1)
-                ->where('facturas.estado_sii', '<>', 'ACEPTADO')
-                ->whereYear('facturas.fecha_emision',$year)
-                ->whereMonth('facturas.fecha_emision','=', $mes)
-                ->get();
-            //Si hay pagos en los documentos rechazados, los desactivamos
-    
-            foreach ($fac_rech as $fr) {
-                $cómo_pagó = "Crédito";
-                $pfr = pago::where('tipo_doc', 'fa')
-                    ->where('id_doc', $fr->id)
-                    ->get();
-    
-                //idem en boletas más arriba
-                if ($pfr->count() > 0 && $fr->estado_sii == 'RECHAZADO') {
-                    foreach ($pfr as $pfr_temp) {
-                        $pfr_temp->activo = 0;
-                        $pfr_temp->save();
-                    }
-                }
-    
-                //Agregamos la forma de pago
-                if ($pfr->count() == 1) {
-                    $pfr_1 = pago::where('tipo_doc', 'fa')
-                        ->where('id_doc', $fr->id)
-                        ->first();
-    
-                    for ($i = 0; $i < count($fp_array); $i++) {
-                        if ($pfr_1->id_forma_pago == $fp_array[$i]['id']) {
-                            $cómo_pagó = $fp_array[$i]['formapago'];
-                        }
-                    }
-                }
-    
-                if ($pfr->count() > 1) $cómo_pagó = "MultiPago";
-                $fr->url_pdf = $cómo_pagó;
-                $fr->save();
-            }
-    
-            if ($fac_rech->count() > 0 && $bol_rech->count() > 0) {
-                $rechazados = collect($fac_rech)->merge(collect($bol_rech));
-            } else if ($fac_rech->count() == 0 && $bol_rech->count() > 0) {
-                $rechazados = $bol_rech;
-            } else if ($fac_rech->count() > 0 && $bol_rech->count() == 0) {
-                $rechazados = $fac_rech;
-            } else if ($fac_rech->count() == 0 && $bol_rech->count() == 0) {
-                $rechazados = collect();
-            }
-            $delivery_pendientes = $this->delivery_pendientes($fecha);
-        
-            $v = view('reportes.ventas_mensuales_resumen', compact('boletas', 'facturas', 'totales', 'formas_pago', 'usuarios', 'notcred', 'notcred_total', 'rechazados', 'delivery_pendientes','nombre_mes','year'));
-        
-            return $v;
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
 
+            $resumenNotasCredito = [
+                'cantidad' => $notasCredito->count(),
+                'total' => round((float) $notasCredito->sum('total'), 2),
+            ];
+
+            foreach ([
+                'venta_bruta',
+                'venta_neta',
+                'costo_productos_vendidos',
+                'utilidad_bruta',
+                'margen_bruto',
+                'venta_sin_costo'
+            ] as $campo) {
+                $resumen[$campo] = round($resumen[$campo], 2);
+            }
+
+
+            /*
+             * =====================================================
+             * MATRICES MENSUALES CON EL MISMO PATRÓN DEL REPORTE
+             * DIARIO: forma de pago por vendedor y total.
+             * =====================================================
+             */
+            $pagosDetallados = pago::select(
+                    'pagos.usuarios_id',
+                    'pagos.id_forma_pago',
+                    'pagos.tipo_doc',
+                    'pagos.monto',
+                    'pagos.referencia_pago',
+                    'users.name as usuario',
+                    'formapago.formapago'
+                )
+                ->leftJoin('users', 'users.id', '=', 'pagos.usuarios_id')
+                ->join(
+                    'formapago',
+                    'formapago.id',
+                    '=',
+                    'pagos.id_forma_pago'
+                )
+                ->where('pagos.activo', 1)
+                ->whereBetween(
+                    'pagos.fecha_pago',
+                    [$fechaInicio, $fechaTermino]
+                )
+                ->whereIn('pagos.tipo_doc', ['bo', 'fa'])
+                ->get();
+
+            $idsUsuariosReporte = collect($ventas)
+                ->pluck('id_vendedor')
+                ->merge($pagosDetallados->pluck('usuarios_id'))
+                ->filter()
+                ->unique()
+                ->values();
+
+            $usuarios = User::whereIn('id', $idsUsuariosReporte)
+                ->orderBy('name')
+                ->get();
+
+            $formasPago = formapago::orderBy('id')->get();
+
+            $crearMatriz = function () use ($usuarios, $formasPago) {
+                $matriz = [];
+
+                foreach ($usuarios as $usuario) {
+                    $matriz[$usuario->name] = [];
+
+                    foreach ($formasPago as $forma) {
+                        $matriz[$usuario->name][$forma->formapago] = 0;
+                    }
+                }
+
+                return $matriz;
+            };
+
+            $totales = $crearMatriz();
+            $boletasPago = $crearMatriz();
+            $facturasPago = $crearMatriz();
+            $getnetPorUsuario = $crearMatriz();
+
+            foreach ($pagosDetallados as $pagoDetalle) {
+                $nombreUsuario = trim((string) $pagoDetalle->usuario);
+
+                if (
+                    $nombreUsuario === ''
+                    || !isset($totales[$nombreUsuario])
+                    || !isset(
+                        $totales[$nombreUsuario][
+                            $pagoDetalle->formapago
+                        ]
+                    )
+                ) {
+                    continue;
+                }
+
+                $montoPago = (float) $pagoDetalle->monto;
+
+                $totales[$nombreUsuario][$pagoDetalle->formapago]
+                    += $montoPago;
+
+                if ($pagoDetalle->tipo_doc === 'bo') {
+                    $boletasPago[$nombreUsuario][
+                        $pagoDetalle->formapago
+                    ] += $montoPago;
+                }
+
+                if ($pagoDetalle->tipo_doc === 'fa') {
+                    $facturasPago[$nombreUsuario][
+                        $pagoDetalle->formapago
+                    ] += $montoPago;
+                }
+
+                if (
+                    (int) $pagoDetalle->referencia_pago === 2
+                    && in_array(
+                        (int) $pagoDetalle->id_forma_pago,
+                        [2, 5],
+                        true
+                    )
+                ) {
+                    $getnetPorUsuario[$nombreUsuario][
+                        $pagoDetalle->formapago
+                    ] += $montoPago;
+                }
+            }
+
+            return view('reportes.ventas_mensuales_resumen', compact(
+                'periodo',
+                'fechaInicio',
+                'fechaTermino',
+                'nombreMes',
+                'anio',
+                'resumen',
+                'vendedores',
+                'pagosPorForma',
+                'totalCobrado',
+                'resumenGetnet',
+                'notasCredito',
+                'resumenNotasCredito',
+                'usuarios',
+                'formasPago',
+                'totales',
+                'boletasPago',
+                'facturasPago',
+                'getnetPorUsuario'
+            ));
+        } catch (\Exception $e) {
+            Log::error('Error reporte mensual de rendimiento', [
+                'mensaje' => $e->getMessage(),
+                'archivo' => $e->getFile(),
+                'linea' => $e->getLine(),
+            ]);
+
+            return response(
+                '<div class="alert alert-danger mb-0">'
+                . '<strong>No fue posible generar el reporte.</strong><br>'
+                . e($e->getMessage())
+                . '</div>',
+                500
+            );
+        }
     }
 
     public function conexiones($fecha){
@@ -1053,61 +1165,43 @@ class reportes_controlador extends Controller
     public function reporte_pagos($fecha)
     {
        
-       // Si la fecha es posterior a su destitución no se debe mostrar el usuario Matias Alfaro ni Jorge Saavedra.
-       //En caso contrario, si la fecha es anterior a la indicada, se debe mostrar al usuario Matiar Alfaro y Jorge Saavedra.
-        
-        //Ultima fecha en que se desvinculo un cajero, en este caso fue Marveisse Albarracin.
-        $match_date = "2023-07-14";
-        if($fecha > $match_date){
-            $u = User::select('users.id','users.name','users.activo')
-                                ->leftjoin('permissions_detail','permissions_detail.usuarios_id','users.id')
-                                
-                                ->where('users.role_id',13)
-                                // ->where('id',9)
-                                ->orWhere('users.id',4)
-                                ->orWhere('users.id',5)
-                                ->orWhere('users.id',6)
-                                ->orWhere('users.id',12)
-                                // ->orWhere('id',16)
-                                ->orWhere('users.id',17)
-                                ->orWhere('users.id',34)
-                                ->orWhere('users.id',72)
-                                ->orWhere('permissions_detail.permission_id',3)
-                                ->where('users.activo', 1)
-                                ->orderBy('users.name')
-                                ->groupBy('users.name')
-                                ->get();
-            $usuarios = [];
-            foreach($u as $user){
-                //Sacamos al usuario jorge Saavedra y Marveisse
-                if($user->id !== 9 && $user->id !== 6){
-                    array_push($usuarios, $user);
-                }
-            }
-            
-        }else{
-            $usuarios = User::select('users.id','users.name')
-                                ->leftjoin('permissions_detail','permissions_detail.usuarios_id','users.id')
-                                ->where('users.activo', 1)
-                                ->where('users.role_id',13)
-                                // ->where('id',9)
-                                ->orWhere('users.id',4)
-                                ->orWhere('users.id',5)
-                                ->orWhere('users.id',6)
-                                ->orWhere('users.id',8)
-                                ->orWhere('users.id',12)
-                                // ->orWhere('id',16)
-                                ->orWhere('users.id',17)
-                                ->orWhere('users.id',34)
-                                ->orWhere('permissions_detail.permission_id',3)
-                                ->orderBy('users.name')
-                                ->groupBy('users.name')
-                                ->get();
-        }
+        /*
+         * Mostrar únicamente usuarios que tengan pagos activos
+         * registrados en la fecha consultada.
+         *
+         * No se filtra por users.activo, porque un usuario actualmente
+         * inactivo puede tener movimientos históricos en la fecha.
+         */
+        $idsUsuariosConPagos = pago::query()
+            ->whereDate('fecha_pago', $fecha)
+            ->where('activo', 1)
+            ->whereNotNull('usuarios_id')
+            ->where('usuarios_id', '>', 0)
+            ->distinct()
+            ->pluck('usuarios_id');
+
+        $usuarios = User::select('id', 'name')
+            ->whereIn('id', $idsUsuariosConPagos)
+            ->orderBy('name')
+            ->get();
 
         $formas_pago = formapago::where('activo', 1)->orderBy('id')->get();
         //$formas_pago: id, formapago
         $fp_array = $formas_pago->toArray();
+
+        /*
+         * Inicializar las estructuras aunque no existan pagos.
+         * Así compact() y la vista pueden responder con tarjetas en cero
+         * y tablas vacías, sin lanzar variables indefinidas.
+         */
+        $totales = [];
+        $boletas = [];
+        $facturas = [];
+        $abonos = [];
+        $getnet = [];
+        $transbank = [];
+        $boletas_credito = [];
+        $facturas_credito = [];
 
         foreach ($usuarios as $usuario) {
             $totales[$usuario->name]['delivery'] = 0;
@@ -1274,6 +1368,78 @@ class reportes_controlador extends Controller
             }
         }
 
+        // NOTAS DE DÉBITO
+        $notdeb = nota_de_debito::select('notas_de_debito.*', 'users.name as usuario', 'users.id as id_user')
+            ->where('notas_de_debito.activo', 1)
+            ->where('notas_de_debito.estado_sii', 'ACEPTADO')
+            ->where('notas_de_debito.fecha_emision', $fecha)
+            ->join('users', 'notas_de_debito.usuarios_id', 'users.id')
+            ->get();
+
+        $notdeb_total = 0;
+        if ($notdeb->count() > 0) {
+            foreach ($notdeb as $nd) {
+                list($tipo_doc, $num_doc, $fecha_doc) = explode("*", $nd->docum_referencia);
+                
+                //Sacamos todas las notas de debito que sean a credito 
+                if($tipo_doc == "bo"){
+                    $boleta = boleta::where('num_boleta',$num_doc)->first();
+                    $boleta->es_credito === 1 ? '' : $notdeb_total += $nd->total;
+                }elseif($tipo_doc == "fa"){
+                    $factura = factura::where('num_factura',$num_doc)->first();
+                    $factura->es_credito === 1 ? '' : $notdeb_total += $nd->total;
+                }else{
+                    $notdeb_total += $nd->total;
+                }
+
+                //Agregar la forma de pago en url_pdf temporalmente no mas
+                if ($tipo_doc == 'bo') {
+                    $id_bol = boleta::where('num_boleta', $num_doc)->value('id');
+                    $pagos_boleta = pago::where('id_doc', $id_bol)
+                        ->where('tipo_doc', 'bo')
+                        ->get();
+                    if ($pagos_boleta->count() == 0) {
+                        $nd->url_pdf = "Crédito";
+                        $nd->save();
+                    }
+                    if ($pagos_boleta->count() > 0) $nd->url_pdf = "MultiPago";
+                    if ($pagos_boleta->count() == 1) {
+                        foreach ($pagos_boleta as $pagbol) {
+                            for ($i = 0; $i < count($fp_array); $i++) {
+                                if ($pagbol->id_forma_pago == $fp_array[$i]['id']) {
+                                    $nd->url_pdf = $fp_array[$i]['formapago'];
+                                    $nd->save();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($tipo_doc == 'fa') {
+                    $id_fac = factura::where('num_factura', $num_doc)->value('id');
+                    $pagos_factura = pago::where('id_doc', $id_fac)
+                        ->where('tipo_doc', 'fa')
+                        ->get();
+                    if ($pagos_factura->count() == 0) {
+                        $nd->url_pdf = "Crédito";
+                        $nd->save();
+                    }
+                    if ($pagos_factura->count() > 0) $nd->url_pdf = "MultiPago";
+                    if ($pagos_factura->count() == 1) {
+
+                        foreach ($pagos_factura as $pagfac) {
+                            for ($i = 0; $i < count($fp_array); $i++) {
+                                if ($pagfac->id_forma_pago == $fp_array[$i]['id']) {
+                                    $nd->url_pdf = $fp_array[$i]['formapago'];
+                                    $nd->save();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $bol_rech = boleta::select('boletas.id', 'boletas.num_boleta as num_doc', 'boletas.total', 'boletas.resultado_envio as resultado', 'boletas.url_xml as xml', 'boletas.estado_sii', 'boletas.url_pdf', 'users.name as usuario')
             ->join('users', 'boletas.usuarios_id', 'users.id')
             ->where('boletas.activo', 1)
@@ -1390,14 +1556,29 @@ class reportes_controlador extends Controller
             foreach($usuarios as $usuario){
                 foreach ($formas_pago as $forma) {
                                     
-                    $pago_getnet = pago::where('referencia_pago',2)
-                                        ->where('activo',1)
-                                        ->where('fecha_pago',$fecha)
-                                        ->where('usuarios_id',$usuario->id)
-                                        ->where('id_forma_pago',$forma->id)
-                                        ->get();
+                    // Getnet: contar/sumar sólo pagos asociados a documentos válidos.
+                    $pago_getnet_boletas = pago::query()
+                                        ->join('boletas', 'pagos.id_doc', '=', 'boletas.id')
+                                        ->where('pagos.tipo_doc', 'bo')
+                                        ->where('pagos.referencia_pago', 2)
+                                        ->where('pagos.activo', 1)
+                                        ->where('pagos.fecha_pago', $fecha)
+                                        ->where('pagos.usuarios_id', $usuario->id)
+                                        ->where('pagos.id_forma_pago', $forma->id)
+                                        ->sum('pagos.monto');
 
-                    $getnet[$usuario->name][$forma->formapago] = $pago_getnet->sum('monto');
+                    $pago_getnet_facturas = pago::query()
+                                        ->join('facturas', 'pagos.id_doc', '=', 'facturas.id')
+                                        ->where('pagos.tipo_doc', 'fa')
+                                        ->where('pagos.referencia_pago', 2)
+                                        ->where('pagos.activo', 1)
+                                        ->where('pagos.fecha_pago', $fecha)
+                                        ->where('pagos.usuarios_id', $usuario->id)
+                                        ->where('pagos.id_forma_pago', $forma->id)
+                                        ->sum('pagos.monto');
+
+                    $getnet[$usuario->name][$forma->formapago] =
+                        $pago_getnet_boletas + $pago_getnet_facturas;
                     
                 }
                 
@@ -1439,7 +1620,217 @@ class reportes_controlador extends Controller
             
             // return [$boletas_credito, $facturas_credito];
             
-            $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'totales', 'formas_pago', 'usuarios', 'notcred', 'notcred_total', 'rechazados', 'delivery_pendientes','abonos','abonos_realizados','getnet','transbank','boletas_a_credito','facturas_a_credito','boletas_credito','facturas_credito'));
+            
+            /*
+             * Indicadores diarios de ventas al contado.
+             *
+             * Los documentos a crédito no se incorporan en ventas, costo,
+             * utilidad, margen, documentos ni unidades de estas tarjetas.
+             * Se mantienen disponibles en las tablas específicas de crédito.
+             */
+            $factorIVA = 1 + (float) Session::get('PARAM_IVA', 0.19);
+
+            $ventasFacturaDia = factura_detalle::from('facturas_detalle as fd')
+                ->select(
+                    DB::raw("'fa' as tipo_doc"),
+                    'f.id as id_documento',
+                    'f.fecha_emision',
+                    'fd.id_repuestos',
+                    'fd.precio_venta',
+                    'fd.pu_neto',
+                    'fd.cantidad',
+                    'fd.descuento',
+                    'fd.total'
+                )
+                ->join('facturas as f', 'f.id', '=', 'fd.id_factura')
+                ->whereDate('f.fecha_emision', $fecha)
+                ->where('f.activo', 1)
+                ->where('fd.activo', 1)
+                ->where('f.es_credito', 0)
+                ->whereIn('f.estado_sii', ['ACEPTADO', 'REPARO'])
+                ->get();
+
+            $ventasBoletaDia = boleta_detalle::from('boletas_detalle as bd')
+                ->select(
+                    DB::raw("'bo' as tipo_doc"),
+                    'b.id as id_documento',
+                    'b.fecha_emision',
+                    'bd.id_repuestos',
+                    'bd.precio_venta',
+                    'bd.pu_neto',
+                    'bd.cantidad',
+                    'bd.descuento',
+                    'bd.total'
+                )
+                ->join('boletas as b', 'b.id', '=', 'bd.id_boleta')
+                ->whereDate('b.fecha_emision', $fecha)
+                ->where('b.activo', 1)
+                ->where('bd.activo', 1)
+                ->where('b.es_credito', 0)
+                ->whereIn('b.estado_sii', ['ACEPTADO', 'REPARO'])
+                ->get();
+
+            $ventasDia = $ventasFacturaDia->concat($ventasBoletaDia);
+            $cacheCostosDia = [];
+            $documentosDia = [];
+
+            $resumenDiario = [
+                'venta_bruta' => 0,
+                'venta_neta' => 0,
+                'costo_productos_vendidos' => 0,
+                'utilidad_bruta' => 0,
+                'margen_bruto' => 0,
+                'cantidad_documentos' => 0,
+                'cantidad_facturas' => 0,
+                'cantidad_boletas' => 0,
+                'cantidad_unidades' => 0,
+                'venta_sin_costo' => 0,
+                'cantidad_items_sin_costo' => 0,
+            ];
+
+            foreach ($ventasDia as $ventaDia) {
+                $cantidadDia = (float) $ventaDia->cantidad;
+                $descuentoDia = (float) $ventaDia->descuento;
+                $totalDia = (float) $ventaDia->total;
+                $precioNetoDia = (float) $ventaDia->pu_neto;
+                $precioVentaDia = (float) $ventaDia->precio_venta;
+
+                if ($precioNetoDia > 0) {
+                    $ventaNetaDia = ($precioNetoDia * $cantidadDia)
+                        - ($descuentoDia / $factorIVA);
+                } elseif ($totalDia > 0) {
+                    $ventaNetaDia = $totalDia / $factorIVA;
+                } else {
+                    $ventaNetaDia = (
+                        ($precioVentaDia * $cantidadDia) - $descuentoDia
+                    ) / $factorIVA;
+                }
+
+                $ventaBrutaDia = $totalDia > 0
+                    ? $totalDia
+                    : (($precioVentaDia * $cantidadDia) - $descuentoDia);
+
+                $ventaNetaDia = max(0, round($ventaNetaDia, 2));
+                $ventaBrutaDia = max(0, round($ventaBrutaDia, 2));
+
+                $claveCostoDia =
+                    $ventaDia->id_repuestos . '_' . $ventaDia->fecha_emision;
+
+                if (!array_key_exists($claveCostoDia, $cacheCostosDia)) {
+                    $cacheCostosDia[$claveCostoDia] =
+                        $this->obtenerCostoHistoricoRepuesto(
+                            $ventaDia->id_repuestos,
+                            $ventaDia->fecha_emision
+                        );
+                }
+
+                $costoHistoricoDia = $cacheCostosDia[$claveCostoDia];
+                $tieneCostoDia = !is_null($costoHistoricoDia);
+                $costoTotalDia = $tieneCostoDia
+                    ? ((float) $costoHistoricoDia['costo_unitario'] * $cantidadDia)
+                    : 0;
+
+                $resumenDiario['venta_bruta'] += $ventaBrutaDia;
+                $resumenDiario['venta_neta'] += $ventaNetaDia;
+                $resumenDiario['cantidad_unidades'] += $cantidadDia;
+
+                if ($tieneCostoDia) {
+                    $resumenDiario['costo_productos_vendidos'] += $costoTotalDia;
+                    $resumenDiario['utilidad_bruta'] +=
+                        $ventaNetaDia - $costoTotalDia;
+                } else {
+                    $resumenDiario['venta_sin_costo'] += $ventaNetaDia;
+                    $resumenDiario['cantidad_items_sin_costo']++;
+                }
+
+                $claveDocumentoDia =
+                    $ventaDia->tipo_doc . '_' . $ventaDia->id_documento;
+
+                $documentosDia[$claveDocumentoDia] = $ventaDia->tipo_doc;
+            }
+
+            foreach ($documentosDia as $tipoDia) {
+                if ($tipoDia === 'fa') {
+                    $resumenDiario['cantidad_facturas']++;
+                } else {
+                    $resumenDiario['cantidad_boletas']++;
+                }
+            }
+
+            $resumenDiario['cantidad_documentos'] = count($documentosDia);
+
+            $ventaConCostoDia =
+                $resumenDiario['venta_neta']
+                - $resumenDiario['venta_sin_costo'];
+
+            $resumenDiario['margen_bruto'] = $ventaConCostoDia > 0
+                ? ($resumenDiario['utilidad_bruta'] / $ventaConCostoDia) * 100
+                : 0;
+
+            /*
+             * GETNET DEL DÍA
+             * Se consideran solamente pagos Getnet realmente asociados a una
+             * boleta o factura existente. Esto evita que registros huérfanos
+             * (por ejemplo, pagos con tipo_doc = 'bo' pero id_doc = 0) inflen
+             * tanto el monto como la cantidad de operaciones del resumen diario.
+             */
+            $getnetBoletasDia = pago::query()
+                ->select('pagos.*')
+                ->join('boletas', 'pagos.id_doc', '=', 'boletas.id')
+                ->where('pagos.tipo_doc', 'bo')
+                ->where('pagos.activo', 1)
+                ->whereDate('pagos.fecha_pago', $fecha)
+                ->where('pagos.referencia_pago', 2)
+                ->whereIn('pagos.id_forma_pago', [2, 5])
+                ->get();
+
+            $getnetFacturasDia = pago::query()
+                ->select('pagos.*')
+                ->join('facturas', 'pagos.id_doc', '=', 'facturas.id')
+                ->where('pagos.tipo_doc', 'fa')
+                ->where('pagos.activo', 1)
+                ->whereDate('pagos.fecha_pago', $fecha)
+                ->where('pagos.referencia_pago', 2)
+                ->whereIn('pagos.id_forma_pago', [2, 5])
+                ->get();
+
+            $getnetDia = $getnetBoletasDia
+                ->concat($getnetFacturasDia)
+                ->values();
+
+            $totalCobradoDia = pago::where('activo', 1)
+                ->whereDate('fecha_pago', $fecha)
+                ->whereIn('tipo_doc', ['bo', 'fa'])
+                ->sum('monto');
+
+            $resumenDiario['cobros_getnet'] =
+                round((float) $getnetDia->sum('monto'), 2);
+
+            $resumenDiario['operaciones_getnet'] =
+                $getnetDia->count();
+            $resumenDiario['porcentaje_getnet'] = $totalCobradoDia > 0
+                ? ($resumenDiario['cobros_getnet'] / $totalCobradoDia) * 100
+                : 0;
+            $resumenDiario['cantidad_notas_credito'] = $notcred->count();
+            $resumenDiario['monto_notas_credito'] =
+                round((float) $notcred->sum('total'), 2);
+
+            foreach ([
+                'venta_bruta',
+                'venta_neta',
+                'costo_productos_vendidos',
+                'utilidad_bruta',
+                'margen_bruto',
+                'venta_sin_costo',
+                'cobros_getnet',
+                'porcentaje_getnet',
+                'monto_notas_credito'
+            ] as $campoDiario) {
+                $resumenDiario[$campoDiario] =
+                    round($resumenDiario[$campoDiario], 2);
+            }
+
+$v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'totales', 'formas_pago', 'usuarios', 'notcred', 'notcred_total', 'notdeb', 'notdeb_total', 'rechazados', 'delivery_pendientes','abonos','abonos_realizados','getnet','transbank','boletas_a_credito','facturas_a_credito','boletas_credito','facturas_credito','resumenDiario'));
             return $v;
         } catch (\Exception $e) {
             return $e->getMessage();
@@ -1523,7 +1914,7 @@ class reportes_controlador extends Controller
 
     public function bajo_stock_html(){
         $usuario = Auth::user();
-        if($usuario->rol->nombrerol == "Administrador"){
+        if($usuario->rol->nombrerol == "Administrador" || $usuario->id == 250){
             try {           
                 $id_familia_sin_definir = 312;
                 $rep = repuesto::select('repuestos.*','marcarepuestos.id as idmarca','marcarepuestos.marcarepuesto','proveedores.empresa_nombre_corto')
@@ -1559,7 +1950,7 @@ class reportes_controlador extends Controller
                     // 33 = BULGARIA
                 foreach($rep as $r){
                     
-                    $stock = intval($r->stock_actual + $r->stock_actual_dos + $r->stock_actual_tres);
+                    $stock = intval(\App\Services\StockPorLocalService::total($r));
                     if($r->stock_minimo >= $stock) array_push($repuestos, $r);
 
                     if($r->id_pais == 3){
@@ -1626,7 +2017,7 @@ class reportes_controlador extends Controller
                 
                 $b = [];
 
-                $repuestos_bajo_stock_todos = stock_minimo::select('stock_minimo.fecha_emision','repuestos.codigo_interno','repuestos.id as id_repuesto','repuestos.estado')
+                $repuestos_bajo_stock_todos = stock_minimo::select('stock_minimo.fecha_emision','repuestos.codigo_interno','repuestos.id as id_repuesto','repuestos.estado','repuestos.id_modifica_estado')
                                                     ->join('repuestos','stock_minimo.id_repuesto','repuestos.id')
                                                     // ->where('repuestos.estado','<>','Pedido')
                                                     // ->orWhere('repuestos.estado','')
@@ -1643,7 +2034,7 @@ class reportes_controlador extends Controller
                   
                     $repuesto = repuesto::find($r->id_repuesto);
                     
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
                  
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
@@ -1651,7 +2042,7 @@ class reportes_controlador extends Controller
                     } 
                 }
 
-                $repuestos_bajo_stock = stock_minimo::select('stock_minimo.fecha_emision','repuestos.codigo_interno','repuestos.id as id_repuesto','repuestos.estado')
+                $repuestos_bajo_stock = stock_minimo::select('stock_minimo.fecha_emision','repuestos.codigo_interno','repuestos.id as id_repuesto','repuestos.estado','repuestos.id_modifica_estado')
                                                     ->join('repuestos','stock_minimo.id_repuesto','repuestos.id')
                                                     ->where('stock_minimo.fecha_emision',$hoy)
                                                     ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
@@ -1669,7 +2060,7 @@ class reportes_controlador extends Controller
                   
                     $repuesto = repuesto::find($r->id_repuesto);
                     
-                    $stock_total = intval($repuesto->stock_actual) + intval($repuesto->stock_actual_dos) + intval($repuesto->stock_actual_tres);
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
                  
                     // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
                     if($repuesto->stock_minimo >= $stock_total){
@@ -1677,15 +2068,69 @@ class reportes_controlador extends Controller
                     } 
                 }
 
-                $estados = ['Pedido', 'Sin stock en proveedor', 'Rechazado', 'En curso','Aprobado','Inactivo'];
+                 $estados = [
+                    'Pedido a otro proveedor', 
+                    'Sin stock en proveedor',
+                    'Con Stock', 
+                    'Rechazado', 
+                    'En transito',
+                    'Aprobado',
+                    'Cargado en carro',
+                    'Inactivo',
+                    'Pedido',
+                    'Pendiente',
+                    'En bodega, desembalando'
+                ];
 
+                $hoy = Carbon::today();
+                try {
+                   //Subconsulta para obtener la ultima fecha de emision de cada repuesto
+                    $subquery = stock_minimo::select('id_repuesto', DB::raw('MAX(fecha_emision) as ultima_fecha_emision'))
+                    ->groupBy('id_repuesto');
+
+                    // unir la subconsulta con la tabla de repuestos 
+                    $reps = repuesto::select('repuestos.*', 'stock_minimo.ultima_fecha_emision')
+                        ->joinSub($subquery, 'stock_minimo', function ($join) {
+                            $join->on('repuestos.id', '=', 'stock_minimo.id_repuesto');
+                        })
+                        ->where('repuestos.activo',1)
+                        ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
+                        ->where('repuestos.estado','')
+                        ->orderBy('stock_minimo.ultima_fecha_emision')
+                        ->groupBy('repuestos.id')
+                        ->get();
+                } catch (\Exception $e) {
+                    return $e->getMessage();
+                }
+                
+                $reps_ = [];
+                foreach($reps as $r){
+
+                    // formateamos la fecha de emision
+                    $r->fecha_emision = Carbon::parse($r->fecha_emision)->format('d-m-Y');
+                    $r->ultima_fecha_emision = Carbon::parse($r->ultima_fecha_emision)->format('d-m-Y');
+                    $repuesto = repuesto::find($r->id);
+                    
+                    $stock_total = \App\Services\StockPorLocalService::total($repuesto);
+                 
+                    // si el stock total es inferior al minimo lo guardamos en el nuevo arreglo
+                    if($repuesto->stock_minimo >= $stock_total){
+                       array_push($reps_, $r);
+                    } 
+                }
+
+                $importaciones_excel = importaciones_excel::with('proveedor')->with('usuario')->get();
+                
                 $v = view('reportes.bajo_stock',[
                     'proveedores' => $proveedores,
                     'familias' => $familias,
                     'repuestos'=> $a,
                     'repuestos_todos' => $b,
-                    'estados' => $estados
+                    'estados' => $estados,
+                    'repuestos_' => $reps_,
+                    'importaciones_excel' => $importaciones_excel
                 ]);
+
                 return $v;
             } catch (\Exception $e) {
                 return $e->getMessage();
@@ -1694,6 +2139,40 @@ class reportes_controlador extends Controller
             return redirect('/home');
         }
         
+    }
+
+    public function stock_critico(){
+        try {
+          
+            $id_familia_sin_definir = 312;
+            $rep = repuesto::select(
+                'repuestos.*',
+                'marcarepuestos.id as idmarca',
+                'marcarepuestos.marcarepuesto',
+                'proveedores.empresa_nombre_corto'
+            )
+            ->where('repuestos.id_familia','<>',$id_familia_sin_definir)
+            ->where('repuestos.activo',1)
+            ->where('repuestos.estado','')
+            ->whereRaw(\App\Services\StockPorLocalService::totalSql() . ' < 1')
+            ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+            ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+            ->get();
+            $pc = new proveedorcontrolador();
+            $rc = new repuestocontrolador();
+
+            $proveedores_array = $pc->dame_proveedores();
+        
+            $proveedores = json_decode($proveedores_array["proveedores"]);
+            $familias = $rc->damefamilias();
+            return view('reportes.stock_critico',[
+                'repuestos' => $rep,
+                'proveedores' => $proveedores,
+                'familias' => $familias
+            ]);
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
     }
 
     public function rep_sin_prov(){
@@ -1705,13 +2184,38 @@ class reportes_controlador extends Controller
              
             $proveedores = json_decode($proveedores_array["proveedores"]);
             $familias = $rc->damefamilias();
-            $estados = ['Pedido', 'Sin stock en proveedor', 'Rechazado', 'En curso','Aprobado','Inactivo'];
-            $repuestos_sin_stock_proveedor = repuesto::select('repuestos.*','familias.nombrefamilia','marcarepuestos.marcarepuesto','proveedores.empresa_nombre_corto')
-                                                ->where('repuestos.estado','Sin stock en proveedor')
+             $estados = [
+                'Pedido a otro proveedor', 
+                'Sin stock en proveedor',
+                'Con Stock', 
+                'Rechazado', 
+                'En transito',
+                'Aprobado',
+                'Cargado en carro',
+                'Inactivo',
+                'Pedido',
+                'Pendiente',
+                'En bodega, desembalando'
+            ];
+            $repuestos = repuesto::select('repuestos.*','familias.nombrefamilia','marcarepuestos.marcarepuesto','proveedores.empresa_nombre_corto')
                                                 ->join('proveedores','proveedores.id','repuestos.id_proveedor')
                                                 ->join('familias','familias.id','repuestos.id_familia')
                                                 ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+                                                ->where('repuestos.estado','Sin stock en proveedor')
+                                                ->where('repuestos.activo',1)
+                                                 ->where('repuestos.id_familia','<>',312)
                                                 ->get();
+
+            $repuestos_sin_stock_proveedor = [];
+
+            // revisar si los repuestos tienen stock en la bodega
+            foreach($repuestos as $r){
+                $stock_minimo = stock_minimo::where('id_repuesto',$r->id)->first();
+                if($stock_minimo && \App\Services\StockPorLocalService::total($r) < $r->stock_minimo){
+                    array_push($repuestos_sin_stock_proveedor,$r);
+                }
+            }          
+
             return view('reportes.rep_sin_prov',[
                 'proveedores' => $proveedores,
                 'familias' => $familias,
@@ -1720,6 +2224,51 @@ class reportes_controlador extends Controller
             ]);
         } catch (\Exception $e) {
             //throw $th;
+            return $e->getMessage();
+        }
+        
+    }
+
+    public function stock_pendiente(){
+        try {
+            $pc = new proveedorcontrolador();
+            $rc = new repuestocontrolador();
+
+            $proveedores_array = $pc->dame_proveedores();
+            $proveedores = json_decode($proveedores_array["proveedores"]);
+            $familias = $rc->damefamilias();
+            $estados = [
+                'Pedido a otro proveedor', 
+                'Sin stock en proveedor',
+                'Con Stock', 
+                'Rechazado', 
+                'En transito',
+                'Aprobado',
+                'Cargado en carro',
+                'Inactivo',
+                'Pedido',
+                'Pendiente',
+                'En bodega, desembalando'
+            ];
+
+            // Obtener todos los repuestos con estado "Pedido"
+            $repuestos = repuesto::select('repuestos.*','familias.nombrefamilia','marcarepuestos.marcarepuesto','proveedores.empresa_nombre_corto')
+                                                ->join('proveedores','proveedores.id','repuestos.id_proveedor')
+                                                ->join('familias','familias.id','repuestos.id_familia')
+                                                ->join('marcarepuestos','marcarepuestos.id','repuestos.id_marca_repuesto')
+                                                ->where('repuestos.estado','Pendiente')
+                                                 ->where('repuestos.id_familia','<>',312)
+                                                ->where('repuestos.activo',1)
+                                                ->orderBy('repuestos.created_at','desc')
+                                                ->get();
+
+            return view('reportes.stock_pendiente',[
+                'proveedores' => $proveedores,
+                'familias' => $familias,
+                'estados' => $estados,
+                'repuestos' => $repuestos
+            ]);
+        } catch (\Exception $e) {
             return $e->getMessage();
         }
         
@@ -1923,9 +2472,57 @@ class reportes_controlador extends Controller
 
     public function getnet_mes($data)
     {
+        list($numeroMes, $año) = explode("&", $data);
+
+        /*
+         * El resumen mensual debe contar exactamente las mismas operaciones
+         * que aparecen al abrir el detalle del día.
+         *
+         * El código anterior contaba directamente desde pagos, mientras que
+         * getnet_dia() sólo muestra pagos que realmente están asociados a una
+         * boleta o factura existente mediante INNER JOIN. Por eso podían
+         * aparecer, por ejemplo, 32 operaciones en el mes y sólo 30 al abrir
+         * el detalle.
+         */
+
+        $pagosBoletas = pago::query()
+            ->selectRaw('pagos.fecha_pago as fecha, pagos.monto as total')
+            ->join('boletas', 'pagos.id_doc', '=', 'boletas.id')
+            ->where('pagos.tipo_doc', 'bo')
+            ->whereMonth('pagos.fecha_pago', $numeroMes)
+            ->whereYear('pagos.fecha_pago', $año)
+            ->where('pagos.activo', 1)
+            ->whereIn('pagos.id_forma_pago', [2, 5])
+            ->where('pagos.referencia_pago', 2);
+
+        $pagosFacturas = pago::query()
+            ->selectRaw('pagos.fecha_pago as fecha, pagos.monto as total')
+            ->join('facturas', 'pagos.id_doc', '=', 'facturas.id')
+            ->where('pagos.tipo_doc', 'fa')
+            ->whereMonth('pagos.fecha_pago', $numeroMes)
+            ->whereYear('pagos.fecha_pago', $año)
+            ->where('pagos.activo', 1)
+            ->whereIn('pagos.id_forma_pago', [2, 5])
+            ->where('pagos.referencia_pago', 2);
+
+        $operacionesGetnet = $pagosBoletas->unionAll($pagosFacturas);
+
+        $mes = DB::query()
+            ->fromSub($operacionesGetnet, 'operaciones_getnet')
+            ->selectRaw('fecha, COUNT(*) as num_oper, SUM(total) as total')
+            ->groupBy('fecha')
+            ->orderBy('fecha', 'ASC')
+            ->get();
+
+        $v = view('reportes.getnet_mes', compact('mes'));
+        return $v;
+    }
+
+
+    public function transferencias_mes($data){
         list($mes, $año) = explode("&", $data);
         $mes = pago::selectRaw('fecha_pago as fecha, count(fecha_pago) as num_oper, sum(monto) as total')
-            ->whereRaw('MONTH(fecha_pago)=? AND YEAR(fecha_pago)=? AND activo=? AND (id_forma_pago=? OR id_forma_pago=?) AND referencia_pago=?', [$mes, $año, 1, 2, 5,2])
+            ->whereRaw('MONTH(fecha_pago)=? AND YEAR(fecha_pago)=? AND activo=? AND id_forma_pago=? ', [$mes, $año, 1,4])
             ->groupBy('fecha_pago')
             ->orderBy('id', 'ASC')
             ->get();
@@ -1935,15 +2532,237 @@ class reportes_controlador extends Controller
 
     public function getnet_dia($fecha)
     {
+        /*
+         * El detalle Getnet se presenta por DOCUMENTO, pero la cantidad de
+         * operaciones y el monto Getnet siguen saliendo de los registros de
+         * pagos. De esta manera el resumen mensual y el detalle diario siguen
+         * conciliando entre sí, incluso cuando un documento posee más de una
+         * operación Getnet.
+         */
+
+        $getnetBoletas = pago::query()
+            ->select(
+                'pagos.id as id_pago',
+                'pagos.id_doc',
+                'pagos.monto as monto_getnet',
+                'pagos.referencia',
+                'pagos.created_at',
+                'boletas.num_boleta as num_doc',
+                'boletas.total as total_venta'
+            )
+            ->selectRaw("'bo' as tipo_codigo, 'Boleta' as tipo_doc")
+            ->join('boletas', 'pagos.id_doc', '=', 'boletas.id')
+            ->where('pagos.tipo_doc', 'bo')
+            ->whereDate('pagos.fecha_pago', $fecha)
+            ->where('pagos.activo', 1)
+            ->whereIn('pagos.id_forma_pago', [2, 5])
+            ->where('pagos.referencia_pago', 2)
+            ->orderBy('pagos.created_at', 'ASC')
+            ->get();
+
+        $getnetFacturas = pago::query()
+            ->select(
+                'pagos.id as id_pago',
+                'pagos.id_doc',
+                'pagos.monto as monto_getnet',
+                'pagos.referencia',
+                'pagos.created_at',
+                'facturas.num_factura as num_doc',
+                'facturas.total as total_venta'
+            )
+            ->selectRaw("'fa' as tipo_codigo, 'Factura' as tipo_doc")
+            ->join('facturas', 'pagos.id_doc', '=', 'facturas.id')
+            ->where('pagos.tipo_doc', 'fa')
+            ->whereDate('pagos.fecha_pago', $fecha)
+            ->where('pagos.activo', 1)
+            ->whereIn('pagos.id_forma_pago', [2, 5])
+            ->where('pagos.referencia_pago', 2)
+            ->orderBy('pagos.created_at', 'ASC')
+            ->get();
+
+        $operacionesGetnet = $getnetBoletas
+            ->concat($getnetFacturas)
+            ->sortBy('created_at')
+            ->values();
+
+        $total_dia = (float) $operacionesGetnet->sum('monto_getnet');
+        $cantidad_operaciones = $operacionesGetnet->count();
+        $documentos = collect();
+
+        /*
+         * Agrupamos por tipo + id de documento. Una boleta y una factura
+         * pueden compartir el mismo id, por eso se incluye el tipo en la clave.
+         */
+        $operacionesAgrupadas = $operacionesGetnet->groupBy(function ($operacion) {
+            return $operacion->tipo_codigo . '_' . $operacion->id_doc;
+        });
+
+        foreach ($operacionesAgrupadas as $grupo) {
+            $primeraOperacion = $grupo->first();
+            $tipoCodigo = $primeraOperacion->tipo_codigo;
+            $idDocumento = (int) $primeraOperacion->id_doc;
+            $numeroDocumento = $primeraOperacion->num_doc;
+
+            /*
+             * Para "Otros medios" se consideran los pagos activos del MISMO
+             * documento y del MISMO día. Así el detalle sigue siendo una
+             * conciliación diaria y no mezcla cobros efectuados en otras fechas.
+             */
+            $pagosDocumentoDia = pago::query()
+                ->select(
+                    'pagos.id',
+                    'pagos.monto',
+                    'pagos.id_forma_pago',
+                    'pagos.referencia_pago',
+                    'pagos.referencia',
+                    'formapago.formapago'
+                )
+                ->leftJoin('formapago', 'pagos.id_forma_pago', '=', 'formapago.id')
+                ->where('pagos.tipo_doc', $tipoCodigo)
+                ->where('pagos.id_doc', $idDocumento)
+                ->whereDate('pagos.fecha_pago', $fecha)
+                ->where('pagos.activo', 1)
+                ->get();
+
+            $otrosMediosAgrupados = [];
+            $totalOtrosMedios = 0;
+
+            foreach ($pagosDocumentoDia as $pagoDocumento) {
+                $esGetnet = in_array((int) $pagoDocumento->id_forma_pago, [2, 5], true)
+                    && (int) $pagoDocumento->referencia_pago === 2;
+
+                if ($esGetnet) {
+                    continue;
+                }
+
+                $nombreFormaPago = trim((string) $pagoDocumento->formapago);
+                if ($nombreFormaPago === '') {
+                    $nombreFormaPago = 'Otro medio';
+                }
+
+                if (!isset($otrosMediosAgrupados[$nombreFormaPago])) {
+                    $otrosMediosAgrupados[$nombreFormaPago] = 0;
+                }
+
+                $otrosMediosAgrupados[$nombreFormaPago] += (float) $pagoDocumento->monto;
+                $totalOtrosMedios += (float) $pagoDocumento->monto;
+            }
+
+            $otrosMedios = [];
+            foreach ($otrosMediosAgrupados as $nombre => $monto) {
+                $otrosMedios[] = [
+                    'nombre' => $nombre,
+                    'monto' => round($monto, 2),
+                ];
+            }
+
+            $montoGetnetDocumento = (float) $grupo->sum('monto_getnet');
+            $totalVenta = (float) $primeraOperacion->total_venta;
+            $totalPagadoDia = $montoGetnetDocumento + $totalOtrosMedios;
+            $diferencia = round($totalVenta - $totalPagadoDia, 2);
+
+            /*
+             * Notas de crédito asociadas al documento. Se conserva el mismo
+             * formato histórico utilizado por el ERP: bo*NRO... / fa*NRO...
+             */
+            $notasCreditoQuery = nota_de_credito::query()
+                ->where('activo', 1)
+                ->where('estado_sii', 'ACEPTADO')
+                ->where('docum_referencia', 'LIKE', $tipoCodigo . '*' . $numeroDocumento . '*%')
+                ->orderBy('fecha_emision', 'ASC');
+
+            $notasCredito = $notasCreditoQuery
+                ->get(['num_nota_credito', 'total'])
+                ->map(function ($nc) {
+                    return [
+                        'numero' => $nc->num_nota_credito,
+                        'monto' => (float) $nc->total,
+                    ];
+                })
+                ->values()
+                ->all();
+
+            $operaciones = $grupo->map(function ($op) {
+                return [
+                    'id_pago' => (int) $op->id_pago,
+                    'hora' => Carbon::parse($op->created_at)->format('H:i:s'),
+                    'monto' => (float) $op->monto_getnet,
+                    'referencia' => (string) $op->referencia,
+                ];
+            })->values()->all();
+
+            $documentos->push([
+                'tipo_codigo' => $tipoCodigo,
+                'tipo_doc' => $primeraOperacion->tipo_doc,
+                'id_doc' => $idDocumento,
+                'num_doc' => $numeroDocumento,
+                'total_venta' => round($totalVenta, 2),
+                'monto_getnet' => round($montoGetnetDocumento, 2),
+                'otros_medios' => $otrosMedios,
+                'total_otros_medios' => round($totalOtrosMedios, 2),
+                'total_pagado_dia' => round($totalPagadoDia, 2),
+                'diferencia' => $diferencia,
+                'es_pago_mixto' => $montoGetnetDocumento > 0 && $totalOtrosMedios > 0,
+                'notas_credito' => $notasCredito,
+                'operaciones' => $operaciones,
+                'primera_hora' => $grupo->min('created_at'),
+            ]);
+        }
+
+        $documentos = $documentos
+            ->sortBy('primera_hora')
+            ->values();
+
+        $cantidad_pagos_mixtos = $documentos
+            ->where('es_pago_mixto', true)
+            ->count();
+
+        $cantidad_con_nc = $documentos
+            ->filter(function ($doc) {
+                return count($doc['notas_credito']) > 0;
+            })
+            ->count();
+
+        $total_notas_credito = round((float) $documentos->sum(function ($doc) {
+            return collect($doc['notas_credito'])->sum('monto');
+        }), 2);
+
+        $total_neto = round($total_dia - $total_notas_credito, 2);
+
+        return view('reportes.getnet_dia', compact(
+            'documentos',
+            'fecha',
+            'total_dia',
+            'cantidad_operaciones',
+            'cantidad_pagos_mixtos',
+            'cantidad_con_nc',
+            'total_notas_credito',
+            'total_neto'
+        ));
+    }
+
+    public function editar_operacion_pago_getnet(Request $request){
+        try {
+         
+            $pago = pago::find($request->id_pago);
+            $pago->referencia = $request->referencia;
+            $pago->save();
+            return "OK";
+        } catch (\Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    public function transferencias_dia($fecha){
         $dia_bol = pago::selectRaw('CONVERT(pagos.created_at,TIME) as hora, pagos.monto as total, pagos.referencia as referencia, "boleta" as tipo_doc, boletas.num_boleta as num_doc')
             ->join('boletas', 'pagos.id_doc', 'boletas.id')
-            ->whereRaw('pagos.tipo_doc=? AND pagos.fecha_pago=? AND pagos.activo=? AND (pagos.id_forma_pago=? OR pagos.id_forma_pago=?) AND referencia_pago=?', ['bo', $fecha, 1, 2, 5,2])
+            ->whereRaw('pagos.tipo_doc=? AND pagos.fecha_pago=? AND pagos.activo=? AND pagos.id_forma_pago=?', ['bo', $fecha, 1,4])
             ->orderBy('pagos.created_at', 'ASC')
             ->get();
 
         $dia_fac = pago::selectRaw('CONVERT(pagos.created_at,TIME)  as hora, pagos.monto as total, pagos.referencia as referencia, "factura" as tipo_doc, facturas.num_factura as num_doc')
             ->join('facturas', 'pagos.id_doc', 'facturas.id')
-            ->whereRaw('pagos.tipo_doc=? AND pagos.fecha_pago=? AND pagos.activo=? AND (pagos.id_forma_pago=? OR pagos.id_forma_pago=?) AND referencia_pago=?', ['fa', $fecha, 1, 2, 5,2])
+            ->whereRaw('pagos.tipo_doc=? AND pagos.fecha_pago=? AND pagos.activo=? AND pagos.id_forma_pago=?', ['fa', $fecha, 1,4])
             ->orderBy('pagos.created_at', 'ASC')
             ->get();
         
@@ -1971,7 +2790,7 @@ class reportes_controlador extends Controller
     }
 
     public function imprimir_repuestos_por_proveedor($id_proveedor){
-        
+       
         $filename = 'repuestos_por_proveedor_'.$id_proveedor.'.xls';
       
         return Excel::download(new RepuestosExport($id_proveedor),$filename);
@@ -2330,5 +3149,1421 @@ class reportes_controlador extends Controller
             return $e->getMessage();
         }
         
+    }
+
+    public function transferencias(){
+        return view('reportes.transferencias');
+    }
+
+    /**
+     * Busca la última compra válida del repuesto realizada
+     * en una fecha anterior o igual a la fecha de venta.
+     *
+     * Por ahora se utiliza el criterio:
+     * "último costo conocido antes de vender".
+     */
+    private function obtenerCostoHistoricoRepuesto($idRepuesto, $fechaVenta)
+    {
+        $compra = compras_det::from('compras_det as cd')
+            ->select(
+                'cd.id',
+                'cd.id_repuestos',
+                'cd.id_factura_cab',
+                'cd.pu',
+                'cd.costos',
+                'cd.precio_sugerido',
+                'cc.factura_fecha',
+                'cc.factura_numero',
+                'cc.factura_id_proveedor',
+                'p.empresa_nombre',
+                'p.empresa_nombre_corto'
+            )
+            ->join(
+                'compras_cab as cc',
+                'cc.id',
+                '=',
+                'cd.id_factura_cab'
+            )
+            ->leftJoin(
+                'proveedores as p',
+                'p.id',
+                '=',
+                'cc.factura_id_proveedor'
+            )
+            ->where('cd.id_repuestos', $idRepuesto)
+            ->whereDate('cc.factura_fecha', '<=', $fechaVenta)
+            ->where('cd.activo', 1)
+            ->where('cc.activo', 1)
+            ->orderByDesc('cc.factura_fecha')
+            ->orderByDesc('cd.id')
+            ->first();
+
+        if (!$compra) {
+            return null;
+        }
+
+        $precioCompra = (float) $compra->pu;
+        $fleteRegistrado = (float) $compra->costos;
+
+        /*
+         * El costo utilizado por el informe corresponde exclusivamente
+         * al precio unitario de compra guardado en compras_det.pu.
+         *
+         * El flete, Getnet, PPM y otros porcentajes pueden participar
+         * en la formación del precio de venta, pero no se vuelven a
+         * sumar al costo ni se descuentan nuevamente de la utilidad.
+         */
+        $costoUnitario = $precioCompra;
+
+        return [
+            'id_compra_detalle'    => $compra->id,
+            'id_factura_compra'    => $compra->id_factura_cab,
+            'numero_factura'       => $compra->factura_numero,
+            'fecha_compra'         => $compra->factura_fecha,
+            'id_proveedor'         => $compra->factura_id_proveedor,
+            'proveedor'            => $compra->empresa_nombre_corto
+                ?: $compra->empresa_nombre,
+            'precio_compra'        => round($precioCompra, 2),
+
+            // Dato informativo: no participa en el costo del informe.
+            'flete_registrado'     => round($fleteRegistrado, 2),
+
+            // Alias temporal para mantener compatibilidad.
+            'flete_unitario'       => round($fleteRegistrado, 2),
+
+            'costo_unitario'       => round($costoUnitario, 2),
+            'precio_sugerido'      => (float) $compra->precio_sugerido,
+        ];
+    }
+
+    public function consultarInformeRentabilidad(Request $request)
+    {
+        try {
+            $request->validate([
+                'fecha_inicio' => 'required|date',
+                'fecha_termino' => 'required|date|after_or_equal:fecha_inicio',
+
+                'id_vendedor' => 'nullable|integer',
+                'id_proveedor' => 'nullable|integer',
+                'id_local' => 'nullable|integer',
+                'id_repuesto' => 'nullable|integer',
+                'comision_getnet_credito' => 'nullable|numeric|min:0|max:100',
+                'comision_getnet_debito' => 'nullable|numeric|min:0|max:100',
+            ]);
+
+            $fechaInicio = Carbon::parse(
+                $request->fecha_inicio
+            )->format('Y-m-d');
+
+            $fechaTermino = Carbon::parse(
+                $request->fecha_termino
+            )->format('Y-m-d');
+
+            /*
+            * Ejemplo:
+            * PARAM_IVA = 0.19
+            * factorIVA = 1.19
+            */
+            $porcentajeIVA = (float) Session::get('PARAM_IVA', 0.19);
+            $factorIVA = 1 + $porcentajeIVA;
+
+            /*
+            * =====================================================
+            * FACTURAS
+            * =====================================================
+            */
+            $queryFacturas = factura_detalle::from('facturas_detalle as fd')
+                ->select(
+                    DB::raw("'FACTURA' as tipo_documento"),
+                    DB::raw("'fa' as codigo_documento"),
+                    'f.id as id_documento',
+                    'f.num_factura as numero_documento',
+                    'f.fecha_emision',
+                    'fd.id as id_detalle',
+                    'fd.id_repuestos',
+                    'fd.id_local',
+                    'fd.usuarios_id as id_vendedor',
+                    'u.name as vendedor',
+                    'r.codigo_interno',
+                    'r.descripcion',
+                    'r.id_proveedor as id_proveedor_repuesto',
+                    'fd.precio_venta',
+                    'fd.pu_neto',
+                    'fd.cantidad',
+                    'fd.subtotal',
+                    'fd.descuento',
+                    'fd.total'
+                )
+                ->join('facturas as f', 'f.id', '=', 'fd.id_factura')
+                ->join('repuestos as r', 'r.id', '=', 'fd.id_repuestos')
+                ->leftJoin('users as u', 'u.id', '=', 'fd.usuarios_id')
+                ->whereBetween('f.fecha_emision', [
+                    $fechaInicio,
+                    $fechaTermino
+                ])
+                ->where('f.activo', 1)
+                ->where('fd.activo', 1)
+                ->whereIn('f.estado_sii', [
+                    'ACEPTADO',
+                    'REPARO'
+                ]);
+
+            if ($request->filled('id_vendedor')) {
+                $queryFacturas->where(
+                    'fd.usuarios_id',
+                    $request->id_vendedor
+                );
+            }
+
+            if ($request->filled('id_local')) {
+                $queryFacturas->where(
+                    'fd.id_local',
+                    $request->id_local
+                );
+            }
+
+            if ($request->filled('id_repuesto')) {
+                $queryFacturas->where(
+                    'fd.id_repuestos',
+                    $request->id_repuesto
+                );
+            }
+
+            $ventasFacturas = $queryFacturas->get();
+
+            /*
+            * =====================================================
+            * BOLETAS
+            * =====================================================
+            */
+            $queryBoletas = boleta_detalle::from('boletas_detalle as bd')
+                ->select(
+                    DB::raw("'BOLETA' as tipo_documento"),
+                    DB::raw("'bo' as codigo_documento"),
+                    'b.id as id_documento',
+                    'b.num_boleta as numero_documento',
+                    'b.fecha_emision',
+                    'bd.id as id_detalle',
+                    'bd.id_repuestos',
+                    'bd.id_local',
+                    'bd.usuarios_id as id_vendedor',
+                    'u.name as vendedor',
+                    'r.codigo_interno',
+                    'r.descripcion',
+                    'r.id_proveedor as id_proveedor_repuesto',
+                    'bd.precio_venta',
+                    'bd.pu_neto',
+                    'bd.cantidad',
+                    'bd.subtotal',
+                    'bd.descuento',
+                    'bd.total'
+                )
+                ->join('boletas as b', 'b.id', '=', 'bd.id_boleta')
+                ->join('repuestos as r', 'r.id', '=', 'bd.id_repuestos')
+                ->leftJoin('users as u', 'u.id', '=', 'bd.usuarios_id')
+                ->whereBetween('b.fecha_emision', [
+                    $fechaInicio,
+                    $fechaTermino
+                ])
+                ->where('b.activo', 1)
+                ->where('bd.activo', 1)
+                ->whereIn('b.estado_sii', [
+                    'ACEPTADO',
+                    'REPARO'
+                ]);
+
+            if ($request->filled('id_vendedor')) {
+                $queryBoletas->where(
+                    'bd.usuarios_id',
+                    $request->id_vendedor
+                );
+            }
+
+            if ($request->filled('id_local')) {
+                $queryBoletas->where(
+                    'bd.id_local',
+                    $request->id_local
+                );
+            }
+
+            if ($request->filled('id_repuesto')) {
+                $queryBoletas->where(
+                    'bd.id_repuestos',
+                    $request->id_repuesto
+                );
+            }
+
+            $ventasBoletas = $queryBoletas->get();
+
+            /*
+            * Unificamos facturas y boletas.
+            */
+            $ventas = $ventasFacturas
+                ->concat($ventasBoletas)
+                ->sortBy('fecha_emision')
+                ->values();
+
+            /*
+            * Cache para evitar repetir la misma consulta de compra.
+            *
+            * La clave incluye repuesto + fecha porque el costo histórico
+            * puede ser distinto dependiendo del día de la venta.
+            */
+            $cacheCostos = [];
+
+            $detalleResultado = [];
+
+            $resumen = [
+                'venta_bruta' => 0,
+                'venta_bruta_facturas' => 0,
+                'venta_bruta_boletas' => 0,
+
+                'venta_neta' => 0,
+                'venta_neta_facturas' => 0,
+                'venta_neta_boletas' => 0,
+
+                'costo_mercaderia' => 0,
+                'ganancia_bruta' => 0,
+                'margen_porcentaje' => 0,
+
+                'cantidad_unidades' => 0,
+                'cantidad_documentos' => 0,
+                'cantidad_facturas' => 0,
+                'cantidad_boletas' => 0,
+
+                'venta_con_costo' => 0,
+                'venta_sin_costo' => 0,
+                'cantidad_items_sin_costo' => 0,
+                'porcentaje_cobertura_costos' => 0,
+            ];
+
+            $resumenVendedores = [];
+            $resumenProveedores = [];
+            $resumenProductos = [];
+            $documentosUnicos = [];
+
+            /*
+             * Monto bruto de las líneas que permanecen dentro de los
+             * filtros del informe. Se utilizará para asignar de forma
+             * proporcional los pagos Getnet cuando un documento contiene
+             * productos de distintos proveedores, locales o vendedores.
+             */
+            $brutoFiltradoPorDocumento = [];
+
+            foreach ($ventas as $venta) {
+                $cantidad = (float) $venta->cantidad;
+                $precioVenta = (float) $venta->precio_venta;
+                $precioNeto = (float) $venta->pu_neto;
+                $descuentoBruto = (float) $venta->descuento;
+                $totalDetalle = (float) $venta->total;
+
+                /*
+                * -------------------------------------------------
+                * CALCULAR VENTA NETA
+                * -------------------------------------------------
+                *
+                * Primera opción:
+                * usar pu_neto cuando existe.
+                *
+                * Respaldo:
+                * dividir el total del detalle por el factor IVA.
+                */
+                if ($precioNeto > 0) {
+                    $descuentoNeto = $descuentoBruto / $factorIVA;
+
+                    $ventaNeta = (
+                        $precioNeto * $cantidad
+                    ) - $descuentoNeto;
+                } else {
+                    if ($totalDetalle > 0) {
+                        $ventaNeta = $totalDetalle / $factorIVA;
+                    } else {
+                        $totalBrutoCalculado = (
+                            $precioVenta * $cantidad
+                        ) - $descuentoBruto;
+
+                        $ventaNeta = $totalBrutoCalculado / $factorIVA;
+                    }
+                }
+
+                $ventaNeta = max(0, round($ventaNeta, 2));
+
+                /*
+                 * Venta bruta: monto final pagado por el cliente,
+                 * incluyendo IVA y descontando rebajas de la línea.
+                 */
+                if ($totalDetalle > 0) {
+                    $ventaBruta = $totalDetalle;
+                } else {
+                    $ventaBruta = (
+                        $precioVenta * $cantidad
+                    ) - $descuentoBruto;
+                }
+
+                $ventaBruta = max(0, round($ventaBruta, 2));
+
+                /*
+                * -------------------------------------------------
+                * OBTENER COSTO HISTÓRICO
+                * -------------------------------------------------
+                */
+                $claveCosto = $venta->id_repuestos
+                    . '_'
+                    . $venta->fecha_emision;
+
+                if (!array_key_exists($claveCosto, $cacheCostos)) {
+                    $cacheCostos[$claveCosto] =
+                        $this->obtenerCostoHistoricoRepuesto(
+                            $venta->id_repuestos,
+                            $venta->fecha_emision
+                        );
+                }
+
+                $costoHistorico = $cacheCostos[$claveCosto];
+
+                /*
+                * Si el usuario filtró por proveedor, utilizamos
+                * el proveedor real de la compra histórica.
+                */
+                if ($request->filled('id_proveedor')) {
+                    if (
+                        !$costoHistorico ||
+                        (int) $costoHistorico['id_proveedor']
+                            !== (int) $request->id_proveedor
+                    ) {
+                        continue;
+                    }
+                }
+
+                $tieneCosto = $costoHistorico !== null;
+
+                $costoUnitario = $tieneCosto
+                    ? (float) $costoHistorico['costo_unitario']
+                    : null;
+
+                $costoTotal = $tieneCosto
+                    ? round($costoUnitario * $cantidad, 2)
+                    : null;
+
+                $ganancia = $tieneCosto
+                    ? round($ventaNeta - $costoTotal, 2)
+                    : null;
+
+                $margen = (
+                    $tieneCosto &&
+                    $ventaNeta > 0
+                )
+                    ? round(($ganancia / $ventaNeta) * 100, 2)
+                    : null;
+
+                $proveedor = $tieneCosto
+                    ? $costoHistorico['proveedor']
+                    : 'SIN COSTO HISTÓRICO';
+
+                $idProveedor = $tieneCosto
+                    ? $costoHistorico['id_proveedor']
+                    : null;
+
+                /*
+                * -------------------------------------------------
+                * DETALLE
+                * -------------------------------------------------
+                */
+                $detalleResultado[] = [
+                    'tipo_documento' => $venta->tipo_documento,
+                    'codigo_documento' => $venta->codigo_documento,
+                    'id_documento' => $venta->id_documento,
+                    'numero_documento' => $venta->numero_documento,
+                    'fecha_emision' => $venta->fecha_emision,
+
+                    'id_detalle' => $venta->id_detalle,
+                    'id_repuesto' => $venta->id_repuestos,
+                    'codigo_interno' => $venta->codigo_interno,
+                    'descripcion' => $venta->descripcion,
+
+                    'id_local' => $venta->id_local,
+                    'id_vendedor' => $venta->id_vendedor,
+                    'vendedor' => $venta->vendedor ?: 'SIN VENDEDOR',
+
+                    'cantidad' => $cantidad,
+                    'precio_venta' => round($precioVenta, 2),
+                    'precio_neto' => round($precioNeto, 2),
+                    'descuento' => round($descuentoBruto, 2),
+                    'venta_bruta' => $ventaBruta,
+                    'venta_neta' => $ventaNeta,
+
+                    'tiene_costo' => $tieneCosto,
+                    'precio_compra' => $tieneCosto
+                        ? $costoHistorico['precio_compra']
+                        : null,
+                    'flete_registrado' => $tieneCosto
+                        ? $costoHistorico['flete_registrado']
+                        : null,
+                    'costo_unitario' => $costoUnitario,
+                    'costo_total' => $costoTotal,
+
+                    'ganancia' => $ganancia,
+                    'margen_porcentaje' => $margen,
+
+                    'id_proveedor' => $idProveedor,
+                    'proveedor' => $proveedor,
+
+                    'factura_compra' => $tieneCosto
+                        ? $costoHistorico['numero_factura']
+                        : null,
+                    'fecha_compra' => $tieneCosto
+                        ? $costoHistorico['fecha_compra']
+                        : null,
+                    'precio_sugerido' => $tieneCosto
+                        ? $costoHistorico['precio_sugerido']
+                        : null,
+                ];
+
+                /*
+                * -------------------------------------------------
+                * RESUMEN GENERAL
+                * -------------------------------------------------
+                */
+                $resumen['venta_bruta'] += $ventaBruta;
+                $resumen['venta_neta'] += $ventaNeta;
+                $resumen['cantidad_unidades'] += $cantidad;
+
+                if ($venta->codigo_documento === 'fa') {
+                    $resumen['venta_bruta_facturas'] += $ventaBruta;
+                    $resumen['venta_neta_facturas'] += $ventaNeta;
+                } else {
+                    $resumen['venta_bruta_boletas'] += $ventaBruta;
+                    $resumen['venta_neta_boletas'] += $ventaNeta;
+                }
+
+                $claveDocumento = $venta->codigo_documento
+                    . '_'
+                    . $venta->id_documento;
+
+                $documentosUnicos[$claveDocumento] = [
+                    'tipo' => $venta->codigo_documento,
+                    'id_documento' => (int) $venta->id_documento,
+                ];
+
+                /*
+                 * El pago se almacena a nivel de documento, mientras que
+                 * proveedor/local/repuesto se conocen a nivel de detalle.
+                 * Guardamos la porción bruta incluida en el informe para
+                 * distribuir posteriormente cada pago en forma proporcional.
+                 */
+                $brutoDetalleFiltrado = $totalDetalle > 0
+                    ? $totalDetalle
+                    : max(
+                        0,
+                        ($precioVenta * $cantidad) - $descuentoBruto
+                    );
+
+                if (!isset($brutoFiltradoPorDocumento[$claveDocumento])) {
+                    $brutoFiltradoPorDocumento[$claveDocumento] = 0;
+                }
+
+                $brutoFiltradoPorDocumento[$claveDocumento]
+                    += $brutoDetalleFiltrado;
+
+                if ($tieneCosto) {
+                    $resumen['costo_mercaderia'] += $costoTotal;
+                    $resumen['ganancia_bruta'] += $ganancia;
+                    $resumen['venta_con_costo'] += $ventaNeta;
+                } else {
+                    $resumen['venta_sin_costo'] += $ventaNeta;
+                    $resumen['cantidad_items_sin_costo']++;
+                }
+
+                /*
+                * -------------------------------------------------
+                * RESUMEN POR VENDEDOR
+                * -------------------------------------------------
+                */
+                $idVendedor = $venta->id_vendedor ?: 0;
+                $nombreVendedor = $venta->vendedor ?: 'SIN VENDEDOR';
+
+                if (!isset($resumenVendedores[$idVendedor])) {
+                    $resumenVendedores[$idVendedor] = [
+                        'id_vendedor' => $idVendedor,
+                        'vendedor' => $nombreVendedor,
+                        'cantidad_unidades' => 0,
+                        'venta_neta' => 0,
+                        'costo_mercaderia' => 0,
+                        'ganancia' => 0,
+                        'margen_porcentaje' => 0,
+                        'venta_sin_costo' => 0,
+                        'documentos' => [],
+                        'cantidad_documentos' => 0,
+                    ];
+                }
+
+                $resumenVendedores[$idVendedor]['cantidad_unidades']
+                    += $cantidad;
+
+                $resumenVendedores[$idVendedor]['venta_neta']
+                    += $ventaNeta;
+
+                $claveDocumentoVendedor = $venta->codigo_documento
+                    . '_' . $venta->id_documento;
+
+                $resumenVendedores[$idVendedor]['documentos']
+                    [$claveDocumentoVendedor] = true;
+
+                if ($tieneCosto) {
+                    $resumenVendedores[$idVendedor]['costo_mercaderia']
+                        += $costoTotal;
+
+                    $resumenVendedores[$idVendedor]['ganancia']
+                        += $ganancia;
+                } else {
+                    $resumenVendedores[$idVendedor]['venta_sin_costo']
+                        += $ventaNeta;
+                }
+
+                /*
+                * -------------------------------------------------
+                * RESUMEN POR PROVEEDOR
+                * -------------------------------------------------
+                */
+                $claveProveedor = $idProveedor ?: 0;
+
+                if (!isset($resumenProveedores[$claveProveedor])) {
+                    $resumenProveedores[$claveProveedor] = [
+                        'id_proveedor' => $idProveedor,
+                        'proveedor' => $proveedor,
+                        'cantidad_unidades' => 0,
+                        'venta_neta' => 0,
+                        'costo_mercaderia' => 0,
+                        'ganancia' => 0,
+                        'margen_porcentaje' => 0,
+                    ];
+                }
+
+                $resumenProveedores[$claveProveedor]['cantidad_unidades']
+                    += $cantidad;
+
+                $resumenProveedores[$claveProveedor]['venta_neta']
+                    += $ventaNeta;
+
+                if ($tieneCosto) {
+                    $resumenProveedores[$claveProveedor]['costo_mercaderia']
+                        += $costoTotal;
+
+                    $resumenProveedores[$claveProveedor]['ganancia']
+                        += $ganancia;
+                }
+
+                /*
+                * -------------------------------------------------
+                * RESUMEN POR PRODUCTO
+                * -------------------------------------------------
+                */
+                $idRepuesto = $venta->id_repuestos;
+
+                if (!isset($resumenProductos[$idRepuesto])) {
+                    $resumenProductos[$idRepuesto] = [
+                        'id_repuesto' => $idRepuesto,
+                        'codigo_interno' => $venta->codigo_interno,
+                        'descripcion' => $venta->descripcion,
+                        'cantidad_vendida' => 0,
+                        'venta_bruta' => 0,
+                        'venta_neta' => 0,
+                        'costo_mercaderia' => 0,
+                        'ganancia' => 0,
+                        'margen_porcentaje' => 0,
+                        'id_proveedor' => $idProveedor,
+                        'proveedor' => $proveedor,
+                    ];
+                }
+
+                $resumenProductos[$idRepuesto]['cantidad_vendida']
+                    += $cantidad;
+
+                $resumenProductos[$idRepuesto]['venta_bruta']
+                    += $ventaBruta;
+
+                $resumenProductos[$idRepuesto]['venta_neta']
+                    += $ventaNeta;
+
+                if ($tieneCosto) {
+                    $resumenProductos[$idRepuesto]['costo_mercaderia']
+                        += $costoTotal;
+
+                    $resumenProductos[$idRepuesto]['ganancia']
+                        += $ganancia;
+                }
+            }
+
+            /*
+            * =====================================================
+            * DOCUMENTOS ÚNICOS
+            * =====================================================
+            */
+            foreach ($documentosUnicos as $documento) {
+                $resumen['cantidad_documentos']++;
+
+                if ($documento['tipo'] === 'fa') {
+                    $resumen['cantidad_facturas']++;
+                } else {
+                    $resumen['cantidad_boletas']++;
+                }
+            }
+
+            /*
+            * =====================================================
+            * CALCULAR MÁRGENES AGRUPADOS
+            * =====================================================
+            *
+            * El margen general se calcula solamente sobre ventas
+            * que tienen costo histórico conocido.
+            */
+            if ($resumen['venta_con_costo'] > 0) {
+                $resumen['margen_porcentaje'] = round(
+                    (
+                        $resumen['ganancia_bruta']
+                        / $resumen['venta_con_costo']
+                    ) * 100,
+                    2
+                );
+            }
+
+            if ($resumen['venta_neta'] > 0) {
+                $resumen['porcentaje_cobertura_costos'] = round(
+                    (
+                        $resumen['venta_con_costo']
+                        / $resumen['venta_neta']
+                    ) * 100,
+                    2
+                );
+            }
+
+            foreach ($resumenVendedores as &$vendedor) {
+                $ventaConCosto = $vendedor['venta_neta']
+                    - $vendedor['venta_sin_costo'];
+
+                if ($ventaConCosto > 0) {
+                    $vendedor['margen_porcentaje'] = round(
+                        (
+                            $vendedor['ganancia']
+                            / $ventaConCosto
+                        ) * 100,
+                        2
+                    );
+                }
+
+                $vendedor['cantidad_unidades'] = round(
+                    $vendedor['cantidad_unidades'],
+                    2
+                );
+
+                $vendedor['venta_neta'] = round(
+                    $vendedor['venta_neta'],
+                    2
+                );
+
+                $vendedor['costo_mercaderia'] = round(
+                    $vendedor['costo_mercaderia'],
+                    2
+                );
+
+                $vendedor['ganancia'] = round(
+                    $vendedor['ganancia'],
+                    2
+                );
+
+                $vendedor['cantidad_documentos'] = count(
+                    $vendedor['documentos']
+                );
+
+                unset($vendedor['documentos']);
+            }
+
+            unset($vendedor);
+
+            foreach ($resumenProveedores as &$proveedorResumen) {
+                if ($proveedorResumen['venta_neta'] > 0) {
+                    $proveedorResumen['margen_porcentaje'] = round(
+                        (
+                            $proveedorResumen['ganancia']
+                            / $proveedorResumen['venta_neta']
+                        ) * 100,
+                        2
+                    );
+                }
+
+                $proveedorResumen['cantidad_unidades'] = round(
+                    $proveedorResumen['cantidad_unidades'],
+                    2
+                );
+
+                $proveedorResumen['venta_neta'] = round(
+                    $proveedorResumen['venta_neta'],
+                    2
+                );
+
+                $proveedorResumen['costo_mercaderia'] = round(
+                    $proveedorResumen['costo_mercaderia'],
+                    2
+                );
+
+                $proveedorResumen['ganancia'] = round(
+                    $proveedorResumen['ganancia'],
+                    2
+                );
+            }
+
+            unset($proveedorResumen);
+
+            foreach ($resumenProductos as &$producto) {
+                if ($producto['venta_neta'] > 0) {
+                    $producto['margen_porcentaje'] = round(
+                        (
+                            $producto['ganancia']
+                            / $producto['venta_neta']
+                        ) * 100,
+                        2
+                    );
+                }
+
+                $producto['cantidad_vendida'] = round(
+                    $producto['cantidad_vendida'],
+                    2
+                );
+
+                $producto['venta_bruta'] = round(
+                    $producto['venta_bruta'],
+                    2
+                );
+
+                $producto['venta_neta'] = round(
+                    $producto['venta_neta'],
+                    2
+                );
+
+                $producto['costo_mercaderia'] = round(
+                    $producto['costo_mercaderia'],
+                    2
+                );
+
+                $producto['ganancia'] = round(
+                    $producto['ganancia'],
+                    2
+                );
+            }
+
+            unset($producto);
+
+
+            /*
+            * =====================================================
+            * GETNET Y COMISIONES
+            * =====================================================
+            *
+            * Los pagos se registran a nivel de boleta/factura, pero los
+            * filtros de proveedor, local, vendedor y repuesto operan sobre
+            * las líneas del documento. Para evitar descontar la comisión
+            * Getnet completa de un documento mixto, cada pago se asigna en
+            * proporción al monto bruto de las líneas incluidas en el informe.
+            */
+            $comisionCredito = (float) $request->input(
+                'comision_getnet_credito',
+                0
+            );
+
+            $comisionDebito = (float) $request->input(
+                'comision_getnet_debito',
+                0
+            );
+
+            $idsFacturasFiltradas = [];
+            $idsBoletasFiltradas = [];
+
+            foreach ($documentosUnicos as $documento) {
+                if ($documento['tipo'] === 'fa') {
+                    $idsFacturasFiltradas[] = $documento['id_documento'];
+                } else {
+                    $idsBoletasFiltradas[] = $documento['id_documento'];
+                }
+            }
+
+            $brutoTotalPorDocumento = [];
+
+            if (count($idsFacturasFiltradas) > 0) {
+                $totalesFacturas = factura_detalle::from('facturas_detalle as fd')
+                    ->select(
+                        'fd.id_factura as id_documento',
+                        DB::raw('SUM(fd.total) as total_bruto')
+                    )
+                    ->whereIn('fd.id_factura', $idsFacturasFiltradas)
+                    ->where('fd.activo', 1)
+                    ->groupBy('fd.id_factura')
+                    ->get();
+
+                foreach ($totalesFacturas as $totalFactura) {
+                    $brutoTotalPorDocumento[
+                        'fa_' . $totalFactura->id_documento
+                    ] = (float) $totalFactura->total_bruto;
+                }
+            }
+
+            if (count($idsBoletasFiltradas) > 0) {
+                $totalesBoletas = boleta_detalle::from('boletas_detalle as bd')
+                    ->select(
+                        'bd.id_boleta as id_documento',
+                        DB::raw('SUM(bd.total) as total_bruto')
+                    )
+                    ->whereIn('bd.id_boleta', $idsBoletasFiltradas)
+                    ->where('bd.activo', 1)
+                    ->groupBy('bd.id_boleta')
+                    ->get();
+
+                foreach ($totalesBoletas as $totalBoleta) {
+                    $brutoTotalPorDocumento[
+                        'bo_' . $totalBoleta->id_documento
+                    ] = (float) $totalBoleta->total_bruto;
+                }
+            }
+
+            $queryPagosFiltrados = pago::query()
+                ->whereBetween('fecha_pago', [
+                    $fechaInicio,
+                    $fechaTermino
+                ])
+                ->where('activo', 1)
+                ->where(function ($query) use (
+                    $idsFacturasFiltradas,
+                    $idsBoletasFiltradas
+                ) {
+                    if (count($idsFacturasFiltradas) > 0) {
+                        $query->orWhere(function ($subQuery) use (
+                            $idsFacturasFiltradas
+                        ) {
+                            $subQuery->where('tipo_doc', 'fa')
+                                ->whereIn('id_doc', $idsFacturasFiltradas);
+                        });
+                    }
+
+                    if (count($idsBoletasFiltradas) > 0) {
+                        $query->orWhere(function ($subQuery) use (
+                            $idsBoletasFiltradas
+                        ) {
+                            $subQuery->where('tipo_doc', 'bo')
+                                ->whereIn('id_doc', $idsBoletasFiltradas);
+                        });
+                    }
+                });
+
+            $pagosPeriodo = count($documentosUnicos) > 0
+                ? $queryPagosFiltrados->get()
+                : collect();
+
+            $totalPagosPeriodo = 0;
+            $totalGetnetCredito = 0;
+            $totalGetnetDebito = 0;
+            $operacionesGetnet = 0;
+            $operacionesGetnetCredito = 0;
+            $operacionesGetnetDebito = 0;
+
+            foreach ($pagosPeriodo as $pagoPeriodo) {
+                $claveDocumentoPago = $pagoPeriodo->tipo_doc
+                    . '_' . $pagoPeriodo->id_doc;
+
+                $brutoFiltrado = (float) (
+                    $brutoFiltradoPorDocumento[$claveDocumentoPago] ?? 0
+                );
+
+                $brutoDocumento = (float) (
+                    $brutoTotalPorDocumento[$claveDocumentoPago] ?? 0
+                );
+
+                $proporcionFiltro = $brutoDocumento > 0
+                    ? min(1, max(0, $brutoFiltrado / $brutoDocumento))
+                    : 0;
+
+                $montoAsignado = round(
+                    (float) $pagoPeriodo->monto * $proporcionFiltro,
+                    2
+                );
+
+                $totalPagosPeriodo += $montoAsignado;
+
+                $esGetnet = (int) $pagoPeriodo->referencia_pago === 2
+                    && in_array(
+                        (int) $pagoPeriodo->id_forma_pago,
+                        [2, 5],
+                        true
+                    );
+
+                if (!$esGetnet || $montoAsignado <= 0) {
+                    continue;
+                }
+
+                $operacionesGetnet++;
+
+                if ((int) $pagoPeriodo->id_forma_pago === 2) {
+                    $totalGetnetCredito += $montoAsignado;
+                    $operacionesGetnetCredito++;
+                } else {
+                    $totalGetnetDebito += $montoAsignado;
+                    $operacionesGetnetDebito++;
+                }
+            }
+
+            $totalPagosPeriodo = round($totalPagosPeriodo, 2);
+            $totalGetnetCredito = round($totalGetnetCredito, 2);
+            $totalGetnetDebito = round($totalGetnetDebito, 2);
+            $totalGetnet = round(
+                $totalGetnetCredito + $totalGetnetDebito,
+                2
+            );
+
+            $comisionGetnetCredito = round(
+                $totalGetnetCredito * ($comisionCredito / 100),
+                2
+            );
+
+            $comisionGetnetDebito = round(
+                $totalGetnetDebito * ($comisionDebito / 100),
+                2
+            );
+
+            $comisionGetnetTotal = round(
+                $comisionGetnetCredito + $comisionGetnetDebito,
+                2
+            );
+
+            $resumen['total_pagos_periodo'] = $totalPagosPeriodo;
+            $resumen['venta_getnet'] = $totalGetnet;
+            $resumen['venta_getnet_credito'] = $totalGetnetCredito;
+            $resumen['venta_getnet_debito'] = $totalGetnetDebito;
+
+            $resumen['operaciones_getnet'] = $operacionesGetnet;
+            $resumen['operaciones_getnet_credito'] =
+                $operacionesGetnetCredito;
+            $resumen['operaciones_getnet_debito'] =
+                $operacionesGetnetDebito;
+
+            $resumen['porcentaje_cobros_getnet'] =
+                $totalPagosPeriodo > 0
+                    ? round(
+                        ($totalGetnet / $totalPagosPeriodo) * 100,
+                        2
+                    )
+                    : 0;
+
+            $resumen['comision_getnet_credito_porcentaje'] =
+                $comisionCredito;
+            $resumen['comision_getnet_debito_porcentaje'] =
+                $comisionDebito;
+
+            $resumen['comision_getnet_credito'] =
+                $comisionGetnetCredito;
+            $resumen['comision_getnet_debito'] =
+                $comisionGetnetDebito;
+            $resumen['comision_getnet_total'] =
+                $comisionGetnetTotal;
+
+            $resumen['ganancia_despues_getnet'] = round(
+                $resumen['ganancia_bruta'] - $comisionGetnetTotal,
+                2
+            );
+
+            $resumen['margen_despues_getnet'] =
+                $resumen['venta_con_costo'] > 0
+                    ? round(
+                        (
+                            $resumen['ganancia_despues_getnet']
+                            / $resumen['venta_con_costo']
+                        ) * 100,
+                        2
+                    )
+                    : 0;
+
+            /*
+            * =====================================================
+            * NOTAS DE CREDITO POR USUARIO
+            * =====================================================
+            *
+            * Se informa tanto el usuario que emitio la nota como
+            * el vendedor del documento original cuando es posible.
+            */
+            $queryNotasCredito = nota_de_credito::select(
+                    'notas_de_credito.id',
+                    'notas_de_credito.num_nota_credito',
+                    'notas_de_credito.fecha_emision',
+                    'notas_de_credito.total',
+                    'notas_de_credito.docum_referencia',
+                    'notas_de_credito.motivo_correccion',
+                    'notas_de_credito.usuarios_id',
+                    'users.name as usuario_emisor'
+                )
+                ->leftJoin(
+                    'users',
+                    'users.id',
+                    '=',
+                    'notas_de_credito.usuarios_id'
+                )
+                ->whereBetween(
+                    'notas_de_credito.fecha_emision',
+                    [$fechaInicio, $fechaTermino]
+                )
+                ->where('notas_de_credito.activo', 1)
+                ->whereIn(
+                    'notas_de_credito.estado_sii',
+                    ['ACEPTADO', 'REPARO']
+                );
+
+            if ($request->filled('id_vendedor')) {
+                $queryNotasCredito->where(
+                    'notas_de_credito.usuarios_id',
+                    $request->id_vendedor
+                );
+            }
+
+            $notasCredito = $queryNotasCredito->get();
+            $detalleNotasCredito = [];
+            $notasPorEmisor = [];
+            $notasPorVendedorOriginal = [];
+
+            foreach ($notasCredito as $nota) {
+                $tipoReferencia = null;
+                $numeroReferencia = null;
+                $idVendedorOriginal = null;
+                $vendedorOriginal = 'NO DETERMINADO';
+
+                $partesReferencia = explode(
+                    '*',
+                    (string) $nota->docum_referencia
+                );
+
+                if (count($partesReferencia) >= 2) {
+                    $tipoReferencia = trim($partesReferencia[0]);
+                    $numeroReferencia = trim($partesReferencia[1]);
+
+                    if ($tipoReferencia === 'bo') {
+                        $documentoOriginal = boleta::select(
+                                'boletas.usuarios_id',
+                                'users.name as vendedor'
+                            )
+                            ->leftJoin(
+                                'users',
+                                'users.id',
+                                '=',
+                                'boletas.usuarios_id'
+                            )
+                            ->where(
+                                'boletas.num_boleta',
+                                $numeroReferencia
+                            )
+                            ->first();
+                    } elseif ($tipoReferencia === 'fa') {
+                        $documentoOriginal = factura::select(
+                                'facturas.usuarios_id',
+                                'users.name as vendedor'
+                            )
+                            ->leftJoin(
+                                'users',
+                                'users.id',
+                                '=',
+                                'facturas.usuarios_id'
+                            )
+                            ->where(
+                                'facturas.num_factura',
+                                $numeroReferencia
+                            )
+                            ->first();
+                    } else {
+                        $documentoOriginal = null;
+                    }
+
+                    if ($documentoOriginal) {
+                        $idVendedorOriginal =
+                            $documentoOriginal->usuarios_id;
+                        $vendedorOriginal =
+                            $documentoOriginal->vendedor
+                            ?: 'SIN VENDEDOR';
+                    }
+                }
+
+                $idEmisor = $nota->usuarios_id ?: 0;
+                $nombreEmisor = $nota->usuario_emisor
+                    ?: 'SIN USUARIO';
+
+                if (!isset($notasPorEmisor[$idEmisor])) {
+                    $notasPorEmisor[$idEmisor] = [
+                        'id_usuario' => $idEmisor,
+                        'usuario' => $nombreEmisor,
+                        'cantidad_notas_credito' => 0,
+                        'monto_notas_credito' => 0,
+                        'promedio_nota_credito' => 0,
+                    ];
+                }
+
+                $notasPorEmisor[$idEmisor]
+                    ['cantidad_notas_credito']++;
+
+                $notasPorEmisor[$idEmisor]
+                    ['monto_notas_credito'] += (float) $nota->total;
+
+                $claveVendedorOriginal = $idVendedorOriginal ?: 0;
+
+                if (!isset(
+                    $notasPorVendedorOriginal[$claveVendedorOriginal]
+                )) {
+                    $cantidadDocumentosVendedor = isset(
+                        $resumenVendedores[$claveVendedorOriginal]
+                    )
+                        ? $resumenVendedores[$claveVendedorOriginal]
+                            ['cantidad_documentos']
+                        : 0;
+
+                    $notasPorVendedorOriginal[
+                        $claveVendedorOriginal
+                    ] = [
+                        'id_vendedor' => $idVendedorOriginal,
+                        'vendedor' => $vendedorOriginal,
+                        'cantidad_documentos' =>
+                            $cantidadDocumentosVendedor,
+                        'cantidad_notas_credito' => 0,
+                        'monto_notas_credito' => 0,
+                        'tasa_notas_credito' => 0,
+                        'promedio_nota_credito' => 0,
+                    ];
+                }
+
+                $notasPorVendedorOriginal[$claveVendedorOriginal]
+                    ['cantidad_notas_credito']++;
+
+                $notasPorVendedorOriginal[$claveVendedorOriginal]
+                    ['monto_notas_credito'] += (float) $nota->total;
+
+                $detalleNotasCredito[] = [
+                    'id' => $nota->id,
+                    'numero_nota_credito' =>
+                        $nota->num_nota_credito,
+                    'fecha_emision' => $nota->fecha_emision,
+                    'total' => round((float) $nota->total, 2),
+                    'usuario_emisor' => $nombreEmisor,
+                    'tipo_documento_referencia' =>
+                        $tipoReferencia,
+                    'numero_documento_referencia' =>
+                        $numeroReferencia,
+                    'vendedor_documento_original' =>
+                        $vendedorOriginal,
+                    'motivo_correccion' =>
+                        $nota->motivo_correccion,
+                ];
+            }
+
+            foreach ($notasPorEmisor as &$resumenEmisor) {
+                $cantidadNotas = $resumenEmisor[
+                    'cantidad_notas_credito'
+                ];
+
+                $resumenEmisor['monto_notas_credito'] = round(
+                    $resumenEmisor['monto_notas_credito'],
+                    2
+                );
+
+                $resumenEmisor['promedio_nota_credito'] =
+                    $cantidadNotas > 0
+                        ? round(
+                            $resumenEmisor['monto_notas_credito']
+                            / $cantidadNotas,
+                            2
+                        )
+                        : 0;
+            }
+
+            unset($resumenEmisor);
+
+            foreach (
+                $notasPorVendedorOriginal
+                as &$resumenVendedorNota
+            ) {
+                $cantidadNotas = $resumenVendedorNota[
+                    'cantidad_notas_credito'
+                ];
+
+                $cantidadDocumentos = $resumenVendedorNota[
+                    'cantidad_documentos'
+                ];
+
+                $resumenVendedorNota['monto_notas_credito'] =
+                    round(
+                        $resumenVendedorNota[
+                            'monto_notas_credito'
+                        ],
+                        2
+                    );
+
+                $resumenVendedorNota['promedio_nota_credito'] =
+                    $cantidadNotas > 0
+                        ? round(
+                            $resumenVendedorNota[
+                                'monto_notas_credito'
+                            ] / $cantidadNotas,
+                            2
+                        )
+                        : 0;
+
+                $resumenVendedorNota['tasa_notas_credito'] =
+                    $cantidadDocumentos > 0
+                        ? round(
+                            (
+                                $cantidadNotas
+                                / $cantidadDocumentos
+                            ) * 100,
+                            2
+                        )
+                        : 0;
+            }
+
+            unset($resumenVendedorNota);
+
+            $notasCreditoResumen = [
+                'cantidad_total' => $notasCredito->count(),
+                'monto_total' => round(
+                    (float) $notasCredito->sum('total'),
+                    2
+                ),
+                'por_emisor' => collect($notasPorEmisor)
+                    ->sortByDesc('cantidad_notas_credito')
+                    ->values(),
+                'por_vendedor_original' =>
+                    collect($notasPorVendedorOriginal)
+                        ->sortByDesc('tasa_notas_credito')
+                        ->values(),
+                'detalle' => $detalleNotasCredito,
+            ];
+
+            /*
+            * Redondeo final del resumen.
+            */
+            foreach ([
+                'venta_bruta',
+                'venta_bruta_facturas',
+                'venta_bruta_boletas',
+                'venta_neta',
+                'venta_neta_facturas',
+                'venta_neta_boletas',
+                'costo_mercaderia',
+                'ganancia_bruta',
+                'venta_con_costo',
+                'venta_sin_costo'
+            ] as $campo) {
+                $resumen[$campo] = round($resumen[$campo], 2);
+            }
+
+            /*
+            * Ordenamos los resultados.
+            */
+            $vendedoresOrdenados = collect($resumenVendedores)
+                ->sortByDesc('venta_neta')
+                ->values();
+
+            $proveedoresOrdenados = collect($resumenProveedores)
+                ->sortByDesc('venta_neta')
+                ->values();
+
+            $productosOrdenados = collect($resumenProductos)
+                ->sortByDesc('cantidad_vendida')
+                ->values();
+
+            return response()->json([
+                'estado' => 1,
+                'mensaje' => 'Informe generado correctamente.',
+
+                'filtros' => [
+                    'fecha_inicio' => $fechaInicio,
+                    'fecha_termino' => $fechaTermino,
+                    'id_vendedor' => $request->id_vendedor,
+                    'id_proveedor' => $request->id_proveedor,
+                    'id_local' => $request->id_local,
+                    'id_repuesto' => $request->id_repuesto,
+                    'comision_getnet_credito' => $comisionCredito,
+                    'comision_getnet_debito' => $comisionDebito,
+                ],
+
+                'resumen' => $resumen,
+                'vendedores' => $vendedoresOrdenados,
+                'proveedores' => $proveedoresOrdenados,
+                'productos' => $productosOrdenados,
+                'notas_credito' => $notasCreditoResumen,
+                'detalle' => $detalleResultado,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'estado' => 0,
+                'mensaje' => 'Debe revisar los filtros ingresados.',
+                'errores' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error informe de rentabilidad', [
+                'mensaje' => $e->getMessage(),
+                'archivo' => $e->getFile(),
+                'linea' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'estado' => 0,
+                'mensaje' => 'No fue posible generar el informe.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function informeRentabilidad()
+    {
+        $confirma = $this->confirmaringreso(
+            '/reportes/informe-rentabilidad'
+        );
+
+        if (!$confirma) {
+            return redirect('home');
+        }
+
+        $u = User::select('users.id','users.name','users.activo')
+                                    ->leftjoin('permissions_detail','permissions_detail.usuarios_id','users.id')
+                                    
+                                    ->where('users.role_id',13)
+                                    // ->where('id',9)
+                                    ->orWhere('users.id',4)
+                                    ->orWhere('users.id',5)
+                                    ->orWhere('users.id',6)
+                                    ->orWhere('users.id',12)
+                                    ->orWhere('users.id',316)
+                                    // ->orWhere('id',16)
+                                    // ->orWhere('users.id',17)
+                                    ->orWhere('users.id',34)
+                                    // ->orWhere('users.id',72)
+                                    ->orWhere('permissions_detail.permission_id',3)
+                                    ->where('users.activo', 1)
+                                    ->orderBy('users.name')
+                                    ->groupBy('users.name')
+                                    ->get();
+        $vendedores = [];
+        foreach($u as $user){
+            //Sacamos al usuario jorge Saavedra y Marveisse
+            if($user->id !== 9 && $user->id !== 6){
+                array_push($vendedores, $user);
+            }
+        }
+
+        $proveedores = proveedor::where('activo', 1)
+            ->where('es_transportista', 0)
+            ->orderBy('empresa_nombre_corto')
+            ->get();
+
+        $locales = local::where('activo',1)->orderBy('local_nombre')->get();
+
+        return view(
+            'reportes.informe_rentabilidad',
+            compact(
+                'vendedores',
+                'proveedores',
+                'locales'
+            )
+        );
     }
 }

@@ -27,8 +27,11 @@
         <td>Local</td>
         <td><select name="local" id="local" class="form-control">
           <option value="1">Solo Local</option>
-          <option value="2">Solo Web</option>
-          <option value="3">Local y Web</option>
+              <option value="2">Solo Web</option>
+              <option value="4">Solo Totem</option>
+              <option value="3">Local + Web</option>
+              <option value="5">Local + Totem</option>
+              <option value="6">Web + Tótem</option>
         </select>
       </td>
       </tr>
