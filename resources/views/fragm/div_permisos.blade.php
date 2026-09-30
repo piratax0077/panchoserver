@@ -1,11 +1,8 @@
-
-<div class="form-check">
+<div class="erp-permission-options">
     @foreach($opciones as $opcion)
-    <input class="form-check-input" type="checkbox" value="{{$opcion}}" name="permisos" id="flexCheckDefault"> 
-    <label class="form-check-label" for="flexCheckDefault">
-        {{$opcion}}
-      </label>
-      <br>
+    <div class="form-check erp-permission-option">
+        <input class="form-check-input" type="checkbox" value="{{ $opcion }}" name="permisos" id="permisoOpcion{{ $id }}_{{ $loop->index }}">
+        <label class="form-check-label" for="permisoOpcion{{ $id }}_{{ $loop->index }}">{{ $opcion }}</label>
+    </div>
     @endforeach
 </div>
-

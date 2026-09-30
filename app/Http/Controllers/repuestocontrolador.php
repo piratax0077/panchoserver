@@ -155,6 +155,7 @@ class repuestocontrolador extends Controller
             //code...
             $hay=repuesto::where('id',$idrep)->where('activo',1)->first();
         if(is_null($hay)){ //No hay
+            $codint = $idrep;
             $estado=['estado'=>'ERROR','mensaje'=>'El código '.$codint. ' no existe o está desactivado'];
         }else{
             $repuesto=$this->dame_un_repuesto($hay->id);

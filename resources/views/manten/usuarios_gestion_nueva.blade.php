@@ -24,7 +24,7 @@
         .erp-page-subtitle { margin:5px 0 0; color:#6b7280; font-size:14px; }
         .erp-primary-btn { display:inline-flex; align-items:center; background:var(--erp-primary); color:#fff; border:0; border-radius:10px; padding:10px 16px; font-weight:600; box-shadow:0 4px 12px rgba(37,99,235,.18); }
         .erp-primary-btn:hover { background:var(--erp-primary-dark); color:#fff; text-decoration:none; }
-        .erp-layout { display:grid; grid-template-columns:minmax(300px, 0.95fr) minmax(360px, 1.15fr) minmax(360px, 1.2fr); gap:18px; align-items:start; }
+        .erp-layout { display:grid; grid-template-columns:minmax(260px, 0.85fr) minmax(320px, 1fr) minmax(380px, 1.4fr); gap:18px; align-items:start; }
         .erp-card { min-width:0; background:var(--erp-surface); border:1px solid var(--erp-border); border-radius:16px; box-shadow:0 4px 18px rgba(15,23,42,.05); overflow:hidden; }
         .erp-card-header { padding:18px 20px; border-bottom:1px solid #edf0f3; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
         .erp-card-title { margin:0; font-size:16px; color:#111827; font-weight:700; }
@@ -84,6 +84,20 @@
         .erp-modal .modal-footer { border-top:1px solid #edf0f3; }
         .erp-role-option { display:flex; align-items:center; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:8px; }
         .erp-role-option:hover { background:#f8fafc; }
+
+        /* Permisos: texto legible y acciones siempre accesibles. */
+        .erp-permissions-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+        .erp-permissions-search { margin-bottom:12px; }
+        #listado-permisos { max-height:480px; max-height:clamp(240px, 52vh, 560px); overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; border:1px solid #e5e7eb; border-radius:10px; }
+        .erp-permissions-table { width:100%; table-layout:fixed; }
+        .erp-permissions-table thead th { position:sticky; top:0; z-index:1; background:#f8fafc !important; }
+        .erp-permissions-table th:last-child, .erp-permissions-table td:last-child { width:68px; }
+        .erp-permissions-table tbody td { padding:10px 12px; overflow-wrap:anywhere; }
+        .erp-permission-category { display:block; color:#667085; font-size:11px; margin-bottom:3px; }
+        .erp-permission-name { display:block; font-weight:600; line-height:1.4; }
+        #panelPermisos { max-height:300px; overflow-y:auto; overscroll-behavior:contain; padding:4px 8px 4px 2px; }
+        #panelPermisos .erp-permission-option { padding:8px 8px 8px 26px; border-bottom:1px solid #e5e7eb; }
+        #panelPermisos .form-check-label { display:block; cursor:pointer; line-height:1.4; overflow-wrap:anywhere; }
         @media (max-width: 1199.98px) { .erp-layout { grid-template-columns:1fr 1fr; } .erp-layout > .erp-card:last-child { grid-column:1 / -1; } }
         @media (max-width: 767.98px) { .erp-users-page { padding:16px 10px 30px; } .erp-page-header { align-items:flex-start; flex-direction:column; } .erp-layout { grid-template-columns:1fr; } .erp-layout > .erp-card:last-child { grid-column:auto; } .erp-user-data-grid { grid-template-columns:1fr; } }
     </style>
@@ -169,26 +183,7 @@
                     $('#btnEliminar').attr('href', 'usuarios/delete/' + user.id);
                     $('#btnEliminar').removeClass('disabled');
 
-                    // $('#listado-permisos').empty();
-                    $('#tbody_permisos').empty();
-                    permisos.forEach(permiso => {
-                        u_h_p.forEach(data => {
-                            if (permiso.id === data.permission_id) {
-                                $('#tbody_permisos').append(`
-                                    <tr> 
-                                        <td><strong>` + permiso.name + `</strong> - ` + data.descripcion +
-                                    ` </td>
-                                        <td class='text-center'><button type='button' class='btn btn-danger btn-xs erp-remove-permission' title='Quitar permiso' onclick='eliminarPermiso(` + data.id + `,` + user.id + `)'><i class='fas fa-times'></i></button></td>
-                                    </tr>
-                                    `);
-
-                            }
-                        });
-                    });
-
-                    $('#tbody_permisos').append(
-                        "<tr class='erp-permission-actions'><td colspan='2'><button type='button' class='btn btn-success btn-sm' onclick='abrirModalPermiso()'><i class='fas fa-plus mr-1'></i>Agregar permisos</button></td></tr>"
-                        );
+                    renderizarPermisosUsuario(permisos, u_h_p, user);
                 },
 
                 error: function(err) {
@@ -258,26 +253,7 @@
                     console.log(u_h_p);
                     $('#roleName').empty();
                     $('#roleName').append(datos.nombrerol);
-                    // $('#listado-permisos').empty();
-                    $('#tbody_permisos').empty();
-                    permisos.forEach(permiso => {
-                        u_h_p.forEach(data => {
-                            if (permiso.id === data.permission_id) {
-                                $('#tbody_permisos').append(`
-                                    <tr> 
-                                        <td><strong>` + permiso.name + `</strong> - ` + data.descripcion +
-                                    ` </td>
-                                        <td class='text-center'><button type='button' class='btn btn-danger btn-xs erp-remove-permission' title='Quitar permiso' onclick='eliminarPermiso(` + data.id + `,` + user.id + `)'><i class='fas fa-times'></i></button></td>
-                                    </tr>
-                                    `);
-
-                            }
-                        });
-                    });
-
-                    $('#tbody_permisos').append(
-                        "<tr class='erp-permission-actions'><td colspan='2'><button type='button' class='btn btn-success btn-sm' onclick='abrirModalPermiso()'><i class='fas fa-plus mr-1'></i>Agregar permisos</button></td></tr>"
-                        );
+                    renderizarPermisosUsuario(permisos, u_h_p, user);
                     Vue.swal({
                         title: 'Felicidades',
                         text: "Rol actualizado",
@@ -500,6 +476,44 @@
 
         }
 
+
+        function renderizarPermisosUsuario(permisos, detalles, usuario) {
+            const categorias = new Map(permisos.map(p => [String(p.id), p.name]));
+            const filas = detalles.filter(d => categorias.has(String(d.permission_id))).slice()
+                .sort((a, b) => String(categorias.get(String(a.permission_id))).localeCompare(String(categorias.get(String(b.permission_id))), 'es')
+                    || String(a.descripcion).localeCompare(String(b.descripcion), 'es'));
+            const tbody = $('#tbody_permisos').empty();
+            filas.forEach(detalle => {
+                const categoria = categorias.get(String(detalle.permission_id));
+                const fila = $('<tr>').attr('data-busqueda', (categoria + ' ' + detalle.descripcion).toLocaleLowerCase('es'));
+                const texto = $('<td>').append($('<small>', {class: 'erp-permission-category', text: categoria}))
+                    .append($('<span>', {class: 'erp-permission-name', text: detalle.descripcion}));
+                const boton = $('<button>', {type: 'button', class: 'btn btn-outline-danger erp-remove-permission',
+                    title: 'Quitar ' + detalle.descripcion, 'aria-label': 'Quitar ' + detalle.descripcion})
+                    .append($('<i>', {class: 'fas fa-times', 'aria-hidden': 'true'}))
+                    .on('click', () => eliminarPermiso(detalle.id, usuario.id));
+                fila.append(texto).append($('<td>', {class:'text-center'}).append(boton));
+                tbody.append(fila);
+            });
+            if (!filas.length) tbody.append('<tr><td colspan="2" class="text-muted text-center py-4">Este usuario no tiene permisos específicos.</td></tr>');
+            $('#cantidad-permisos').text(filas.length + (filas.length === 1 ? ' permiso' : ' permisos'));
+            $('#agregar-permisos-usuario').prop('disabled', false);
+            $('#buscar-permiso-usuario').val('').prop('disabled', false);
+            $('#sin-coincidencias-permisos').addClass('d-none');
+            $('#listado-permisos').scrollTop(0);
+        }
+
+        $(document).on('input', '#buscar-permiso-usuario', function() {
+            const filtro = this.value.trim().toLocaleLowerCase('es');
+            let visibles = 0;
+            $('#tbody_permisos tr[data-busqueda]').each(function() {
+                const visible = $(this).attr('data-busqueda').includes(filtro);
+                $(this).toggle(visible);
+                if (visible) visibles++;
+            });
+            $('#sin-coincidencias-permisos').toggleClass('d-none', visibles > 0 || !filtro);
+        });
+
         function abrirModalPermiso() {
             $('#listado-permisos-detalle').removeClass('d-none');
             $('#listado-permisos-detalle').addClass('d-block');
@@ -580,26 +594,7 @@
                     let u_h_p = data[3];
                     var user = data[0];
 
-                    // $('#listado-permisos').empty();
-                    $('#tbody_permisos').empty();
-                    permisos.forEach(permiso => {
-                        u_h_p.forEach(data => {
-                            if (permiso.id === data.permission_id) {
-                                $('#tbody_permisos').append(`
-                                    <tr> 
-                                        <td><strong>` + permiso.name + `</strong> - ` + data.descripcion +
-                                    ` </td>
-                                        <td class='text-center'><button type='button' class='btn btn-danger btn-xs erp-remove-permission' title='Quitar permiso' onclick='eliminarPermiso(` + data.id + `,` + user.id + `)'><i class='fas fa-times'></i></button></td>
-                                    </tr>
-                                    `);
-
-                            }
-                        });
-                    });
-
-                    $('#tbody_permisos').append(
-                        "<tr class='erp-permission-actions'><td colspan='2'><button type='button' class='btn btn-success btn-sm' onclick='abrirModalPermiso()'><i class='fas fa-plus mr-1'></i>Agregar permisos</button></td></tr>"
-                        );
+                    renderizarPermisosUsuario(permisos, u_h_p, user);
 
                     Vue.swal({
                         icon: 'success',
@@ -654,27 +649,7 @@
                             let u_h_p = data[3];
                             var user = data[0];
 
-                            // $('#listado-permisos').empty();
-                            $('#tbody_permisos').empty();
-                            permisos.forEach(permiso => {
-                                u_h_p.forEach(data => {
-                                    if (permiso.id === data.permission_id) {
-                                        $('#tbody_permisos').append(`
-                                    <tr> 
-                                        <td><strong>` + permiso.name + `</strong> - ` + data.descripcion +
-                                            ` </td>
-                                        <td class='text-center'><button type='button' class='btn btn-danger btn-xs erp-remove-permission' title='Quitar permiso' onclick='eliminarPermiso(` + data.id + `,` +
-                                            user.id + `)'><i class='fas fa-times'></i></button></td>
-                                    </tr>
-                                    `);
-
-                                    }
-                                });
-                            });
-
-                            $('#tbody_permisos').append(
-                                "<tr class='erp-permission-actions'><td colspan='2'><button type='button' class='btn btn-success btn-sm' onclick='abrirModalPermiso()'><i class='fas fa-plus mr-1'></i>Agregar permisos</button></td></tr>"
-                                );
+                            renderizarPermisosUsuario(permisos, u_h_p, user);
                             Vue.swal({
 
                                 title: 'Eliminado!',
@@ -948,16 +923,23 @@
                         </div>
                     </div>
                     <div class="erp-card-body">
-                        <div id="listado-permisos" class="table-responsive">
+                        <div class="erp-permissions-toolbar">
+                            <span id="cantidad-permisos" class="text-muted small">Selecciona un usuario</span>
+                            <button id="agregar-permisos-usuario" type="button" class="btn btn-success btn-sm" onclick="abrirModalPermiso()" disabled><i class="fas fa-plus mr-1"></i>Agregar permisos</button>
+                        </div>
+                        <div class="erp-permissions-search">
+                            <label class="sr-only" for="buscar-permiso-usuario">Buscar permiso o categoría</label>
+                            <input id="buscar-permiso-usuario" type="search" class="form-control form-control-sm" placeholder="Buscar permiso o categoría…" disabled>
+                        </div>
+                        <div id="listado-permisos" class="table-responsive" tabindex="0" role="region" aria-label="Permisos asignados al usuario">
                             <table class="table erp-permissions-table">
-                                <thead><tr><th class="erp-column-code">Cod.</th><th>Permiso</th></tr></thead>
+                                <thead><tr><th>Permiso / categoría</th><th class="text-center">Quitar</th></tr></thead>
                                 <tbody id="tbody_permisos">
-                                    @foreach ($permisos as $permiso)
-                                        <tr><td><span class="erp-code-badge">#{{ $permiso->id }}</span></td><td>{{ $permiso->name }}</td></tr>
-                                    @endforeach
+                                    <tr><td colspan="2" class="text-muted text-center py-4">Selecciona un usuario para ver sus permisos.</td></tr>
                                 </tbody>
                             </table>
                         </div>
+                        <p id="sin-coincidencias-permisos" class="small text-muted mt-2 d-none" role="status">No hay permisos que coincidan con la búsqueda.</p>
 
                         <div id="listado-permisos-detalle" class="d-none erp-permission-editor">
                             <div class="row">

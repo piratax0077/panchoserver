@@ -3238,6 +3238,7 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
 
     public function consultarInformeRentabilidad(Request $request)
     {
+        abort_unless($this->confirmaringreso('/reportes/informe-rentabilidad'), 403);
         try {
             $request->validate([
                 'fecha_inicio' => 'required|date',
@@ -4213,13 +4214,6 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                     ['ACEPTADO', 'REPARO']
                 );
 
-            if ($request->filled('id_vendedor')) {
-                $queryNotasCredito->where(
-                    'notas_de_credito.usuarios_id',
-                    $request->id_vendedor
-                );
-            }
-
             $notasCredito = $queryNotasCredito->get();
             $detalleNotasCredito = [];
             $notasPorEmisor = [];
@@ -4242,6 +4236,7 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
 
                     if ($tipoReferencia === 'bo') {
                         $documentoOriginal = boleta::select(
+                                'boletas.id',
                                 'boletas.usuarios_id',
                                 'users.name as vendedor'
                             )
@@ -4258,6 +4253,7 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                             ->first();
                     } elseif ($tipoReferencia === 'fa') {
                         $documentoOriginal = factura::select(
+                                'facturas.id',
                                 'facturas.usuarios_id',
                                 'users.name as vendedor'
                             )
@@ -4277,12 +4273,32 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                     }
 
                     if ($documentoOriginal) {
+                        // Las ventas se atribuyen al usuario del detalle, que puede
+                        // diferir del usuario que registro la cabecera.
+                        $esBoleta = $tipoReferencia === 'bo';
+                        $vendedoresDetalle = DB::table($esBoleta ? 'boletas_detalle' : 'facturas_detalle')
+                            ->where($esBoleta ? 'id_boleta' : 'id_factura', $documentoOriginal->id)
+                            ->where('activo', 1)
+                            ->whereNotNull('usuarios_id')
+                            ->distinct()->pluck('usuarios_id');
+                        if ($vendedoresDetalle->count() === 1) {
+                            $documentoOriginal->usuarios_id = $vendedoresDetalle->first();
+                            $documentoOriginal->vendedor = DB::table('users')
+                                ->where('id', $documentoOriginal->usuarios_id)->value('name');
+                        }
                         $idVendedorOriginal =
                             $documentoOriginal->usuarios_id;
                         $vendedorOriginal =
                             $documentoOriginal->vendedor
                             ?: 'SIN VENDEDOR';
                     }
+                }
+
+                // Filtrar por el vendedor original, no por quien emitio la NC.
+                // La venta original puede ser anterior al periodo consultado.
+                if ($request->filled('id_vendedor') &&
+                    (string) $idVendedorOriginal !== (string) $request->id_vendedor) {
+                    continue;
                 }
 
                 $idEmisor = $nota->usuarios_id ?: 0;
@@ -4422,9 +4438,9 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
             unset($resumenVendedorNota);
 
             $notasCreditoResumen = [
-                'cantidad_total' => $notasCredito->count(),
+                'cantidad_total' => count($detalleNotasCredito),
                 'monto_total' => round(
-                    (float) $notasCredito->sum('total'),
+                    (float) array_sum(array_column($detalleNotasCredito, 'total')),
                     2
                 ),
                 'por_emisor' => collect($notasPorEmisor)
@@ -4511,6 +4527,71 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+
+    public function infoRepuestoRentabilidad(Request $request, $id)
+    {
+        abort_unless($this->confirmaringreso('/reportes/informe-rentabilidad'), 403);
+        $request->validate(['page' => 'nullable|integer|min:1']);
+        $repuesto = repuesto::findOrFail($id);
+
+        if (\App\Services\StockPorLocalService::habilitado()) {
+            $stocks = \App\RepuestoStock::with(['local', 'responsable'])
+                ->where('repuesto_id', $repuesto->id)->orderBy('local_id')->get()
+                ->map(function ($stock) {
+                    return [
+                        'local' => optional($stock->local)->local_nombre ?: 'Local sin identificar',
+                        'cantidad' => (int) $stock->cantidad,
+                        'ubicacion' => $stock->ubicacion_fisica,
+                        'responsable' => optional($stock->responsable)->name,
+                        'actualizado' => $stock->updated_at ? $stock->updated_at->format('Y-m-d') : null,
+                    ];
+                });
+        } else {
+            $configuracion = [
+                ['stock_actual', 'local_id', 'ubicacion', 'id_responsable', 'fecha_actualizacion_stock', 1, 'Bodega'],
+                ['stock_actual_dos', 'local_id_dos', 'ubicacion_dos', 'id_responsable_dos', 'fecha_actualizacion_stock_dos', 3, 'Tienda'],
+                ['stock_actual_tres', 'local_id_tres', 'ubicacion_tres', 'id_responsable_tres', 'fecha_actualizacion_stock_tres', 4, 'Casa Matriz'],
+            ];
+            $locales = local::whereIn('id', collect($configuracion)->map(function ($campos) use ($repuesto) {
+                return $repuesto->{$campos[1]} ?: $campos[5];
+            }))->pluck('local_nombre', 'id');
+            $responsables = User::whereIn('id', collect($configuracion)->map(function ($campos) use ($repuesto) {
+                return $repuesto->{$campos[3]};
+            })->filter())->pluck('name', 'id');
+            $stocks = collect($configuracion)->map(function ($campos) use ($repuesto, $locales, $responsables) {
+                $localId = $repuesto->{$campos[1]} ?: $campos[5];
+                return [
+                    'local' => $locales->get($localId, $campos[6]),
+                    'cantidad' => (int) $repuesto->{$campos[0]},
+                    'ubicacion' => $repuesto->{$campos[2]},
+                    'responsable' => $responsables->get($repuesto->{$campos[3]}),
+                    'actualizado' => $repuesto->{$campos[4]},
+                ];
+            });
+        }
+
+        $compras = compras_det::query()
+            ->join('compras_cab', 'compras_det.id_factura_cab', '=', 'compras_cab.id')
+            ->leftJoin('users', 'compras_det.usuarios_id', '=', 'users.id')
+            ->leftJoin('proveedores', 'compras_cab.factura_id_proveedor', '=', 'proveedores.id')
+            ->leftJoin('locales', 'compras_det.id_local', '=', 'locales.id')
+            ->where('compras_det.id_repuestos', $repuesto->id)
+            ->select([
+                'compras_det.id', 'compras_cab.factura_fecha as fecha',
+                'compras_cab.factura_numero as numero', 'users.name as usuario',
+                'proveedores.empresa_nombre_corto as proveedor', 'locales.local_nombre as local',
+                'compras_det.pu as precio_compra', 'compras_det.precio_sugerido as precio_venta',
+                'compras_det.costos', 'compras_det.cantidad',
+                'compras_det.activo as detalle_activo', 'compras_cab.activo as compra_activa',
+            ])
+            ->orderByDesc('compras_cab.factura_fecha')->orderByDesc('compras_det.id')->paginate(20);
+
+        return view('reportes.partials.info_repuesto_rentabilidad', [
+            'repuesto' => $repuesto, 'stocks' => $stocks,
+            'stockTotal' => $stocks->sum('cantidad'), 'compras' => $compras,
+        ]);
     }
 
     public function informeRentabilidad()

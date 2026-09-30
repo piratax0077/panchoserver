@@ -498,6 +498,8 @@
             return;
         }
 
+        // Conservar las selecciones enviadas aunque se editen durante la consulta.
+        const resumenBusqueda = obtenerResumenBusqueda();
         bloquearConsulta(true);
 
         $.ajax({
@@ -519,6 +521,10 @@
             success: function (respuesta) {
                 ultimoInformeRentabilidad = respuesta;
                 renderizarInforme(respuesta);
+                if (respuesta && respuesta.estado === 1) {
+                    $('#resumen_busqueda_texto').text(resumenBusqueda);
+                    $('#resumen_busqueda').show();
+                }
             },
             error: function (error) {
                 let mensaje = 'No fue posible generar el informe.';
@@ -539,6 +545,27 @@
                 bloquearConsulta(false);
             }
         });
+    }
+
+    function obtenerResumenBusqueda() {
+        const partes = ['Desde ' + formatearFecha($('#fecha_inicio').val()) +
+            ' hasta ' + formatearFecha($('#fecha_termino').val())];
+        [
+            ['id_vendedor', 'Vendedor', 'Todos'],
+            ['id_proveedor', 'Proveedor', 'Todos'],
+            ['id_local', 'Local', 'Todos'],
+            ['id_repuesto', 'Repuesto', 'Todos']
+        ].forEach(function (filtro) {
+            const campo = $('#' + filtro[0]);
+            const nombre = campo.val() ? campo.find('option:selected').text().trim() : filtro[2];
+            partes.push(filtro[1] + ': ' + nombre);
+        });
+        const credito = Number($('#comision_getnet_credito').val() || 0);
+        const debito = Number($('#comision_getnet_debito').val() || 0);
+        if (credito || debito) {
+            partes.push('Comisión Getnet: crédito ' + credito + '% / débito ' + debito + '%');
+        }
+        return partes.join(' · ');
     }
 
     function bloquearConsulta(bloquear) {
@@ -718,7 +745,7 @@
 
         datos.forEach(function (item) {
             html += '<tr>' +
-                '<td>' + escaparHtml(item.codigo_interno) + '</td>' +
+                '<td><a href="javascript:void(0)" onclick="dameInfoRepuestoModal(\'' + escaparHtml(item.id_repuesto) + '\')" data-target="#modalInfoRepuesto" data-toggle="modal">' + escaparHtml(item.codigo_interno) + '</a></td>' +
                 '<td>' + escaparHtml(item.descripcion) + '</td>' +
                 '<td>' + escaparHtml(item.proveedor) + '</td>' +
                 '<td class="texto-derecha">' + formatearNumero(item.cantidad_vendida) + '</td>' +
@@ -735,6 +762,55 @@
         $('#tbody_productos').html(html || filaSinResultados(9));
     }
 
+    var peticionInfoRepuestoRentabilidad = null;
+    var secuenciaInfoRepuestoRentabilidad = 0;
+
+    function dameInfoRepuestoModal(idRepuesto, pagina = 1){
+        const secuencia = ++secuenciaInfoRepuestoRentabilidad;
+        if (peticionInfoRepuestoRentabilidad) peticionInfoRepuestoRentabilidad.abort();
+        const url = @json(route('reportes.informe-rentabilidad.repuesto', ['id' => '__REPUESTO__'], false))
+            .replace('__REPUESTO__', encodeURIComponent(idRepuesto));
+        $('#modalBodyInfoRepuesto').attr('aria-busy', 'true').html(
+            '<p class="text-center text-muted py-4" role="status">Cargando stock e historial de compras…</p>'
+        );
+        peticionInfoRepuestoRentabilidad = $.ajax({
+            type: 'GET',
+            url: url,
+            data: {page: pagina},
+            dataType: 'html',
+            headers: {'Accept': 'text/html'},
+            success: function(html){
+                if (secuencia === secuenciaInfoRepuestoRentabilidad) $('#modalBodyInfoRepuesto').html(html);
+            },
+            error: function(xhr, estado){
+                if (estado === 'abort' || secuencia !== secuenciaInfoRepuestoRentabilidad) return;
+                const mensaje = xhr.status === 401 || xhr.status === 419
+                    ? 'La sesión no está disponible para esta consulta. Recarga el informe e inicia sesión nuevamente si el sistema lo solicita.'
+                    : xhr.status === 403 ? 'No tienes permiso para consultar esta información.'
+                    : xhr.status === 404 ? 'No se encontró el repuesto.'
+                    : 'No fue posible cargar la información. Cierra el modal y vuelve a intentarlo.';
+                $('#modalBodyInfoRepuesto').empty().append($('<p>', {
+                    'class': 'alert alert-danger mb-0', role: 'alert', text: mensaje
+                }));
+            },
+            complete: function(){
+                if (secuencia === secuenciaInfoRepuestoRentabilidad) {
+                    $('#modalBodyInfoRepuesto').attr('aria-busy', 'false');
+                    peticionInfoRepuestoRentabilidad = null;
+                }
+            }
+        });
+    }
+
+    $(document).on('click', '#modalInfoRepuesto .rentabilidad-compras-pagina', function(){
+        dameInfoRepuestoModal($(this).data('repuesto'), $(this).data('pagina'));
+    });
+    $(document).on('hide.bs.modal', '#modalInfoRepuesto', function(){
+        ++secuenciaInfoRepuestoRentabilidad;
+        if (peticionInfoRepuestoRentabilidad) peticionInfoRepuestoRentabilidad.abort();
+        peticionInfoRepuestoRentabilidad = null;
+        $('#modalBodyInfoRepuesto').empty().attr('aria-busy', 'false');
+    });
 
     function renderizarNotasCredito(
         porVendedor,
@@ -967,6 +1043,8 @@
         }
 
         $('#contenido_informe').hide();
+        $('#resumen_busqueda').hide();
+        $('#resumen_busqueda_texto').empty();
         $('#alerta_sin_costo').hide();
         ultimoInformeRentabilidad = null;
     }
@@ -1078,6 +1156,11 @@
         </div>
     </div>
 
+    <div id="resumen_busqueda" class="alert alert-light border" style="display:none; overflow-wrap:anywhere;" role="status" aria-live="polite">
+        <strong class="d-block mb-1"><i class="fa fa-filter" aria-hidden="true"></i> Filtros aplicados al informe</strong>
+        <span id="resumen_busqueda_texto"></span>
+    </div>
+
     <div id="cargando_informe" class="cargando">
         <i class="fa fa-spinner fa-spin fa-2x"></i>
         <div class="mt-2">Calculando ventas, costos y márgenes...</div>
@@ -1157,7 +1240,7 @@
 
                     <div class="col-lg-3 col-md-4 col-sm-6">
                         <div class="indicador indicador-advertencia">
-                            <div class="titulo">Ventas sin costo</div>
+                            <div class="titulo">Ventas sin costo (Repuestos express)</div>
                             <div class="valor" id="valor_sin_costo">$0</div>
                             <div class="detalle" id="detalle_sin_costo">0 líneas sin costo histórico</div>
                         </div>
@@ -1389,4 +1472,22 @@
         </div>
     </div>
 </div>
+ <div class="modal fade" id="modalInfoRepuesto" tabindex="-1" role="dialog" aria-labelledby="tituloInfoRepuestoRentabilidad" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+      <div class="modal-content bg-white text-dark">
+        <div class="modal-header">
+          <h5 class="modal-title" id="tituloInfoRepuestoRentabilidad">Información del Repuesto</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body" id="modalBodyInfoRepuesto">
+          ...
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 @endsection

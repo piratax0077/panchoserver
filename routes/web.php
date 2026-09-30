@@ -1035,6 +1035,7 @@ Route::middleware(['auth'])->prefix('reportes')->group(function ()
     Route::get('/buscar_periodo_stock_minimo/{mes}/{anio}','reportes_controlador@buscar_periodo_stock_minimo');
     Route::get('/transferencias','reportes_controlador@transferencias');
     Route::post('/editar_operacion_pago_getnet','reportes_controlador@editar_operacion_pago_getnet');
+    Route::get('informe-rentabilidad/repuesto/{id}', 'reportes_controlador@infoRepuestoRentabilidad')->where('id', '[0-9]+')->name('reportes.informe-rentabilidad.repuesto');
     Route::post('informe-rentabilidad/consultar','reportes_controlador@consultarInformeRentabilidad')->name('reportes.informe-rentabilidad.consultar');
     Route::get('informe-rentabilidad','reportes_controlador@informeRentabilidad')->name('reportes.informe-rentabilidad');
 });

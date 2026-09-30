@@ -111,7 +111,7 @@ class gestionUsuarios_controlador extends Controller
         if($id == 5) $opciones = ['Cargar folios','Anulación de folios','Estado DTE','Ultimos Estados DTE'];
         if($id == 6) $opciones = ['Marca vehículo','Modelo vehículo','Roles de usuario','Familia de repuestos','Marca de repuestos','Modificar repuestos','Catálogo de repuestos','Paises','Proveedores','Formas de pago','Límites de créditos','Días de crédito','Clientes','Estado de cuenta cliente','Cliente express','Parametros','Repuestos relacionados','Usuarios'];
         if($id == 7) $opciones = ['RCOF Boletas','Libro ventas','Libro compras'];
-        if($id == 8) $opciones = ['Ventas diarias','Detalle ventas','Desempeño mensual','Documentos generados','Buscar documentos','Documentos Transbank','Documentos Transferencias','Documentos Getnet'];
+        if($id == 8) $opciones = ['Ventas diarias','Detalle ventas','Desempeño mensual','Documentos generados','Buscar documentos','Documentos Transbank','Documentos Transferencias','Documentos Getnet','Informe de rentabilidad'];
         if($id == 9) $opciones = ['Buscar por medidas','Modificar precio','Actualizar precio','Ultimas compras'];
         $v = view('fragm.div_permisos',compact('id','opciones'));
         return $v;
@@ -1501,6 +1501,10 @@ try {
                             break;
                         case 'Documentos Transbank':
                             $detalle_permiso->path_ruta = '/reportes/transbank';
+                            break;
+                        case 'Informe de rentabilidad':
+                            $detalle_permiso->permission_id = 8;
+                            $detalle_permiso->path_ruta = '/reportes/informe-rentabilidad';
                             break;
                         case 'Documentos Getnet':
                             $detalle_permiso->path_ruta = '/reportes/getnet';
