@@ -1,6 +1,11 @@
 @if(isset($fotos))
 @if(count($fotos) > 0)
-<p class="text-center">Cantidad de fotos ({{count($fotos)}})</p>
+<div style="width: 100%;">
+    <div style="text-align:center; margin-bottom: 12px;">
+        <span style="background: #eceff1; color: #546e7a; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 12px;">
+            <i class="fa fa-images"></i> {{count($fotos)}} {{count($fotos) == 1 ? 'foto' : 'fotos'}}
+        </span>
+    </div>
     <div id="carouselExampleControls" class="carousel slide" data-ride="carousel">
         <div class="carousel-inner">            
             @foreach($fotos as $foto)
@@ -19,6 +24,7 @@
         <span class="sr-only">Next</span>
         </a>
   </div>
+</div>
   @else
   <div id="carouselExampleControls" class="carousel slide" data-ride="carousel">
     <div class="carousel-inner">

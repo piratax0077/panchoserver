@@ -369,15 +369,12 @@
 
         function calcular_precio_sugerido(){
           var pu=parseFloat(document.getElementById("nuevo_pu").value);
-          var iva=0.19; // Leer de la tabla parámetros
-          var utilidad=parseFloat(document.getElementById("utilidad").value)/100.0;
-          var ps=document.getElementById("nuevo_ps");
-          var elvalor=pu*(1+utilidad)*(1+iva);
-          // Recalculo manual con utilidad de familia; guardar sin Calcular conserva el flete existente.
-          document.getElementById("flete").value = Math.max(0, Number(ps.value)-elvalor).toFixed(2);
+          var porcentajeFlete=parseFloat(document.getElementById("porcentaje_flete").value)/100.0;
+          // Flete = P.U. x % Flete de la familia (mismo criterio usado en la importación de facturas XML).
+          document.getElementById("flete").value = Math.max(0, pu*porcentajeFlete).toFixed(2);
           Vue.swal({
             icon:'success',
-            text:'Precio sugerido actualizado correctamente',
+            text:'Flete recalculado correctamente',
             position:'top-end',
             timer: 3000,
             toast: true,

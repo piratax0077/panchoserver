@@ -1,0 +1,24 @@
+<div class="modal fade" id="modalOfertasFamilias" tabindex="-1" role="dialog" aria-labelledby="titulo_familias" aria-hidden="true">
+<div class="modal-dialog modal-xl" role="document"><div class="modal-content">
+<div class="modal-header"><div><h5 class="modal-title" id="titulo_familias">Ofertas por familia</h5><small class="text-muted">Seleccione familias y aplique datos en común.</small></div><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button></div>
+<div class="modal-body"><div class="ofertas-page">
+<p id="familias_cargando" role="status" aria-live="polite"></p><div id="familias_error" class="alert alert-danger d-none" role="alert"></div>
+<div class="ofertas-layout">
+<section class="ofertas-panel ofertas-search"><h4>Familias para nuevas ofertas</h4><p class="ofertas-muted">El descuento aplica a los productos de cada familia.</p>
+<input id="buscar_familias_catalogo" class="form-control form-control-sm mb-3" placeholder="Buscar familia" aria-label="Buscar familias sin oferta">
+<div class="familias-lista"><table class="table"><thead><tr><th><input type="checkbox" id="familias_catalogo_todas" aria-label="Seleccionar familias visibles"></th><th>Familia</th></tr></thead><tbody id="familias_catalogo"></tbody></table></div>
+<div class="ofertas-tools mt-3 mb-0"><strong id="familias_catalogo_cantidad" aria-live="polite">0 seleccionadas</strong><button type="button" id="familias_crear" class="btn btn-success btn-sm" onclick="familias_abrir_lote('crear')" disabled>Crear ofertas en conjunto</button></div>
+</section>
+<section class="ofertas-panel"><h4>Ofertas de familias <span id="familias_total" class="badge badge-light">0</span></h4>
+<div class="ofertas-tools"><input id="buscar_familias_ofertas" class="form-control form-control-sm" placeholder="Buscar familia" aria-label="Buscar ofertas de familias"><select id="familias_estado" class="form-control form-control-sm" aria-label="Estado"><option value="">Todos los estados</option><option value="vigente">Vigentes</option><option value="programada">Programadas</option><option value="caducada">Caducadas</option></select><select id="familias_canal" class="form-control form-control-sm" aria-label="Canal"><option value="">Todos los canales</option>@include('ventas.partials.ofertas_canales')</select></div>
+<div class="ofertas-selection"><strong id="familias_seleccionadas" aria-live="polite">0 seleccionadas</strong><button type="button" id="familias_editar" class="btn btn-primary btn-sm" onclick="familias_abrir_lote('editar')" disabled>Editar seleccionadas</button><button type="button" class="btn btn-outline-secondary btn-sm" onclick="familias_limpiar()">Limpiar selección</button></div>
+<div class="table-responsive familias-lista"><table class="table"><thead><tr><th><input type="checkbox" id="familias_ofertas_todas" aria-label="Seleccionar ofertas de familia visibles"></th><th>Familia</th><th>Descuento</th><th>Vigencia</th><th>Canal</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="familias_ofertas"></tbody></table></div><p id="familias_vacio" class="ofertas-empty d-none">No hay ofertas que coincidan con los filtros.</p>
+</section></div>
+<section id="familias_editor" class="ofertas-panel familias-editor d-none"><h4 id="familias_editor_titulo"></h4><p id="familias_editor_ayuda" class="ofertas-muted"></p>
+<div class="row"><div class="col-md-3 form-group"><label for="familias_desde">Desde</label><input type="date" id="familias_desde" class="form-control"></div><div class="col-md-3 form-group"><label for="familias_hasta">Hasta</label><input type="date" id="familias_hasta" class="form-control"></div><div class="col-md-3 form-group"><label for="familias_local">Canal</label><select id="familias_local" class="form-control"><option value="">Mantener actual</option>@include('ventas.partials.ofertas_canales')</select></div><div class="col-md-3 form-group"><label for="familias_porcentaje">Descuento (%)</label><input type="number" min="0.01" max="99.99" step="0.01" id="familias_porcentaje" class="form-control" placeholder="Mantener actual"></div></div>
+<div id="familias_editor_error" class="alert alert-danger d-none" role="alert"></div>
+<h6>Vista previa</h6><div class="table-responsive familias-preview"><table class="table table-sm"><thead><tr><th>Familia</th><th>Descuento</th><th>Desde / hasta</th><th>Canal</th></tr></thead><tbody id="familias_preview"></tbody></table></div>
+<div class="ofertas-tools mt-3 mb-0"><button type="button" id="familias_guardar" class="btn btn-primary btn-sm" onclick="familias_guardar_lote()">Aplicar cambios</button><button type="button" id="familias_cancelar" class="btn btn-outline-secondary btn-sm" onclick="familias_cancelar_lote()">Cancelar edición</button></div>
+</section>
+</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">Cerrar</button></div>
+</div></div></div>

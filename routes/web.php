@@ -291,6 +291,8 @@ Route::middleware(['auth'])->prefix('repuesto')->group(function ()
     Route::post('datos','repuestocontrolador@datos'); //guardar datos
     Route::post('modificado','repuestocontrolador@guardar_repuesto_modificado');
     Route::post('buscarepuestos','repuestocontrolador@buscarepuestos'); //buscar datos
+    Route::get('buscar_filtros','repuestocontrolador@buscar_filtros'); //buscar por múltiples filtros
+    Route::post('buscar_filtros','repuestocontrolador@buscar_filtros'); //buscar por múltiples filtros (POST)
     Route::get('proveedor/{id_prov}','repuestocontrolador@dame_repuestos_x_proveedor');
     Route::post('actualizasaldos','repuestocontrolador@actualiza_saldos');
     Route::get('/buscarcodint/{codint}','repuestocontrolador@dame_repuesto_x_cod_int');
@@ -582,6 +584,9 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::get('/imprimir_consignacion/{num_consignacion}','imprimir_controlador@imprimir_consignacion');
     Route::post('/imprimir_arqueo','imprimir_controlador@imprimir_arqueo');
     Route::get('/ofertas','ventas_controlador@ofertas');
+    Route::post('/ofertas/lote','ventas_controlador@ofertas_lote');
+    Route::get('/ofertas/familias','ventas_controlador@ofertas_familias_datos');
+    Route::post('/ofertas/familias/lote','ventas_controlador@ofertas_familias_lote');
     Route::post('/damerepuesto_oferta','ventas_controlador@damerepuesto_oferta');
     Route::post('/damerepuesto_kit','ventas_controlador@damerepuesto_kit');
     Route::post('/aplicar_descuento','ventas_controlador@aplicar_descuento');
@@ -601,6 +606,7 @@ Route::middleware(['auth'])->prefix('ventas')->group(function ()
     Route::post('/imprimir_vale_resultado','imprimir_controlador@imprimir_vale_resultado');
 
     //Route::get('/{id}','ventas_controlador@dame_relacionados');
+    Route::get('/relacionados/{id}','ventas_controlador@dame_relacionados');
     Route::get('/buscardescripcion/{descripcion}','ventas_controlador@buscar_por_descripcion');
     Route::get('/buscarcodproveedor/{codigo}','ventas_controlador@buscar_por_codigo_proveedor');
     Route::get('/buscaroem/{oem}','ventas_controlador@buscar_por_oem');
@@ -1020,6 +1026,7 @@ Route::middleware(['auth'])->prefix('reportes')->group(function ()
     Route::get('/imprimir_detalle_dia/{fecha}','reportes_controlador@imprimir_detalle_dia');
     Route::get('/imprimir_detalle_dia_getnet/{fecha}','reportes_controlador@imprimir_detalle_dia_getnet');
     Route::get('/imprimir_repuestos_por_proveedor/{id_proveedor}','reportes_controlador@imprimir_repuestos_por_proveedor');
+    Route::get('/descargar_repuestos_filtrados','reportes_controlador@descargar_repuestos_filtrados');
     Route::get('/bajo_stock_home','reportes_controlador@bajo_stock_home');
     Route::get('/bajo_stock','reportes_controlador@bajo_stock_html');
     Route::get('/rep_sin_prov','reportes_controlador@rep_sin_prov');

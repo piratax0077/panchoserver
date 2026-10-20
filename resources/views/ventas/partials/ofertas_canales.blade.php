@@ -1,0 +1,1 @@
+<option value="1">Solo local</option><option value="2">Solo web</option><option value="3">Local + web</option><option value="4">Solo tótem</option><option value="5">Local + tótem</option><option value="6">Web + tótem</option>

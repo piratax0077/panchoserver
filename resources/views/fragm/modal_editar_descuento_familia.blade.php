@@ -13,7 +13,7 @@
       </tr>
       <tr>
         <td>%</td>
-        <td><input type="number" min="1" max="100" name="porcentaje" id="porcentaje" maxlength="2" onkeypress="return soloNumeros(event)" onkeyup="soloNumeros(event)" class="form-control" value="{{$descuento->porcentaje}}"></td>
+        <td><input type="number" min="0.01" max="99.99" step="0.01" name="porcentaje" id="porcentaje"  class="form-control" value="{{$descuento->porcentaje}}"></td>
       </tr>
       <tr>
         <td>Fecha Inicio</td>
@@ -26,12 +26,12 @@
       <tr>
         <td>Local</td>
         <td><select name="local" id="local" class="form-control">
-          <option value="1">Solo Local</option>
-              <option value="2">Solo Web</option>
-              <option value="4">Solo Totem</option>
-              <option value="3">Local + Web</option>
-              <option value="5">Local + Totem</option>
-              <option value="6">Web + Tótem</option>
+          <option value="1" {{ (int) $descuento->id_local === 1 ? 'selected' : '' }}>Solo Local</option>
+              <option value="2" {{ (int) $descuento->id_local === 2 ? 'selected' : '' }}>Solo Web</option>
+              <option value="4" {{ (int) $descuento->id_local === 4 ? 'selected' : '' }}>Solo Totem</option>
+              <option value="3" {{ (int) $descuento->id_local === 3 ? 'selected' : '' }}>Local + Web</option>
+              <option value="5" {{ (int) $descuento->id_local === 5 ? 'selected' : '' }}>Local + Totem</option>
+              <option value="6" {{ (int) $descuento->id_local === 6 ? 'selected' : '' }}>Web + Tótem</option>
         </select>
       </td>
       </tr>

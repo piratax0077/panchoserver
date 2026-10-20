@@ -30,14 +30,26 @@
     $total_iva=$boletas_iva+$facturas_iva;//+$notas_credito_iva+$notas_debito_iva;
     $total_suma=$boletas_suma+$facturas_suma;//+$notas_credito_suma+$notas_debito_suma;
 @endphp
-<p style="color:blue">Todos son documentos electrónicos</p>
-<table class="table table-bordered table-hover table-sm">
+<div class="panel-libro">
+    <div class="panel-libro__header d-flex justify-content-between align-items-center flex-wrap">
+        <h5 class="panel-libro__titulo">Resumen mensual de documentos electrónicos</h5>
+        <span class="badge badge-info">Período {{ $mes }}-{{ $año }}</span>
+    </div>
+
+    <div class="px-3 pt-2 pb-0 text-muted" style="font-size:13px;">
+        Todos son documentos electrónicos
+    </div>
+
+    <div class="table-responsive">
+    <table class="table table-bordered table-hover table-sm tabla-libro">
     <thead>
-        <th class="text-center" width='200px'>Documento</th>
-        <th class="text-center" width='50px'>Cantidad</th>
-        <th class="text-center">Neto</th>
-        <th class="text-center">IVA</th>
-        <th class="text-center">Total</th>
+        <tr>
+            <th class="text-center" width='200px'>Documento</th>
+            <th class="text-center" width='50px'>Cantidad</th>
+            <th class="text-center">Neto</th>
+            <th class="text-center">IVA</th>
+            <th class="text-center">Total</th>
+        </tr>
     </thead>
     <tbody>
         <tr>
@@ -96,7 +108,7 @@
             <td class="text-right">{{number_format($notas_debito_iva,0,',','.')}}</td>
             <td class="text-right">{{number_format($notas_debito_suma,0,',','.')}}</td>
         </tr>
-        <tr>
+        <tr class="font-weight-bold">
             <td class="text-right"><b>TOTALES (bol+fac):</b></td>
             <td class="text-center"></td>
             <td class="text-right"><b>{{number_format($total_neto,0,',','.')}}</b></td>
@@ -105,6 +117,8 @@
         </tr>
     </tbody>
 </table>
+</div>
+</div>
 @php
     //Caso de documentos manuales
     if($mes==11 && $año==2020){

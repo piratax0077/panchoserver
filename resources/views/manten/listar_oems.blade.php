@@ -2,7 +2,7 @@
 @section('titulo','Listar OEMs')
 @section('javascript')
 <style id="oem-clonaciones-styles">
-.oem-page{padding:20px 18px 28px}.oem-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.oem-header h4{margin:0;font-weight:700}.oem-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 360px;gap:16px;align-items:start}.oem-card{overflow:hidden;border:1px solid #dbe4ee;border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.07)}.oem-card__title{display:flex;align-items:center;gap:9px;margin:0;padding:13px 15px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:16px;font-weight:700}.oem-search{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:7px;padding:14px}.oem-search .btn{padding:0}.oem-content{padding:0 14px 14px}.oem-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.oem-history{max-height:620px;overflow:auto}.oem-history table{margin:0}.oem-history thead th{position:sticky;top:0;z-index:2;background:#e6f7f4;color:#334155}.oem-history td{vertical-align:middle}.oem-history th:last-child,.oem-history td:last-child{width:52px;text-align:right}.oem-delete{width:34px;height:34px;padding:0!important}.oem-empty{padding:28px!important;text-align:center;color:#94a3b8}.oem-flow{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0;padding:12px;border-radius:8px;background:#f1f5f9}@media(max-width:1100px){.oem-layout{grid-template-columns:1fr 1fr}.oem-history-card{grid-column:1/-1}}@media(max-width:767.98px){.oem-layout{grid-template-columns:1fr}.oem-history-card{grid-column:auto}}
+.oem-page{padding:20px 18px 28px}.oem-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}.oem-header h4{margin:0;font-weight:700}.oem-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 360px;gap:16px;align-items:start}.oem-card{overflow:hidden;border:1px solid #dbe4ee;border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.07)}.oem-card__title{display:flex;align-items:center;gap:9px;margin:0;padding:13px 15px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:16px;font-weight:700}.oem-search{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:7px;padding:14px}.oem-search .btn{padding:0}.oem-content{padding:0 14px 14px}.oem-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.oem-history{max-height:620px;overflow:auto}.oem-history table{margin:0}.oem-history thead th{position:sticky;top:0;z-index:2;background:#e6f7f4;color:#334155}.oem-history td{vertical-align:middle}.oem-history th:last-child,.oem-history td:last-child{width:52px;text-align:right}.oem-delete{width:34px;height:34px;padding:0!important}.oem-empty{padding:28px!important;text-align:center;color:#94a3b8}.oem-flow{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0;padding:12px;border-radius:8px;background:#f1f5f9}@media(max-width:1100px){.oem-layout{grid-template-columns:1fr 1fr}.oem-history-card{grid-column:1/-1}}@media(max-width:767.98px){.oem-layout{grid-template-columns:1fr}.oem-history-card{grid-column:auto}}
 </style>
 <script>
     function buscar_repuesto_origen(){
@@ -389,7 +389,11 @@
 <div class="container-fluid oem-page">
     <div class="oem-header">
         <h4><i class="fas fa-clone mr-2"></i>Clonación de OEM</h4>
-        <a href="/repuesto/clonaciones" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Otras clonaciones</a>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <a href="/repuesto/listar-oems" class="btn btn-outline-secondary btn-sm"><i class="fas fa-redo mr-1"></i> Nueva clonación</a>
+            <button type="button" class="btn btn-primary btn-sm" id="btn_clonar" onclick="clonar_oems()" disabled><i class="fas fa-copy mr-1"></i> Clonar OEM</button>
+            <a href="/repuesto/clonaciones" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Otras clonaciones</a>
+        </div>
     </div>
     <div id="mensajes"></div>
     <div class="oem-layout">
@@ -424,10 +428,6 @@
                 </table>
             </div>
         </aside>
-    </div>
-    <div class="oem-actions">
-        <a href="/repuesto/listar-oems" class="btn btn-outline-secondary"><i class="fas fa-redo mr-1"></i> Nueva clonación</a>
-        <button type="button" class="btn btn-primary" id="btn_clonar" onclick="clonar_oems()" disabled><i class="fas fa-copy mr-1"></i> Clonar OEM</button>
     </div>
 </div>
 @endsection

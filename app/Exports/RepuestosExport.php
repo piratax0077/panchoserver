@@ -9,9 +9,10 @@ use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Events\AfterSheet;
 
-class RepuestosExport implements FromQuery, WithHeadings, WithTitle, ShouldAutoSize, WithEvents
+class RepuestosExport implements FromQuery, WithHeadings, WithTitle, ShouldAutoSize, WithEvents, WithStrictNullComparison
 {
     use Exportable;
 

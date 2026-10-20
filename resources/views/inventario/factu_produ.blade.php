@@ -71,7 +71,7 @@
 
 
 
-            document.getElementById("zona_similares").style.gridColumn="2/5"; //este
+            document.getElementById("zona_similares").style.gridColumn="1/-1"; //este
             document.getElementById("zona_OEMs").style.visibility="hidden";
             document.getElementById("zona_FABs").style.visibility="hidden";
 
@@ -79,7 +79,7 @@
 
         }else{
 
-            document.getElementById("zona_similares").style.gridColumn="2/3"; //este
+            document.getElementById("zona_similares").style.gridColumn=""; //este
             document.getElementById("zona_OEMs").style.visibility="visible";
             document.getElementById("zona_FABs").style.visibility="visible";
 
@@ -265,6 +265,10 @@ function guardar_motor(){
     }
 
     // Aplicar máscara a input mientras se tipea
+    function formatEnteroChile(value) {
+      return Math.round(Number(value) || 0).toLocaleString("es-CL");
+    }
+
     function applyMaskChile(input) {
       // Bloquear teclas no permitidas
       input.addEventListener('keydown', function(e) {
@@ -289,14 +293,12 @@ function guardar_motor(){
         }
       });
 
-      // Al salir del campo: completar con 2 decimales
+      // Al salir del campo: mostrar entero con separadores de miles
       input.addEventListener('blur', function() {
         if (this.value.trim() === '') return;
         let num = cleanNumberChile(this.value);
         if (!isNaN(num) && num > 0) {
-          let p = num.toFixed(2).split('.');
-          p[0]  = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-          this.value = p.join(',');
+          this.value = formatEnteroChile(num);
         }
       });
     }
@@ -1826,7 +1828,7 @@ function guardar_motor(){
 
         var subtotal = cantidad * pu;
 
-        document.getElementById("subtotalitem").value = formatNumberChile(subtotal);
+        document.getElementById("subtotalitem").value = formatEnteroChile(subtotal);
 
 
 
@@ -1882,7 +1884,21 @@ function guardar_motor(){
 
 
 
-  function calculapreciosug()
+  function calcularReferenciaFlete()
+  {
+    var total=cleanNumberChile(document.getElementById("ref_total_factura").value);
+    var flete=cleanNumberChile(document.getElementById("ref_total_flete").value);
+    var getnet=cleanNumberChile(document.getElementById("ref_getnet").value);
+    var ppm=cleanNumberChile(document.getElementById("ref_ppm").value);
+    var valido=Number.isFinite(total) && total>0 && Number.isFinite(flete) && flete>=0
+        && Number.isFinite(getnet) && getnet>=0 && Number.isFinite(ppm) && ppm>=0;
+    var porcentaje=valido ? flete/total*100 : null;
+    var formato=new Intl.NumberFormat("es-CL", {maximumFractionDigits:2});
+    document.getElementById("ref_porcentaje_flete").value=valido ? formato.format(porcentaje)+" %" : "";
+    document.getElementById("ref_porcentaje_total").value=valido ? formato.format(porcentaje+getnet+ppm)+" %" : "";
+  }
+
+  function calculapreciosug(forzar=false)
   {
     let cboFAM=document.getElementById("familia").value;
     if(cboFAM=="0" || cboFAM.trim().length==0)
@@ -1928,105 +1944,39 @@ function guardar_motor(){
       return false;
     }
 
-    var fle = cleanNumberChile(document.getElementById("flete").value);
-    var flete=0;
+    var pctFlete = cleanNumberChile(document.getElementById("porcentaje_flete").value);
+    if(isNaN(pctFlete) || Number(pctFlete)<0) pctFlete=0;
 
-    if(isNaN(fle) || Number(fle)<0 || fle.length==0 )
-    {
-        document.getElementById("flete").value=0;
-        /*
-
-
-
+    var iva=0.19;
+    var utilidad=cleanNumberChile(document.getElementById("utilidad").value)/100;
+    if(!Number.isFinite(utilidad) || utilidad<0 || utilidad>=1) {
         Vue.swal({
-
-
-
-                text: 'Ingrese Flete Válido o presione el bóton CALCULAR',
-
-
-
-                position: 'top-end',
-
-
-
-                icon: 'warning',
-
-
-
-                toast: true,
-
-
-
-                showConfirmButton: false,
-
-
-
-                timer: 3000,
-
-
-
-            });
-
-
-
-        document.getElementById("flete").focus();
-
-
-
-      return false;
-
-
-
-      */
-    }else{
-      flete=parseInt(fle);
-
+            text: 'El margen de utilidad debe ser mayor o igual a 0 y menor a 100%.',
+            icon: 'warning',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+        });
+        document.getElementById("utilidad").focus();
+        return false;
     }
 
-    var pu=cleanNumberChile(document.getElementById("pu").value);
-    var iva=0.19; // Leer de la tabla parámetros
-    var utilidad=parseFloat(document.getElementById("utilidad").value)/100.0;
+    // Margen sobre la venta neta, incluyendo el flete en el costo.
+    // Conservar los decimales del flete hasta calcular el precio final.
+    var flete=pu*(pctFlete/100);
+    document.getElementById("flete").value=formatEnteroChile(flete);
+    document.getElementById("flete").dataset.valorExacto=String(flete);
+    var elvalor=(pu+flete)/(1-utilidad)*(1+iva);
     var ps=document.getElementById("preciosug");
-    var elvalor=pu*(1+utilidad)*(1+iva)+flete;
-
-    /* REDONDEO
-
-    //aplicar redondeo divisor por 100
-    var divisor=elvalor/100;
-    var entero=Math.trunc(divisor);
-    var entero_x_100=entero*100;
-    var residuo=elvalor%100;
-    var valor_redondeado=0;
-    if(residuo>50)
-    {
-      valor_redondeado=entero_x_100+100;
-    }else{
-      valor_redondeado=entero_x_100;
+    var precioActual=cleanNumberChile(ps.value);
+    var precioAutomatico=Number(ps.dataset.precioAutomatico);
+    if(forzar || precioActual==0 || precioActual===precioAutomatico) {
+        ps.value=formatEnteroChile(elvalor);
+        ps.dataset.precioAutomatico=String(Math.round(elvalor));
     }
-
-    if(flete==0 && ps.value>0) //calcula el flete
-    {
-        flete=ps.value-valor_redondeado;
-        document.getElementById("flete").value=flete;
-    }
-
-    if((flete>0 && ps.value==0) || (flete==0 && ps.value==0))
-    {
-        ps.value=valor_redondeado;
-    }
-*/
-    if(flete==0 && cleanNumberChile(ps.value)>0) //calcula el flete
-    {
-        flete=Math.round(cleanNumberChile(ps.value)-elvalor);
-        document.getElementById("flete").value=flete;
-    } else if(cleanNumberChile(ps.value)==0) {
-        // Mostrar precio sugerido calculado con formato chileno
-        let p = elvalor.toFixed(2).split('.');
-        p[0]  = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        ps.value = p.join(',');
-    }
-    //ps.select();
+    // Respetar un precio manual; el botón Calcular permite reemplazarlo.
+    return true;
   }
 
   function guardarficha(){
@@ -2035,59 +1985,6 @@ function guardar_motor(){
       text:'En construcción'
     });
   }
-
-  function dameSoloUtilidad(){
-    // campos id y porcentaje de la tabla familias
-    var idFamilia=document.getElementById("familia").value;
-    if(idFamilia=="0" || idFamilia.trim().length==0)
-    {
-        return false;
-    }
-
-
-
-    //Petición AJAX para obtener el porcentaje respectivo
-
-
-    var url_familia='{{url("factuprodu")}}'+'/'+idFamilia+'/utilidad'; //petición
-
-      $.ajax({
-        type:'GET',
-        beforeSend: function () {
-          //$("#mensajes").html("Obteniendo Utilidad...");
-        },
-        url:url_familia,
-        success:function(utilidad){
-          console.log(utilidad);
-          document.getElementById("utilidad").value=utilidad;
-        },
-        error: function(error){
-          Vue.swal.close();
-          $('#mensajes').html(error.responseText);
-          Vue.swal({
-
-
-
-                title: 'ERROR',
-
-
-
-                text: error.responseText,
-
-
-
-                icon: 'error',
-
-
-
-            });
-
-
-
-        }
-
-  });
-}
 
   function dameUtilidad(value)
   {
@@ -2110,7 +2007,7 @@ function guardar_motor(){
           $('#rec_alt_rep').addClass('d-none');
           $('#bendix').removeClass('d-none');
           $('#bendix').append(`
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" readonly></textarea>
           
           <div class='form-group'>
               <label>MOTOR DE PARTIDA</label>
@@ -2125,7 +2022,7 @@ function guardar_motor(){
         }else if(resp == 'rv'){
           $('#rec_alt_rep').removeClass('d-none');
           $('#rec_alt_rep').append(`
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" readonly></textarea>
           <div>
           <div class='form-group'>
               <label>RECTIFICADOR </label>
@@ -2153,7 +2050,7 @@ function guardar_motor(){
           $('#span_medidas').append(`
           <label for="medidas">Medidas:</label>
           <div class="clearfix"></div>
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;"></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo"></textarea>
           <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
           <input type="hidden" id="familia_length" />
           `);
@@ -2272,7 +2169,7 @@ function guardar_motor(){
           $('#span_medidas').append(`
           <label for="medidas">Medidas:</label>
           <div class="clearfix"></div>
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;"></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo"></textarea>
           <button onclick="agregar_medida_familia()" class="btn btn-success btn-sm float-left" >+</button>
           <input type="hidden" id="familia_length" />
           `);
@@ -2335,41 +2232,7 @@ function guardar_motor(){
         
     });
 
-    // campos id y porcentaje de la tabla familias
-    var idFamilia=document.getElementById("familia").value;
-    if(idFamilia=="0" || idFamilia.trim().length==0)
-    {
-        return false;
-    }
-
-
-
-    //Petición AJAX para obtener el porcentaje respectivo
-
-
-    var url_familia='{{url("factuprodu")}}'+'/'+idFamilia+'/utilidad'; //petición
-
-      $.ajax({
-        type:'GET',
-        beforeSend: function () {
-          //$("#mensajes").html("Obteniendo Utilidad...");
-        },
-        url:url_familia,
-        success:function(utilidad){
-          console.log(utilidad);
-          document.getElementById("utilidad").value=utilidad;
-        },
-        error: function(error){
-          Vue.swal.close();
-          $('#mensajes').html(error.responseText);
-          Vue.swal({
-                title: 'ERROR',
-                text: error.responseText,
-                icon: 'error',
-            });
-        }
-
-      }); //Fin ajax dameUtilidad
+    // La utilidad se conserva para todos los productos de la factura.
 
   }
 
@@ -2895,8 +2758,8 @@ function editar_medida_familia(idmedida){
       }
 
       var subtotalitem = cleanNumberChile(document.getElementById("subtotalitem").value);
-      calculapreciosug();
-      var flete = cleanNumberChile(document.getElementById("flete").value);
+      if(calculapreciosug()===false) return false;
+      var flete = Number(document.getElementById("flete").dataset.valorExacto);
       if(flete<0) flete=0;
       var preciosug = cleanNumberChile(document.getElementById("preciosug").value);
 
@@ -5166,13 +5029,15 @@ function editar_medida_familia(idmedida){
       document.getElementById("stock_maximo").value="0";
       document.getElementById("codigo_barras").value="0";
       document.getElementById("cantidad").value="0";
-      document.getElementById("pu").value="0.00";
-      document.getElementById("subtotalitem").value="0.00";
-      document.getElementById("flete").value="0.00";
-      document.getElementById("preciosug").value="0.00";
+      document.getElementById("pu").value="0";
+      document.getElementById("subtotalitem").value="0";
+      // Conservar los porcentajes de utilidad y flete para el siguiente ítem.
+      document.getElementById("flete").value="0";
+      document.getElementById("preciosug").value="0";
+      document.getElementById("preal").value="";
+      document.getElementById("poferta").value="";
 
       document.getElementById("id_repuesto").value="";
-      document.getElementById("utilidad").value="";
       document.getElementById("elegir").value="NO";
 
       //habilitar reIngreso de Items
@@ -5234,7 +5099,7 @@ function editar_medida_familia(idmedida){
         //MOSTRAMOS FORMULARIO
         $('#rec_alt_rep').removeClass('d-none');
           $('#rec_alt_rep').append(`
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" readonly></textarea>
           
           <div class='form-group'>
               <label>RECTIFICADOR </label>
@@ -5257,7 +5122,7 @@ function editar_medida_familia(idmedida){
         $('#bendix').removeClass('d-none');
           $('#result').addClass('d-block');
           $('#bendix').append(`
-          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;" readonly></textarea>
+          <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm d-none" maxlength="500" placeholder="500 caratéres máximo" readonly></textarea>
           <div>
           <div class='form-group'>
               <label>MOTOR DE PARTIDA</label>
@@ -5280,7 +5145,6 @@ function editar_medida_familia(idmedida){
         $('#bendix').removeClass('d-block');
         $('#bendix').addClass('d-none');
       }
-      dameSoloUtilidad();
       document.getElementById("MarcaRepuesto").value=repuesto.id_marca_repuesto;
       document.getElementById("Pais").value=repuesto.id_pais;
       document.getElementById("descripcion").value=repuesto.descripcion;
@@ -5303,7 +5167,7 @@ function editar_medida_familia(idmedida){
         document.getElementById("stock_maximo").value=repuesto.stock_maximo;
         document.getElementById("elegir").value="NO";
         document.getElementById("preal").value = repuesto.precio_real;
-        document.getElementById("poferta").value = repuesto.precio_venta;
+        document.getElementById("poferta").value = Number(repuesto.precio_venta || 0).toLocaleString("es-CL", {maximumFractionDigits:0});
       }else{
         document.getElementById("id_repuesto_clonado").value=0;
         document.getElementById("codigo_interno").value=repuesto.codigo_interno;
@@ -5311,17 +5175,15 @@ function editar_medida_familia(idmedida){
         // Asignar precio de compra con formato chileno (miles con punto, decimales con coma)
         (function(){
           var puNum = parseFloat(repuesto.precio_compra) || 0;
-          // Formatear con 2 decimales y separador de miles
-          var parts = puNum.toFixed(2).split('.');
-          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-          document.getElementById("pu").value = parts.join(',');
+          // Formatear sin decimales y con separador de miles
+          document.getElementById("pu").value = formatEnteroChile(puNum);
           // Disparar evento input para que cualquier máscara aplicada reevalúe estado del campo
           var ev = new Event('input', { bubbles: true });
           document.getElementById("pu").dispatchEvent(ev);
         })();
         document.getElementById("elegir").value="SI";
         document.getElementById("preal").value = repuesto.precio_real;
-        document.getElementById("poferta").value = repuesto.precio_venta;
+        document.getElementById("poferta").value = Number(repuesto.precio_venta || 0).toLocaleString("es-CL", {maximumFractionDigits:0});
       }
 
 
@@ -5642,8 +5504,14 @@ function editar_medida_familia(idmedida){
         document.getElementById("vencefactura").disabled=true;
         document.getElementById("btnGuardarCabeceraFactura").disabled=true;
 
-        location.href="#ingreso_datos_titulo";
-        document.getElementById("txtBuscar").focus();
+        var campoUtilidad=document.getElementById("utilidad");
+        campoUtilidad.disabled=false;
+        campoUtilidad.focus({preventScroll:true});
+        campoUtilidad.select();
+        document.getElementById("costos_importacion_factura").scrollIntoView({
+            behavior:"smooth",
+            block:"center"
+        });
 
     }
 
@@ -5861,14 +5729,14 @@ window.onload = function(e){
     cargar_pais();
 
     // APLICAR MÁSCARAS DE FORMATO CHILENO A INPUTS
-    const inputsConMascara = ['cantidad', 'pu', 'subtotalitem', 'stock_minimo', 'stock_maximo', 'preciosug'];
+    const inputsConMascara = ['cantidad', 'pu', 'subtotalitem', 'stock_minimo', 'stock_maximo', 'preciosug', 'preal', 'poferta', 'ref_total_factura', 'ref_total_flete'];
     inputsConMascara.forEach(id => {
       const input = document.getElementById(id);
       if (input) {
         applyMaskChile(input);
         // Formatear valor inicial si existe
         if (input.value && input.value !== '0' && input.value !== '0.00') {
-          input.value = formatNumberChile(input.value);
+          input.value = formatEnteroChile(cleanNumberChile(input.value));
         }
       }
     });
@@ -6039,12 +5907,13 @@ label {
 
 .contenedor{
     display:grid;
-    grid-template-columns: 24% 40% 18% 18%;
-    grid-template-rows: 50px 80px 240px 90px 400px;
-    height: 100%;
-    row-gap: 5px;
-    column-gap: 2px;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    grid-template-rows: auto;
+    height: auto;
+    row-gap: 0;
+    column-gap: 8px;
     align-items: start;
+    max-width: 100%;
 }
 
 
@@ -6058,13 +5927,13 @@ label {
 
 .g-cabecera{
     grid-column: 1/5;
-    background-color: #D0FFFF;
+    background-color: #fff;
     display:grid;
     grid-template-columns: repeat(6,1fr);
     grid-template-rows: 1fr 2fr;
     column-gap: 2px;
-    border: 1px solid black;
-    border-radius: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
 
 
 
@@ -6130,7 +5999,7 @@ label {
 
 
 
-    background-color: #F2F5A9;
+    background-color: #fff;
 
 
 
@@ -6148,7 +6017,7 @@ label {
 
     column-gap: 2px;
 
-    border: 1px solid black;
+    border: 1px solid #dee2e6;
 
 
 }
@@ -6159,558 +6028,384 @@ label {
 
 
 
-.contenedor .g-repuestos  .g-repuestos-titulo{
-
-
-
-    grid-column: 1/7;
-
-
-
-    display:grid;
-
-
-
-    grid-template-columns: 9fr 1fr;
-
-
-
-    grid-template-rows: 1fr;
-
-
-
-    align-items:start;
-
-
-
-    align-content:start;
-
-
-
+.contenedor .g-repuestos .g-repuestos-titulo{
+    grid-column:1/7;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding-bottom:10px;
+    margin-bottom:12px;
+    border-bottom:1px solid #e9ecef;
 }
 
-
-
-
-
-
+#ingreso_datos_titulo{
+    margin:0;
+    flex:1;
+    text-align:center !important;
+}
 
 #zona_ingreso_repuesto{
-
-
-
-    grid-column: 1/7;
-
-
-
+    grid-column:1/7;
     display:grid;
-
-
-
-    grid-template-columns: repeat(6,1fr);
-
-
-
-    grid-template-rows: 30px 30px 90px 50px;
-
-
-
-    align-items: start;
-
-
-
-    align-content:start;
-
-
-
+    grid-template-columns:minmax(0,1fr);
+    gap:14px;
 }
 
-
-
-
-
-
+#zona_ingreso_repuesto > div{
+    grid-column:1;
+    display:grid;
+    gap:12px 18px;
+    align-items:start;
+}
 
 #zona_ingreso_repuesto .g-repuestos-busqueda{
-
-
-
-    grid-column:1/7;
-
-
-
-    display:grid;
-
-
-
-    grid-template-columns: 1fr 1fr 1fr 2fr;
-
-
-
-    grid-template-rows: 1fr;
-
-
-
-
-
-
-
-   /* grid-template-rows: 1fr;*/
-
-
-
+    grid-template-columns:auto minmax(180px,360px) auto auto;
+    justify-content:center;
+    align-items:center;
+    padding-bottom:12px;
+    border-bottom:1px solid #e9ecef;
 }
-
-
-
-
-
-
 
 #ing-cod-rep{
-
-
-
-    display:grid;
-
-
-
-    justify-content: end;
-
-
-
-
-
-
-
+    display:block;
+    min-width:0;
 }
-
-
-
-
-
-
 
 #txtBuscar{
-
-
-
-    width: 95%;
-
-
-
+    width:100%;
 }
 
-
-
-
-
-
-
-#zona_ingreso_repuesto .g-repuestos-familia{
-
-
-
-    grid-column: 1/7;
-
-
-
-    display:grid;
-
-
-
-    grid-template-columns: repeat(5,1fr);
-
-
-
-    grid-gap:5px;
-
-
-
-    align-items:start;
-
-
-
-    align-content:start;
-
-
-
+#zona_ingreso_repuesto .g-repuestos-busqueda .enlinea{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
 }
 
+#zona_ingreso_repuesto .g-repuestos-busqueda label{
+    margin:0;
+}
 
-
-
-
-
+#zona_ingreso_repuesto .g-repuestos-familia,
+#zona_ingreso_repuesto .g-repuestos-stock{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+}
 
 #zona_ingreso_repuesto .g-repuestos-descripcion{
-
-
-
-    grid-column: 1/7;
-
-
-
-    display:grid;
-
-
-
-    grid-template-columns: repeat(5,1fr);
-
-
-
-    grid-gap:5px;
-
-
-
-    align-items:start;
-
-
-
-    align-content:start;
-
-
-
+    grid-template-columns:repeat(4,minmax(0,1fr));
 }
 
-
-
-#zona_ingreso_repuesto .g-repuestos-stock{
-
-
-
-    grid-column: 1/7;
-
-
-
+#zona_ingreso_repuesto .g-repuestos-familia > span,
+#span_medidas{
     display:grid;
-
-
-
-    grid-template-columns: repeat(5,1fr);
-
-
-
-    grid-gap:5px;
-
-
-
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:0 6px;
     align-items:start;
-
-
-
-    align-content:start;
-
-
-
 }
 
+#zona_ingreso_repuesto .g-repuestos-familia label,
+#span_medidas label{
+    grid-column:1/-1;
+}
 
+#zona_ingreso_repuesto label{
+    display:block;
+    font-size:13px;
+    margin-bottom:5px;
+}
 
+#zona_ingreso_repuesto span{
+    min-width:0;
+}
 
+#zona_ingreso_repuesto .g-repuestos-familia select{
+    width:100%;
+    min-width:0;
+}
 
+#span_medidas .clearfix{
+    display:none;
+}
 
+#zona_ingreso_repuesto .g-repuestos-descripcion textarea{
+    height:64px;
+    resize:vertical;
+}
 
+#span_medidas textarea{
+    width:100%;
+    float:none;
+}
 
+@media (max-width:1100px){
+    #zona_ingreso_repuesto .g-repuestos-descripcion{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+    #zona_ingreso_repuesto .g-repuestos-busqueda{
+        grid-template-columns:auto minmax(0,360px) auto;
+    }
+    #zona_ingreso_repuesto .g-repuestos-busqueda .enlinea{
+        grid-column:1/-1;
+    }
+}
 
-
+@media (max-width:640px){
+    .contenedor .g-repuestos .g-repuestos-titulo{
+        flex-wrap:wrap;
+    }
+    #zona_ingreso_repuesto .g-repuestos-familia,
+    #zona_ingreso_repuesto .g-repuestos-descripcion,
+    #zona_ingreso_repuesto .g-repuestos-stock{
+        grid-template-columns:minmax(0,1fr);
+    }
+    #zona_ingreso_repuesto .g-repuestos-busqueda{
+        grid-template-columns:minmax(0,1fr) auto;
+    }
+    #zona_ingreso_repuesto .g-repuestos-busqueda > span{
+        grid-column:1/-1;
+    }
+}
 
 .g-items{
+    grid-column: 1/5;
+    background:#fff;
+    border:1px solid #dee2e6;
+    border-radius:8px;
+    padding:12px 15px 15px 15px;
+}
 
+.contenedor .titulazo{
+    background:transparent;
+    color:#343a40;
+}
 
+.g-cabecera,
+.g-repuestos{
+    padding:10px 15px;
+}
 
-    grid-column: 1/6;
+.g-repuestos{
+    grid-template-rows:auto auto;
+    border-radius:4px;
+}
 
+#titulo-factura,
+#ingreso_datos_titulo,
+#titulo-item-factura,
+#costos_importacion_factura .grupo-titulo{
+    color:#495057;
+    font-size:14px;
+    font-weight:600;
+}
 
+.g-items-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+    padding-bottom:8px;
+    border-bottom:1px solid #dee2e6;
+}
 
+#titulo-item-factura p{
+    margin:0;
+}
+
+.grupo-campos{
+    margin-bottom:12px;
+    padding-bottom:12px;
+    border-bottom:1px solid #e9ecef;
+}
+
+.grupo-campos:last-of-type{
+    border-bottom:none;
+    margin-bottom:0;
+    padding-bottom:0;
+}
+
+.grupo-titulo{
+    font-size:11px;
+    font-weight:bold;
+    text-transform:uppercase;
+    color:#495057;
+    letter-spacing:.5px;
+    margin-bottom:6px;
+}
+
+.grupo-fila{
     display:grid;
-
-
-
-    grid-template-columns: 1fr 1fr 1fr 1fr 2fr 3fr ;
-
-
-
-    grid-template-rows: 30px 60px;
-
-
-
+    grid-template-columns: repeat(3, 1fr);
+    gap:10px 15px;
 }
 
-
-
-
-
-
-
-#titulo-item-factura{
-
-
-
-    grid-column:4/6;
-
-
-
-    display:grid;
-
-
-
-    grid-template-columns: 80% 20%;
-
-
-
-    justify-items:center;
-
-
-
-    align-items:start;
-
-
-
-    align-content:start;
-
-
-
+.destino-acciones{
+    display:flex;
+    justify-content:center;
+    align-items:flex-end;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:6px 0;
 }
 
-
-
-
-
-
-
-#btnGuardarItem-div{
-
-
-
-    text-align: left;
-
-
-
+.destino-acciones > .campo{
+    width:360px;
+    max-width:100%;
+    min-width:0;
 }
 
+#zona_ingreso_items_factura .destino-acciones #locales{
+    width:100%;
+}
 
+.grupo-fila.col-1{
+    grid-template-columns: 1fr;
+}
 
+.campo label{
+    display:block;
+    font-size:12px;
+    margin-bottom:2px;
+}
 
+.campo .ayuda{
+    display:block;
+    font-size:10px;
+    color:#6c757d;
+    margin-top:3px;
+}
 
+.campo-flete-resultado{
+    background:#f3f4f5 !important;
+    font-weight:bold;
+}
 
+.campo-referencia{
+    background:#eef3f8 !important;
+    color:#4a5b6b;
+}
+
+.campo-precio-sugerido{
+    display:flex;
+    gap:6px;
+}
+
+.campo-precio-sugerido input{
+    flex:1;
+}
+
+.panel-ficha{
+    background:#fff;
+    border:1px solid #dee2e6;
+    padding:12px 15px 15px 15px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-height:420px;
+}
+
+.panel-ficha-titulo{
+    font-size:11px;
+    font-weight:bold;
+    text-transform:uppercase;
+    color:#495057;
+    letter-spacing:.5px;
+    margin:0 0 2px 0;
+    padding-bottom:8px;
+    border-bottom:1px solid #dee2e6;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+/* Tonos suaves para identificar cada sección sin recargar los campos. */
+.contenedor .g-cabecera{
+    --seccion-fondo:#f2f6fa;
+    --seccion-borde:#b8c9d9;
+}
+
+#referencia_costos_factura{
+    --seccion-fondo:#f2f6f6;
+    --seccion-borde:#bccdcd;
+}
+
+.referencia-ayuda{
+    color:#59666b;
+    font-size:13px;
+    margin:0 0 12px;
+}
+
+@media (max-width:640px){
+    #referencia_costos_factura .grupo-fila{
+        grid-template-columns:minmax(0,1fr);
+    }
+}
+
+#costos_importacion_factura{
+    --seccion-fondo:#f8f5ef;
+    --seccion-borde:#d4c5aa;
+}
+
+.contenedor .g-repuestos{
+    --seccion-fondo:#f1f7f3;
+    --seccion-borde:#b6cebf;
+}
+
+#zona_ingreso_items_factura{
+    --seccion-fondo:#f5f3f9;
+    --seccion-borde:#c6bdd7;
+}
+
+#zona_fotos{
+    --seccion-fondo:#f1f6f7;
+    --seccion-borde:#b7ccd0;
+}
+
+#zona_similares{
+    --seccion-fondo:#f5f6ef;
+    --seccion-borde:#c8cdaf;
+}
+
+#zona_OEMs{
+    --seccion-fondo:#faf3f1;
+    --seccion-borde:#d8beb7;
+}
+
+#zona_FABs{
+    --seccion-fondo:#f3f4f6;
+    --seccion-borde:#c2c8d0;
+}
+
+.contenedor > .g-cabecera,
+.contenedor > .g-repuestos,
+.contenedor > .g-items,
+.contenedor > .panel-ficha{
+    background:var(--seccion-fondo);
+    border-color:var(--seccion-borde);
+    border-left-width:3px;
+}
 
 .g-fotos{
-    background-color: #D0FFFF;
-    display:grid;
-    grid-template-columns: 75% 25%;
-    grid-template-rows: 30px 60px 30px 400px;
-    margin-top: 60px;
-    border: 1px solid black;
-    border-top-right-radius: 10px;
-    border-bottom-right-radius: 10px;
-}
-
-
-
-.fotos_msje{
-
-
-
-    grid-column:1/3;
-
-
-
-}
-
-
-
-#fotos_subir{
-
-
-
-    grid-column: 1/3;
-
-
-
-}
-
-
-
-#fotos_submit{
-
-
-
-    grid-column: 1/3;
-
-
-
-}
-
-
-
-#fotos_rep{
-
-
-
-    grid-column:1/3;
-
-
-
-    grid-row: 4/5;
-
-
-
-}
-
-
-
-
-
-
-
-.g-aplicaciones{
-    display:grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: 40px 215px 40px 50px 300px;
-    margin-top: 60px;
-    border: 1px solid black;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
-}
-
-
-
-
-
-
-
-.aplicaciones_msje{
-
-
-
-    grid-column:1/3;
-
-
-
-}
-
-
-
-.aplicaciones_modelos{
-
-
-
-    grid-column:2/4;
-
-
-
-    grid-row:2/3;
-
-
-
-}
-
-
-
-.aplicaciones_nombre_modelo{
-  margin-top: 15px;
-    grid-column:1/4;
-    grid-row:3/4;
-}
-
-
-
-.aplicaciones_anios_vehiculo{
-
-
-
-    grid-column: 1/4;
-
-
-
-    grid-row:4/5;
-
-
-
-}
-
-
-
-#similares_rep{
-
-
-
-    grid-column:1/4;
-
-
-
-    grid-row:5;
-
-
-
-}
-
-
-
-
-
-
-
-.g-oems{
-    background-color: #D0FFFF;
-    /*display:grid;*/
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows:1fr 1fr 3fr;
-    align-items: start;
-    margin-top: 60px;
-    border: 1px solid black;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
-}
-
-
-
-
-
-
-
-.oems_msje{
-    grid-column: 1/3;
-}
-
-#oems_rep{
-    grid-column:1/3;
-    grid-row:3/4;
+    border-top-right-radius:8px;
+    border-bottom-right-radius:8px;
 }
 
 .g-fabricantes{
-    display:grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows:1fr 1fr 1fr 3fr;
-    margin-top: 60px;
-    border: 1px solid black;
-    border-top-left-radius: 10px;
-    border-bottom-left-radius: 10px;
+    border-top-left-radius:8px;
+    border-bottom-left-radius:8px;
 }
 
-.fabricantes_msje{
-  grid-column: 1/3;
+.campo-linea{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
 }
 
-.fabricantes_elegir{
-    grid-column: 1/2;
-    grid-row:2/3;
-}
-
-.fabricantes_codigo{
-    grid-column: 2/3;
-    grid-row:2/3;
-}
-
-.btnGuardarFAB{
-    grid-column: 1/3;
-    grid-row:3/4;
-}
-
-#fabs_rep{
-    grid-column: 1/3;
-    grid-row:4/5;
+.campo-linea .campo{
+    flex:1;
+    min-width:140px;
 }
 
 #global {
@@ -6736,6 +6431,74 @@ label {
 
 
 
+/* Distribución y títulos centrados de las secciones de ingreso. */
+.contenedor > .panel-ficha{
+    grid-column:span 2;
+    min-width:0;
+    border-radius:8px;
+    margin-top:10px;
+    align-self:stretch;
+}
+#titulo-item-factura{
+    width:100%;
+    text-align:center;
+}
+.grupo-titulo{
+    text-align:center;
+}
+.panel-ficha-titulo{
+    position:relative;
+    display:block;
+    text-align:center;
+}
+#zona_similares .panel-ficha-titulo{
+    padding-left:40px;
+    padding-right:40px;
+    min-height:32px;
+}
+.panel-ficha-titulo #ampliar{
+    position:absolute;
+    right:0;
+    top:0;
+}
+#zona_similares .campo-linea{
+    display:grid;
+    grid-template-columns:minmax(0, 2fr) minmax(0, 3fr);
+    align-items:start;
+}
+#zona_similares .campo-linea .campo{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+}
+#zona_similares #MarcaSim{
+    height:300px;
+}
+#zona_similares #ModeloSim{
+    height:266px;
+}
+#zona_similares #MarcaSim,
+#zona_similares #ModeloSim{
+    width:100%;
+}
+@media (max-width:640px){
+    #zona_similares .campo-linea{
+        grid-template-columns:minmax(0, 1fr);
+    }
+}
+@media (max-width:1100px){
+    #zona_ingreso_repuesto .g-repuestos-busqueda .enlinea{
+        justify-content:center;
+    }
+}
+@media (max-width:640px){
+    .contenedor > .panel-ficha{
+        grid-column:1/-1;
+    }
+    #zona_ingreso_repuesto .g-repuestos-busqueda > span{
+        text-align:center;
+    }
+}
 </style>
 
 
@@ -6812,10 +6575,6 @@ label {
 
 
 
-        <input type="hidden" id="utilidad">
-
-
-
         <!-- <input type="hidden" id="codigo_interno" value="0"> -->
 
 
@@ -6854,7 +6613,7 @@ label {
 
         </div>
 
-        
+
 
 
 
@@ -6928,6 +6687,70 @@ label {
 
 
     </div> <!--Fin CABECERA FACTURA-->
+
+    <div class="g-items" id="referencia_costos_factura">
+        <div class="g-items-header text-center justify-content-center">
+            <strong class="text-center">REFERENCIA DE FLETE Y OTROS PORCENTAJES</strong>
+        </div>
+        <p class="referencia-ayuda">Calculadora de referencia. Puedes elegir libremente el % Flete que aplicarás en la sección siguiente.</p>
+        <div class="grupo-campos">
+            <div class="grupo-fila">
+                <span class="campo">
+                    <label for="ref_total_factura">Total de la factura ($):</label>
+                    <input type="text" id="ref_total_factura" class="form-control form-control-sm" inputmode="numeric" placeholder="Ingrese el total" oninput="calcularReferenciaFlete()" onblur="calcularReferenciaFlete()">
+                </span>
+                <span class="campo">
+                    <label for="ref_total_flete">Total de flete ($):</label>
+                    <input type="text" id="ref_total_flete" class="form-control form-control-sm" inputmode="numeric" placeholder="Ingrese el flete total" oninput="calcularReferenciaFlete()" onblur="calcularReferenciaFlete()">
+                </span>
+                <span class="campo">
+                    <label for="ref_porcentaje_flete">% Flete de referencia:</label>
+                    <input type="text" id="ref_porcentaje_flete" class="form-control form-control-sm campo-flete-resultado" readonly placeholder="Se calcula con los totales">
+                    <span class="ayuda">Total de flete ÷ total de factura × 100</span>
+                </span>
+            </div>
+        </div>
+        <div class="grupo-campos">
+            <div class="grupo-fila">
+                <span class="campo">
+                    <label for="ref_getnet">% Getnet:</label>
+                    <input type="text" id="ref_getnet" class="form-control form-control-sm" inputmode="decimal" value="0" oninput="calcularReferenciaFlete()">
+                </span>
+                <span class="campo">
+                    <label for="ref_ppm">% PPM:</label>
+                    <input type="text" id="ref_ppm" class="form-control form-control-sm" inputmode="decimal" value="0" oninput="calcularReferenciaFlete()">
+                </span>
+                <span class="campo">
+                    <label for="ref_porcentaje_total">% Combinado de referencia:</label>
+                    <input type="text" id="ref_porcentaje_total" class="form-control form-control-sm campo-flete-resultado" readonly placeholder="Flete + Getnet + PPM">
+                    <span class="ayuda">Suma de porcentajes. No modifica automáticamente el % Flete aplicado.</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="g-items" id="costos_importacion_factura">
+            <div class="grupo-campos">
+                <div class="grupo-titulo">Costos de importación de la factura</div>
+                <div class="grupo-fila">
+                    <span class="campo">
+                        <label for="utilidad">% Utilidad (margen):</label>
+                        <input type="text" name="utilidad" value="0" id="utilidad" class="form-control form-control-sm" onfocusout="calculapreciosug()">
+                        <span class="ayuda">Se mantiene para todos los productos de esta factura hasta que lo cambie.</span>
+                    </span>
+                    <span class="campo">
+                        <label for="porcentaje_flete">% Flete:</label>
+                        <input type="text" name="porcentaje_flete" value="0" id="porcentaje_flete" class="form-control form-control-sm" onfocusout="calculapreciosug()">
+                        <span class="ayuda">Sobre el precio unitario</span>
+                    </span>
+                    <span class="campo">
+                        <label for="flete">Flete (calculado):</label>
+                        <input type="text" name="flete" value="0" id="flete" class="form-control form-control-sm campo-flete-resultado" readonly>
+                    </span>
+                </div>
+            </div>
+    </div>
+
 
 
 
@@ -7043,7 +6866,7 @@ label {
 
 
 
-                    <select name="cboFamilia" class="form-control form-control-sm" id="familia" onchange="dameUtilidad(this.value)" style="width:70%">
+                    <select name="cboFamilia" class="form-control form-control-sm" id="familia" onchange="dameUtilidad(this.value)">
 
 
 
@@ -7167,7 +6990,7 @@ label {
 
                     <div class="clearfix"></div>
 
-                    <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo" style="width: 80%; float: left;"></textarea>
+                    <textarea name="medidas" value="" wrap="hard" cols="11" rows="3" id="medidas" class="form-control form-control-sm" maxlength="500" placeholder="500 caratéres máximo"></textarea>
                     
                     <button class="btn btn-success btn-sm" onclick="agregar_medida_familia()">+</button>
                     <input type="hidden" id="familia_length" />
@@ -7215,53 +7038,69 @@ label {
     </div> {{-- FIN g-repuestos --}}
 
         <div class="g-items" id="zona_ingreso_items_factura">
-            <div id="titulo-item-factura">
-                <p><b>INGRESO DE ITEMS DE LA FACTURA</b></p>
-            </div>
-            <div id="btnGuardarItem-div">
-                <input type="submit" id="btnGuardarItem" name="btnGuardarItem" class="btn btn-success btn-sm" value="Guardar Item" onclick="verificar_cod_prov()"/>
-            </div>
-            <span>
-                <label for="cantidad">Cantidad:</label>
-                <input type="text" name="cantidad" value="0"  id="cantidad" class="form-control form-control-sm" onfocusout="calculasubtotalitem()"  style="width:80%">
-            </span>
-            <span>
-                <label for="pu">Precio Unitario:</label>
-                <input type="text" name="pu" value="0.00"  id="pu" class="form-control form-control-sm" onfocusout="calculasubtotalitem()" style="width:80%"> <br>
-                
-                <input type="text" name="preal" id="preal" class="form-control form-control-sm" style="width:80%" placeholder="Precio REAL" readonly>
-            </span>
-            <span>
-                <label for="subtotalitem">Subtotal:</label>
-                <input type="text" name="subtotalitem" value="0.00"  id="subtotalitem" class="form-control form-control-sm" style="width:80%" readonly> <br>
-                
-                <input type="text" name="poferta" id="poferta" class="form-control form-control-sm" style="width:80%" placeholder="Precio OFERTA" readonly>
-            </span>
-        <!--
-            <span>
-                <label for="flete">Flete:</label><br>
-                <input type="text" name="flete" value="0"  id="flete" class="form-control form-control-sm" style="width:80%">
-            </span>
-        -->
-                <input type="hidden" value="0" id="flete">
-            <span>
-                <label for="preciosug">Precio Sugerido</label>
-                <span>
-                    <input type="text" name="preciosug" value="0.00"  id="preciosug" class="form-control form-control-sm" style="display:inline-block;width:50%;margin-right:4px">
-                    <button class="btn btn-success btn-sm" id="btn_calcular_preciosug" onclick="calculapreciosug()" onfocusout="ir_a_boton_guardaritem()" readonly>Calcular</button>
-                </span>
-            </span>
-            <span>
-                <label for="locales">Local:</label><br>
-                <span class="enlinea">
-                    <select name="locales" class="form-control form-control-sm" id="locales" style="width:80%">
-                        @foreach ($locales as $local)
-                        <option value="{{$local->id}}">{{$local->local_nombre}} en {{$local->local_direccion}}</option>
-                        @endforeach
-                    </select>
-                </span>
+            <div class="g-items-header">
+                <div id="titulo-item-factura">
+                    <p><b>INGRESO DE ITEMS DE LA FACTURA</b></p>
+                </div>
 
-            </span>
+            </div>
+
+            <div class="grupo-campos">
+                <div class="grupo-titulo">1. Datos de la compra</div>
+                <div class="grupo-fila">
+                    <span class="campo">
+                        <label for="cantidad">Cantidad:</label>
+                        <input type="text" name="cantidad" value="0" id="cantidad" class="form-control form-control-sm" onfocusout="calculasubtotalitem()">
+                    </span>
+                    <span class="campo">
+                        <label for="pu">Precio Unitario:</label>
+                        <input type="text" name="pu" value="0" id="pu" class="form-control form-control-sm" onfocusout="calculasubtotalitem()">
+                    </span>
+                    <span class="campo">
+                        <label for="subtotalitem">Subtotal:</label>
+                        <input type="text" name="subtotalitem" value="0" id="subtotalitem" class="form-control form-control-sm campo-flete-resultado" readonly>
+                    </span>
+                </div>
+            </div>
+
+
+            <div class="grupo-campos">
+                <div class="grupo-titulo">2. Precio de venta</div>
+                <div class="grupo-fila">
+                    <span class="campo">
+                        <label for="preal">Precio REAL (referencia):</label>
+                        <input type="text" name="preal" id="preal" class="form-control form-control-sm campo-referencia" placeholder="Precio REAL">
+                    </span>
+                    <span class="campo">
+                        <label for="poferta">Precio OFERTA (referencia):</label>
+                        <input type="text" name="poferta" id="poferta" class="form-control form-control-sm campo-referencia" placeholder="Precio OFERTA">
+                    </span>
+                    <span class="campo">
+                        <label for="preciosug">Precio Sugerido:</label>
+                        <span class="campo-precio-sugerido">
+                            <input type="text" name="preciosug" value="0" id="preciosug" class="form-control form-control-sm">
+                            <button class="btn btn-success btn-sm" id="btn_calcular_preciosug" onclick="calculapreciosug(true)" onfocusout="ir_a_boton_guardaritem()" readonly>Calcular</button>
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="grupo-campos">
+                <div class="grupo-titulo">3. Destino</div>
+                <div class="destino-acciones">
+                    <span class="campo">
+                        <label for="locales">Local:</label>
+                        <select name="locales" class="form-control form-control-sm" id="locales">
+                            @foreach ($locales as $local)
+                            <option value="{{$local->id}}">{{$local->local_nombre}} en {{$local->local_direccion}}</option>
+                            @endforeach
+                        </select>
+                    </span>
+                <div id="btnGuardarItem-div">
+                    <input type="submit" id="btnGuardarItem" name="btnGuardarItem" class="btn btn-success btn-sm" value="Guardar Item" onclick="verificar_cod_prov()"/>
+                </div>
+                </div>
+            </div>
 
             <span class="d-none">
               <label for="preciosug">Ubicación</label><br>
@@ -7270,11 +7109,6 @@ label {
                   <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#exampleModal">Ubicación</button>
               </span>
             </span>
-
-
-
-
-
         </div>{{-- FIN g-items --}}
 
 
@@ -7291,178 +7125,110 @@ label {
 
 
 
+
 <!-- zona_fotos INICIO-->
-        <div class="g-fotos" id="zona_fotos">
-            <div class="fotos_msje">
-                <p id="fotos_msje"><b>FOTOS:</b></p>
+        <div class="g-fotos panel-ficha" id="zona_fotos">
+            <p id="fotos_msje" class="panel-ficha-titulo">FOTOS:</p>
+
+            <div class="campo">
+                <label for="archivo">Subir foto (jpg, jpeg, png):</label>
+                <input type="file" name="archivo" id="archivo" class="form-control-file form-control-sm">
+                <span class="ayuda">Se guardará asociada a este repuesto.</span>
             </div>
-            <div id="fotos_subir">
-                <label>Subir Foto (jpg,jpeg,png):</label>
-                <input type="file" name="archivo" id="archivo" class="form-control-file">
+
+            <div>
+                <input type="submit" name="btnGuardarFoto" id="btnGuardarFoto" value="Agregar Foto" class="btn btn-primary btn-sm" onclick="guardarfoto()"/>
             </div>
-            <div id="fotos_submit">
-                <input type="submit" name="btnGuardarFoto" id="btnGuardarFoto" value="Agregar Foto" class="btn btn-primary btn-sm" onclick="guardarfoto()" style="margin-left:2px"/>
-            </div>
+
             <div id="fotos_ficha_tecnica"></div>
-            <div  id="fotos_rep"></div>
+            <div id="fotos_rep"></div>
         </div><!-- zona_fotos FIN -->
 
 <!-- zona_similares APLICACIONES INICIO-->
 
-        <div class="g-aplicaciones" id="zona_similares" >
-            <div class="aplicaciones_msje">
-                <p id="aplicaciones_msje"><b>APLICACIONES:</b></p>
-            </div>
+        <div class="g-aplicaciones panel-ficha" id="zona_similares" >
+            <p class="panel-ficha-titulo">
+                <span id="aplicaciones_msje">APLICACIONES:</span>
+                <button type="button" id="ampliar" class="btn btn-sm btn-outline-secondary" onclick="ampliar()" title="Ampliar / contraer">&gt;&gt;</button>
+            </p>
 
-            <div style="text-align:right">
-                <button id="ampliar" class="btn btn-sm btn-success" onclick="ampliar()">>></button>
-            </div>
-
-            <div style="padding-left:2px;padding-right:2px">
-
-                <label for="MarcaSim">Marca:</label>
-                <select name="cboMarcaSim" class="form-control form-control-sm" id="MarcaSim" onchange="cargarModelosSimilares()" size="10">
-                    <option value="">Elija una marca</option>
-                    @foreach ($marcas as $marca)
-                        <option value="{{$marca->idmarcavehiculo}}">{{$marca->marcanombre}}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div class="aplicaciones_modelos" style="padding-left:2px;padding-right:2px">
-                <label for="modelo">Modelo:</label>
-                <input type="text" class="form-control form-control-sm" id="filtrar_modelo" placeholder="filtrar modelo" style="width:40%">
-                <select name="cboModeloSim" id="ModeloSim" class="form-control form-control-sm" onchange="ubicarse_en_anios()" size="10">
-                    <option value="">Sin modelos</option>
-                </select>
-            </div>
-
-
-            <div  class="aplicaciones_nombre_modelo" >
-                <p id="nombre_modelo" class="letra-chica"><b>Modelo:</b></p>
-            </div>
-
-            <div  class="aplicaciones_anios_vehiculo">
-                <label for="anios_vehiculo">Años:</label><br>
-                <span class="enlinea">
-                    <input type="text" name="anios_vehiculo_sim" value="" id="anios_vehiculo_sim" class="form-control form-control-sm" style="width:150px;margin-right:10px">
-                    <input type="submit" name="btnGuardarSimilar" id="btnGuardarSimilar" value="Agregar Aplicación" class="btn btn-primary btn-sm form-control-sm" onclick="guardarsimilar()"/>
+            <div class="campo-linea">
+                <span class="campo">
+                    <label for="MarcaSim">Marca:</label>
+                    <select name="cboMarcaSim" class="form-control form-control-sm" id="MarcaSim" onchange="cargarModelosSimilares()" size="14">
+                        <option value="">Elija una marca</option>
+                        @foreach ($marcas as $marca)
+                            <option value="{{$marca->idmarcavehiculo}}">{{$marca->marcanombre}}</option>
+                        @endforeach
+                    </select>
+                </span>
+                <span class="campo">
+                    <label for="filtrar_modelo">Modelo:</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="filtrar_modelo" placeholder="Filtrar modelo">
+                    <select name="cboModeloSim" id="ModeloSim" class="form-control form-control-sm" onchange="ubicarse_en_anios()" size="12">
+                        <option value="">Sin modelos</option>
+                    </select>
                 </span>
             </div>
 
-            <div  id="similares_rep" >
+            <p id="nombre_modelo" class="ayuda mb-0"><b>Modelo:</b></p>
+
+            <div class="campo">
+                <label for="anios_vehiculo_sim">Años de aplicación:</label>
+                <div class="campo-precio-sugerido">
+                    <input type="text" name="anios_vehiculo_sim" value="" id="anios_vehiculo_sim" class="form-control form-control-sm" placeholder="Ej: 2010-2015">
+                    <input type="submit" name="btnGuardarSimilar" id="btnGuardarSimilar" value="Agregar" class="btn btn-primary btn-sm" onclick="guardarsimilar()"/>
+                </div>
+                <span class="ayuda">Elija marca y modelo, luego indique el rango de años.</span>
+            </div>
+
+            <div id="similares_rep">
                 <!--zona para aplicaciones -->
             </div>
         </div>
-
-
-
      <!-- zona_similares APLICACIONES FIN-->
 
-
-
-
-
-
-
     <!-- zona_OEMs INICIO-->
-        <div class="g-oems" id="zona_OEMs">
-            <div class="oems_msje">
-                <p id="oems_msje"><b>OEMs:</b></p>
+        <div class="g-oems panel-ficha" id="zona_OEMs">
+            <p id="oems_msje" class="panel-ficha-titulo">OEMs:</p>
+
+            <div class="campo">
+                <label for="codigos_OEM">Código OEM:</label>
+                <div class="campo-precio-sugerido">
+                    <input type="text" name="codigos_OEM" id="codigos_OEM" class="form-control form-control-sm" onkeyup="enter_text_oem(event)">
+                    <input type="submit" name="btnGuardarOEM" id="btnGuardarOEM" value="Agregar" class="btn btn-primary btn-sm" onclick="guardarOEM()"/>
+                </div>
+                <span class="ayuda">Código original del fabricante de equipo.</span>
             </div>
-            <div>
-                <label for="codigos_OEM">Códigos:</label>
-                <input type="text" name="codigos_OEM" id="codigos_OEM" class="form-control form-control-sm" onkeyup="enter_text_oem(event)">
-            </div>
-            <div>
-                <input type="submit" name="btnGuardarOEM" id="btnGuardarOEM" value="Agregar OEM" class="btn btn-primary btn-sm form-control-sm" onclick="guardarOEM()" style="margin-left:10px;margin-top:20px"/>
-            </div>
-            <div  id="oems_rep" ></div>
+
+            <div id="oems_rep"></div>
             <div id="rec_alt_rep"></div>
             <div id="bendix"></div>
             <div id="result"></div>
-
         </div>
-
  <!-- zona_OEMs FIN-->
 
 <!-- zona_FABs INICIO-->
-        <div class="g-fabricantes" id="zona_FABs">
+        <div class="g-fabricantes panel-ficha" id="zona_FABs">
+            <p id="fabricantes_msje" class="panel-ficha-titulo">FABRICANTES:</p>
 
-
-
-            <div class="fabricantes_msje">
-
-
-
-                <p id="fabricantes_msje"><b>FABRICANTES:</b></p>
-
-
-
-            </div>
-
-
-
-            <div class="fabricantes_elegir">
-
-
-
-                <label for="fabricante">Elegir:</label>
-
-
-
+            <div class="campo">
+                <label for="cboFabricante">Fabricante:</label>
                 <select name="cboFabricante" id="cboFabricante" class="form-control form-control-sm">
-
-
-
                     <option value="">Sin Fabricantes</option>
-
-
-
                 </select>
-
-
-
             </div>
 
-
-
-            <div class="fabricantes_codigo" style="margin-left:10px">
-
-
-
+            <div class="campo">
                 <label for="codigo_FAB">Código:</label>
-
-
-
-                <input type="text" name="codigo_FAB" id="codigo_FAB" class="form-control form-control-sm" onkeyup="enter_text_FAB(event)" style="width:80%">
-
-
-
+                <div class="campo-precio-sugerido">
+                    <input type="text" name="codigo_FAB" id="codigo_FAB" class="form-control form-control-sm" onkeyup="enter_text_FAB(event)">
+                    <input type="submit" name="btnGuardarFAB" id="btnGuardarFAB" value="Agregar" class="btn btn-primary btn-sm" onclick="guardarFAB()"/>
+                </div>
+                <span class="ayuda">Código del fabricante alternativo seleccionado.</span>
             </div>
 
-
-
-            <div class="btnGuardarFAB">
-
-
-
-                <input type="submit" name="btnGuardarFAB" id="btnGuardarFAB" value="Agregar FAB" class="btn btn-primary btn-sm form-control-sm" onclick="guardarFAB()" style="margin-top: 20px"/>
-
-
-
-            </div>
-
-
-
-            <div  id="fabs_rep" >
-
-
-
-            </div>
-
-
-
+            <div id="fabs_rep"></div>
         </div>
 <!-- zona_FABs FIN-->
 

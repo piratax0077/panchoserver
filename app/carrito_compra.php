@@ -69,6 +69,7 @@ class carrito_compra extends Model
                                     ->join('marcarepuestos','repuestos.id_marca_repuesto','marcarepuestos.id')
                                     ->leftjoin('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
                                     ->orderBy('carrito_compras.item','ASC')
+                                    ->orderBy('carrito_compras.id','ASC')
                                     ->get();
         //Debugbar::addMessage('carrito_compra->dame_todo_carrito','depurador');
         return $todo_el_carrito;

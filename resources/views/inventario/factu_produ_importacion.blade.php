@@ -474,7 +474,10 @@
 
             let cantidad = esCaja ? (cantidadXml * unidadesCaja) : cantidadXml;
             let precioXml = numeroImportacion(item.precio_xml || item.precio || item.precio_unitario || item.costo);
-            let precioUnitario = esCaja && unidadesCaja > 0 ? (precioXml / unidadesCaja) : precioXml;
+            // El costo base ya incluye el descuento de la linea XML.
+            let precioCompraXml = item.precio_compra_xml !== undefined && item.precio_compra_xml !== null
+                ? numeroImportacion(item.precio_compra_xml) : precioXml;
+            let precioUnitario = esCaja && unidadesCaja > 0 ? (precioCompraXml / unidadesCaja) : precioCompraXml;
             let descuentoUnitario = precioUnitario * (porcentajeDescuento / 100);
             let costo = precioUnitario - descuentoUnitario;
 

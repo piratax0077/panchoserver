@@ -5651,8 +5651,39 @@ class ventas_controlador extends Controller
         $num_docu=0;
         $id_documento_pago = 0;
        //Recuperar el XML Generado para enviar
+        $transaccionLocal = false;
+        $recibidoSii = false;
         try {
             $envio=file_get_contents($doc);
+            $carritoDocumento = null;
+            $lineasXml = [];
+            if (in_array($tipo_dte, ['39', '33'], true)) {
+                $xmlPrevio = new \SimpleXMLElement($envio, LIBXML_COMPACT);
+                $folioXml = (string) $xmlPrevio->SetDTE->DTE->Documento->Encabezado->IdDoc->Folio;
+                $modeloDocumento = $tipo_dte === '39' ? new boleta : new factura;
+                $campoFolio = $tipo_dte === '39' ? 'num_boleta' : 'num_factura';
+                if ($modeloDocumento->where($campoFolio, $folioXml)->exists()) {
+                    throw new \RuntimeException('Este folio ya esta registrado. Revise el documento antes de reintentar.');
+                }
+                $carritoDocumento = $vendedor_id
+                    ? (new carrito_transferido)->dame_todo_carrito_cliente($r->cliente_id)
+                    : (new carrito_compra)->dame_todo_carrito();
+                if ($carritoDocumento->count() > 0 || empty($consignacion)) {
+                    $lineasXml = \App\Services\DetalleVentaXml::vincular($carritoDocumento, $xmlPrevio);
+                }
+                if ($r->venta === 'contado') {
+                    if (!is_array($r->forma_pago) || !is_array($r->monto) || !is_array($r->referencia)
+                        || count($r->forma_pago) === 0 || count($r->forma_pago) !== count($r->monto)
+                        || count($r->forma_pago) !== count($r->referencia)) {
+                        throw new \RuntimeException('Complete las formas de pago antes de emitir el documento.');
+                    }
+                    foreach ($r->monto as $montoPago) {
+                        if (!is_numeric($montoPago) || (float) $montoPago <= 0) {
+                            throw new \RuntimeException('El monto de cada pago debe ser mayor a cero.');
+                        }
+                    }
+                }
+            }
             if($tipo_dte=='39'){
                 $rs=ClsSii::enviar_sii_boleta($RutEnvia,$RutEmisor,$envio); //recibe un array asoc, si OK, trackID es $estado['trackid']
                 // asignamos datos faltos a rs
@@ -5677,6 +5708,9 @@ class ventas_controlador extends Controller
                     return response()->json($rs);
                 }
 
+                $recibidoSii = true;
+                \Illuminate\Support\Facades\DB::beginTransaction();
+                $transaccionLocal = true;
                 $b = new boleta;
                 $b->num_boleta = strval($xml->SetDTE->DTE->Documento->Encabezado->IdDoc->Folio);
                 $b->fecha_emision = strval($xml->SetDTE->DTE->Documento->Encabezado->IdDoc->FchEmis);
@@ -5707,7 +5741,7 @@ class ventas_controlador extends Controller
                 if($r->vendedor_id){
                     
                     $carrito_transferido = new carrito_transferido();
-                    $ct = $carrito_transferido->dame_todo_carrito_cliente($r->cliente_id);
+                    $ct = $carritoDocumento;
                     
                     foreach($ct as $i){
 
@@ -5720,13 +5754,13 @@ class ventas_controlador extends Controller
                         $bd->id_repuestos = $i->id_repuestos;
                         $bd->id_unidad_venta = $i->id_unidad_venta;
                         $bd->id_local = $i->id_local;
-                        $bd->precio_venta = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem);//*(1+Session::get('PARAM_IVA')); //$i->pu;
+                        $bd->precio_venta = intval($lineasXml[$i->id]->PrcItem);//*(1+Session::get('PARAM_IVA')); //$i->pu;
                         $bd->pu_neto = round($bd->precio_venta/(1+Session::get('PARAM_IVA')),2);
-                        $bd->cantidad = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->QtyItem); //$i->cantidad;
-                        $sb=intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->MontoItem);//*(1+Session::get('PARAM_IVA'));
+                        $bd->cantidad = intval($lineasXml[$i->id]->QtyItem); //$i->cantidad;
+                        $sb=intval($lineasXml[$i->id]->MontoItem);//*(1+Session::get('PARAM_IVA'));
                         $bd->subtotal = $sb;//$i->subtotal_item;
-                        if(!is_null(intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto))){
-                            $bd->descuento = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
+                        if(!is_null(intval($lineasXml[$i->id]->DescuentoMonto))){
+                            $bd->descuento = intval($lineasXml[$i->id]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
                         }else{
                             $bd->descuento=0;
                         }
@@ -5767,14 +5801,14 @@ if($repuesto->local_id == $i->id_local){
 
                             $this->revisar_stock_minimo($repuesto->id);
 
-                            $bd->save();
                         }
+                        $bd->save();
                         
                     }
                    
                 }else{
                     $carrito=new carrito_compra();
-                    $c = $carrito->dame_todo_carrito();
+                    $c = $carritoDocumento;
                     if(count($c)>0){
                         foreach($c as $i){
                             $porcentaje = $dcto / 100;
@@ -5785,14 +5819,14 @@ if($repuesto->local_id == $i->id_local){
                             $bd->id_repuestos = $i->id_repuestos;
                             $bd->id_unidad_venta = $i->id_unidad_venta;
                             $bd->id_local = $i->id_local;
-                            $bd->precio_venta = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem);//*(1+Session::get('PARAM_IVA')); //$i->pu;
+                            $bd->precio_venta = intval($lineasXml[$i->id]->PrcItem);//*(1+Session::get('PARAM_IVA')); //$i->pu;
                             $bd->pu_neto = round($bd->precio_venta/(1+Session::get('PARAM_IVA')),2);
-                            $bd->cantidad = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->QtyItem); //$i->cantidad;
-                            $sb=intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->MontoItem);//*(1+Session::get('PARAM_IVA'));
+                            $bd->cantidad = intval($lineasXml[$i->id]->QtyItem); //$i->cantidad;
+                            $sb=intval($lineasXml[$i->id]->MontoItem);//*(1+Session::get('PARAM_IVA'));
                             $bd->subtotal = $sb;//$i->subtotal_item;
                             
-                            if(!is_null(intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto))){
-                                $bd->descuento = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
+                            if(!is_null(intval($lineasXml[$i->id]->DescuentoMonto))){
+                                $bd->descuento = intval($lineasXml[$i->id]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
                             }else{
                                 $bd->descuento=0;
                             }
@@ -5837,8 +5871,8 @@ if($repuesto->local_id == $i->id_local){
 
                                 // Actualizar tabla saldos considerando el local
                                 // id_repuestos,id_local,saldo,activo,usuarios_id
-                                $bd->save();
                             }
+                            $bd->save();
                             
                         }
                     }else{
@@ -5899,6 +5933,9 @@ if($repuesto->local_id == $i->id_local){
                     //$TrackID="---";
                     //$estado_sii=$rs['estado'];
                 }
+                $recibidoSii = true;
+                \Illuminate\Support\Facades\DB::beginTransaction();
+                $transaccionLocal = true;
                 $f = new factura;
                 $f->num_factura = strval($xml->SetDTE->DTE->Documento->Encabezado->IdDoc->Folio);
                 $f->fecha_emision = strval($xml->SetDTE->DTE->Documento->Encabezado->IdDoc->FchEmis);
@@ -5926,7 +5963,7 @@ if($repuesto->local_id == $i->id_local){
                 //Si la factura viene desde un carrito transferido
                 if($r->vendedor_id){
                     $carrito_transferido = new carrito_transferido();
-                    $ct = $carrito_transferido->dame_todo_carrito_cliente($r->cliente_id);
+                    $ct = $carritoDocumento;
 
 
                     foreach($ct as $i){
@@ -5937,13 +5974,13 @@ if($repuesto->local_id == $i->id_local){
                         $fd->id_repuestos = $i->id_repuestos;
                         $fd->id_unidad_venta = $i->id_unidad_venta;
                         $fd->id_local = $i->id_local;
-                        $fd->precio_venta = $xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem;//round($fd->pu_neto*(1+Session::get('PARAM_IVA')),2,PHP_ROUND_HALF_UP);
-                        $fd->pu_neto = round($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem/(1+Session::get('PARAM_IVA')),2);
-                        $fd->cantidad = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->QtyItem); //$i->cantidad;
+                        $fd->precio_venta = $lineasXml[$i->id]->PrcItem;//round($fd->pu_neto*(1+Session::get('PARAM_IVA')),2,PHP_ROUND_HALF_UP);
+                        $fd->pu_neto = round($lineasXml[$i->id]->PrcItem/(1+Session::get('PARAM_IVA')),2);
+                        $fd->cantidad = intval($lineasXml[$i->id]->QtyItem); //$i->cantidad;
                         $fd->subtotal = $fd->precio_venta*$fd->cantidad;
                         //if hay descuento en el xml?? poner, sino 0;
-                        if(!is_null(intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto))){
-                            $fd->descuento = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
+                        if(!is_null(intval($lineasXml[$i->id]->DescuentoMonto))){
+                            $fd->descuento = intval($lineasXml[$i->id]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
                         }else{
                             $fd->descuento=0;
                         }
@@ -5986,13 +6023,13 @@ if($repuesto->local_id == $i->id_local){
                             // Actualizar tabla saldos considerando el local
                             // id_repuestos,id_local,saldo,activo,usuarios_id
 
-                            $fd->save();
                         }
+                        $fd->save();
                         
                     }
                 }else{
                     $carrito=new carrito_compra();
-                    $c = $carrito->dame_todo_carrito();
+                    $c = $carritoDocumento;
                     if(count($c) > 0){
                         foreach($c as $i){
                             $porcentaje = $dcto / 100;
@@ -6002,13 +6039,13 @@ if($repuesto->local_id == $i->id_local){
                             $fd->id_repuestos = $i->id_repuestos;
                             $fd->id_unidad_venta = $i->id_unidad_venta;
                             $fd->id_local = $i->id_local;
-                            $fd->precio_venta = $xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem;//round($fd->pu_neto*(1+Session::get('PARAM_IVA')),2,PHP_ROUND_HALF_UP);
-                            $fd->pu_neto = round($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->PrcItem/(1+Session::get('PARAM_IVA')),2);
-                            $fd->cantidad = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->QtyItem); //$i->cantidad;
+                            $fd->precio_venta = $lineasXml[$i->id]->PrcItem;//round($fd->pu_neto*(1+Session::get('PARAM_IVA')),2,PHP_ROUND_HALF_UP);
+                            $fd->pu_neto = round($lineasXml[$i->id]->PrcItem/(1+Session::get('PARAM_IVA')),2);
+                            $fd->cantidad = intval($lineasXml[$i->id]->QtyItem); //$i->cantidad;
                             $fd->subtotal = $fd->precio_venta*$fd->cantidad;
                             //if hay descuento en el xml?? poner, sino 0;
-                            if(!is_null(intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto))){
-                                $fd->descuento = intval($xml->SetDTE->DTE->Documento->Detalle[$i->item-1]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
+                            if(!is_null(intval($lineasXml[$i->id]->DescuentoMonto))){
+                                $fd->descuento = intval($lineasXml[$i->id]->DescuentoMonto); //round($i->descuento_item/(1+Session::get('PARAM_IVA')),0,PHP_ROUND_HALF_UP);
                             }else{
                                 $fd->descuento=0;
                             }
@@ -6047,8 +6084,8 @@ if($repuesto->local_id == $i->id_local){
 
 
                                 $this->revisar_stock_minimo($repuesto->id);
-                                $fd->save();
                             }
+                            $fd->save();
                             
                         }
                     }else{
@@ -6103,7 +6140,7 @@ if($repuesto->local_id == $i->id_local){
                     }
                 }
             } catch (\Exception $e) {
-                return $e->getMessage();
+                throw $e;
             }
             
             
@@ -6179,8 +6216,16 @@ if($repuesto->local_id == $i->id_local){
                 $cuenta->save();
             }
 
+            if ($transaccionLocal) {
+                \Illuminate\Support\Facades\DB::commit();
+                $transaccionLocal = false;
+            }
         } catch (\Throwable $e) {
+            if ($transaccionLocal) {
+                \Illuminate\Support\Facades\DB::rollBack();
+            }
             Log::error('Error procesando envío DTE al SII', [
+                'recibido_sii' => $recibidoSii,
                 'usuario_id' => Auth::id(),
                 'xml' => $d ?? null,
                 'tipo_dte' => $tipo_dte ?? null,
@@ -6193,7 +6238,10 @@ if($repuesto->local_id == $i->id_local){
 
             return response()->json([
                 'estado' => 'ERROR',
-                'mensaje' => 'No fue posible completar el envío al SII.',
+                'mensaje' => $recibidoSii
+                    ? 'El SII recibio el documento, pero fallo el registro local y se revirtieron sus cambios. Conserve el folio y solicite conciliacion antes de volver a emitir.'
+                    : 'No fue posible completar el envio. Revise el carrito y sus pagos.',
+                'recibido_sii' => $recibidoSii,
                 'detalle' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
@@ -8325,6 +8373,142 @@ if($idlocal == 1 && ($cantidad > $repuesto->stock_actual)){
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
+    }
+
+    public function ofertas_familias_datos()
+    {
+        abort_unless($this->confirmaringreso('/ventas/ofertas'), 403);
+        return response()->json([
+            'hoy' => Carbon::today()->toDateString(),
+            'familias' => familia::select('id', 'nombrefamilia')->where('activo', 1)->orderBy('nombrefamilia')->get(),
+            'ofertas' => descuento::select('descuentos.*', 'familias.nombrefamilia')
+                ->join('familias', 'familias.id', '=', 'descuentos.id_familia')->orderBy('descuentos.id', 'desc')->get(),
+        ]);
+    }
+
+    public function ofertas_familias_lote(Request $req)
+    {
+        abort_unless($this->confirmaringreso('/ventas/ofertas'), 403);
+        $datos = $req->validate([
+            'accion' => 'required|in:crear,editar',
+            'ids' => 'required|array|min:1|max:500',
+            'ids.*' => 'required|integer|min:1|distinct',
+            'desde' => 'nullable|date_format:Y-m-d',
+            'hasta' => 'nullable|date_format:Y-m-d',
+            'id_local' => 'nullable|integer|in:1,2,3,4,5,6',
+            'porcentaje' => 'nullable|numeric|gt:0|lt:100',
+        ]);
+        $cambios = array_filter(\Illuminate\Support\Arr::only($datos, ['desde', 'hasta', 'id_local', 'porcentaje']), function ($valor) {
+            return $valor !== null && $valor !== '';
+        });
+        if (($datos['accion'] === 'crear' && count($cambios) !== 4) || !$cambios) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['datos' => 'Complete fechas, canal y porcentaje para crear; al editar indique al menos un cambio.']);
+        }
+        $cantidad = \DB::transaction(function () use ($datos, $cambios) {
+            $crear = $datos['accion'] === 'crear';
+            $registros = $crear
+                ? familia::whereIn('id', $datos['ids'])->where('activo', 1)->lockForUpdate()->get()
+                : descuento::whereIn('id', $datos['ids'])->lockForUpdate()->get();
+            if ($registros->count() !== count($datos['ids'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['ids' => 'Una familia u oferta ya no esta disponible. Actualice el listado.']);
+            }
+            if ($crear && descuento::whereIn('id_familia', $datos['ids'])->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['ids' => 'Alguna familia ya tiene oferta. Edite su oferta existente.']);
+            }
+            $hoy = Carbon::today()->toDateString();
+            foreach ($registros as $registro) {
+                $oferta = $crear ? new descuento : $registro;
+                if ($crear) {
+                    $oferta->id_familia = $registro->id;
+                    $oferta->id_cliente = 4;
+                    $oferta->usuarios_id = Auth::id();
+                }
+                foreach ($cambios as $campo => $valor) $oferta->$campo = $valor;
+                $desde = Carbon::parse($oferta->desde)->toDateString();
+                $hasta = Carbon::parse($oferta->hasta)->toDateString();
+                if ($hasta < $desde) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['hasta' => 'La fecha final no puede ser anterior a la inicial en ninguna familia seleccionada.']);
+                }
+                $oferta->activo = $desde <= $hoy && $hoy <= $hasta ? 1 : 0;
+                $oferta->save();
+            }
+            return $registros->count();
+        });
+        return response()->json(['cantidad' => $cantidad, 'mensaje' => 'Se procesaron '.$cantidad.' ofertas por familia correctamente.']);
+    }
+
+    public function ofertas_lote(Request $req)
+    {
+        abort_unless($this->confirmaringreso('/ventas/ofertas'), 403);
+        $datos = $req->validate([
+            'accion' => 'required|in:crear,editar',
+            'ids' => 'required|array|min:1|max:500',
+            'ids.*' => 'required|integer|min:1|distinct',
+            'desde' => 'nullable|date_format:Y-m-d',
+            'hasta' => 'nullable|date_format:Y-m-d',
+            'local' => 'nullable|integer|in:1,2,3,4,5,6',
+            'tipo_descuento' => 'nullable|in:monto,porcentaje',
+            'valor_descuento' => 'nullable|numeric|gt:0',
+        ]);
+        $accion = $datos['accion'];
+        $cambios = array_filter(\Illuminate\Support\Arr::only($datos, ['desde', 'hasta', 'local']), function ($valor) {
+            return $valor !== null && $valor !== '';
+        });
+        $cambiaPrecio = isset($datos['valor_descuento']);
+        if ($cambiaPrecio && empty($datos['tipo_descuento'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['tipo_descuento' => 'Seleccione el tipo de descuento.']);
+        }
+        if ($accion === 'crear' && (count($cambios) !== 3 || !$cambiaPrecio)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['datos' => 'Para crear ofertas indique fechas, canal y descuento.']);
+        }
+        if ($accion === 'editar' && !$cambios && !$cambiaPrecio) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['datos' => 'Indique al menos un dato para modificar.']);
+        }
+        $cantidad = \DB::transaction(function () use ($datos, $accion, $cambios, $cambiaPrecio) {
+            $registros = $accion === 'crear'
+                ? repuesto::whereIn('id', $datos['ids'])->where('activo', 1)->lockForUpdate()->get()
+                : oferta_pagina_web::whereIn('id', $datos['ids'])->lockForUpdate()->get();
+            if ($registros->count() !== count($datos['ids'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['ids' => 'Algún registro ya no está disponible. Actualice la página.']);
+            }
+            if ($accion === 'crear' && oferta_pagina_web::whereIn('id_repuesto', $datos['ids'])->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['ids' => 'Algún producto ya tiene una oferta. Edite la oferta existente.']);
+            }
+            $hoy = Carbon::today()->toDateString();
+            foreach ($registros as $registro) {
+                $oferta = $accion === 'crear' ? new oferta_pagina_web : $registro;
+                if ($accion === 'crear') {
+                    $oferta->id_repuesto = $registro->id;
+                    $oferta->precio_antiguo = $registro->precio_venta;
+                    $oferta->usuario_id = Auth::id();
+                }
+                foreach ($cambios as $campo => $valor) {
+                    $oferta->$campo = $valor;
+                }
+                $desde = Carbon::parse($oferta->desde)->toDateString();
+                $hasta = Carbon::parse($oferta->hasta)->toDateString();
+                if ($hasta < $desde) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['hasta' => 'La fecha final no puede ser anterior a la inicial en ninguna oferta seleccionada.']);
+                }
+                if ($cambiaPrecio) {
+                    try {
+                        $precio = \App\Services\PrecioOferta::calcular($oferta->precio_antiguo, $datos['tipo_descuento'], $datos['valor_descuento']);
+                    } catch (\InvalidArgumentException $e) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['valor_descuento' => 'Producto '.$oferta->id_repuesto.': '.$e->getMessage()]);
+                    }
+                    $oferta->descuento = $precio['descuento'];
+                    $oferta->precio_actualizado = $precio['precio_actualizado'];
+                }
+                $oferta->activo = $desde <= $hoy && $hoy <= $hasta ? 1 : 0;
+                $oferta->save();
+                if ($accion === 'crear') {
+                    $registro->oferta = 1;
+                    $registro->save();
+                }
+            }
+            return $registros->count();
+        });
+        return response()->json(['cantidad' => $cantidad, 'mensaje' => 'Se procesaron '.$cantidad.' ofertas correctamente.']);
     }
 
     public function confirmar_edicion_oferta(Request $req){
@@ -11213,6 +11397,15 @@ if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
     }
 
     public function editar_nueva_familia(Request $request){
+        abort_unless($this->confirmaringreso('/ventas/ofertas'), 403);
+        $request->validate([
+            'idfamilia' => 'required|integer|min:1',
+            'porcentaje_nuevo' => 'required|numeric|gt:0|lt:100',
+            'fecha_inicio' => 'required|date_format:Y-m-d',
+            'fecha_fin' => 'required|date_format:Y-m-d|after_or_equal:fecha_inicio',
+            'local' => 'nullable|integer|in:1,2,3,4,5,6',
+            'imagen' => 'nullable|image|max:4096',
+        ]);
         try {
    
           // recuperar la imagen y guardarla en el storage
@@ -11233,6 +11426,9 @@ if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
             $descuento->porcentaje = $porcentaje;
             $descuento->desde = $request->fecha_inicio;
             $descuento->hasta = $request->fecha_fin;
+            $descuento->id_local = $request->input('local', $descuento->id_local);
+            $hoy = Carbon::today()->toDateString();
+            $descuento->activo = $request->fecha_inicio <= $hoy && $hoy <= $request->fecha_fin ? 1 : 0;
             if($request->hasFile('imagen')){
                 $descuento->image_path = $nombre;
             }
@@ -11291,7 +11487,7 @@ if($origen == 1 && ($cantidad > $repuesto->stock_actual)){
             if($encontrados->count()>0){
                 $existe = oferta_pagina_web::where('id_repuesto', $encontrados[0]->id)->first();
                 if($existe){
-                    return ["error","Repuesta ya se encuentra en oferta"];
+                    return ["error","El repuesto ya tiene una oferta. Puede modificarla en Ofertas registradas."];
                 }
                 $urlfoto = repuestofoto::select('urlfoto')->where('id_repuestos',$encontrados[0]->id)->first();
                 $repuesto=$encontrados;

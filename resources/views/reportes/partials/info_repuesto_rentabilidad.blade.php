@@ -35,7 +35,7 @@
                 <th scope="col">Fecha</th><th scope="col">Usuario</th><th scope="col">Factura</th>
                 <th scope="col">Proveedor</th><th scope="col">Local</th>
                 <th scope="col" class="text-right">Precio compra</th><th scope="col" class="text-right">Precio venta</th>
-                <th scope="col" class="text-right">Flete</th><th scope="col" class="text-right">Cantidad</th>
+                <th scope="col" class="text-right">Flete</th><th scope="col" class="text-right">Cantidad comprada</th>
             </tr></thead>
             <tbody>
                 @forelse($compras as $compra)

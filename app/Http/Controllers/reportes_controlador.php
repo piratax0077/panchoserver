@@ -29,6 +29,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\ventasDiariasExports;
 use App\Exports\ventasDiariasExportsGetnet;
 use App\Exports\RepuestosExport;
+use App\Exports\RepuestosFilteredExport;
 use App\Exports\UsersExport;
 use App\carrito_virtual;
 use App\carrito_virtual_detalle;
@@ -3260,6 +3261,12 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 $request->fecha_termino
             )->format('Y-m-d');
 
+            $sinFiltrosSegmentacion =
+                !$request->filled('id_vendedor')
+                && !$request->filled('id_proveedor')
+                && !$request->filled('id_local')
+                && !$request->filled('id_repuesto');
+
             /*
             * Ejemplo:
             * PARAM_IVA = 0.19
@@ -3293,11 +3300,18 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                     'fd.cantidad',
                     'fd.subtotal',
                     'fd.descuento',
-                    'fd.total'
+                    'fd.total',
+                    'f.es_credito',
+                    'cli.tipo_cliente as cliente_tipo_cliente',
+                    'cli.rut as cliente_rut',
+                    'cli.razon_social as cliente_razon_social',
+                    'cli.nombres as cliente_nombres',
+                    'cli.apellidos as cliente_apellidos'
                 )
                 ->join('facturas as f', 'f.id', '=', 'fd.id_factura')
                 ->join('repuestos as r', 'r.id', '=', 'fd.id_repuestos')
                 ->leftJoin('users as u', 'u.id', '=', 'fd.usuarios_id')
+                ->leftJoin('clientes as cli', 'cli.id', '=', 'f.id_cliente')
                 ->whereBetween('f.fecha_emision', [
                     $fechaInicio,
                     $fechaTermino
@@ -3357,11 +3371,18 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                     'bd.cantidad',
                     'bd.subtotal',
                     'bd.descuento',
-                    'bd.total'
+                    'bd.total',
+                    'b.es_credito',
+                    'cli.tipo_cliente as cliente_tipo_cliente',
+                    'cli.rut as cliente_rut',
+                    'cli.razon_social as cliente_razon_social',
+                    'cli.nombres as cliente_nombres',
+                    'cli.apellidos as cliente_apellidos'
                 )
                 ->join('boletas as b', 'b.id', '=', 'bd.id_boleta')
                 ->join('repuestos as r', 'r.id', '=', 'bd.id_repuestos')
                 ->leftJoin('users as u', 'u.id', '=', 'bd.usuarios_id')
+                ->leftJoin('clientes as cli', 'cli.id', '=', 'b.id_cliente')
                 ->whereBetween('b.fecha_emision', [
                     $fechaInicio,
                     $fechaTermino
@@ -3436,6 +3457,13 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 'venta_sin_costo' => 0,
                 'cantidad_items_sin_costo' => 0,
                 'porcentaje_cobertura_costos' => 0,
+
+                'venta_bruta_credito' => 0,
+                'venta_neta_credito' => 0,
+                'cantidad_documentos_credito' => 0,
+                'cantidad_facturas_credito' => 0,
+                'cantidad_boletas_credito' => 0,
+                'porcentaje_venta_credito' => 0,
             ];
 
             $resumenVendedores = [];
@@ -3459,37 +3487,6 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 $totalDetalle = (float) $venta->total;
 
                 /*
-                * -------------------------------------------------
-                * CALCULAR VENTA NETA
-                * -------------------------------------------------
-                *
-                * Primera opción:
-                * usar pu_neto cuando existe.
-                *
-                * Respaldo:
-                * dividir el total del detalle por el factor IVA.
-                */
-                if ($precioNeto > 0) {
-                    $descuentoNeto = $descuentoBruto / $factorIVA;
-
-                    $ventaNeta = (
-                        $precioNeto * $cantidad
-                    ) - $descuentoNeto;
-                } else {
-                    if ($totalDetalle > 0) {
-                        $ventaNeta = $totalDetalle / $factorIVA;
-                    } else {
-                        $totalBrutoCalculado = (
-                            $precioVenta * $cantidad
-                        ) - $descuentoBruto;
-
-                        $ventaNeta = $totalBrutoCalculado / $factorIVA;
-                    }
-                }
-
-                $ventaNeta = max(0, round($ventaNeta, 2));
-
-                /*
                  * Venta bruta: monto final pagado por el cliente,
                  * incluyendo IVA y descontando rebajas de la línea.
                  */
@@ -3502,6 +3499,12 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 }
 
                 $ventaBruta = max(0, round($ventaBruta, 2));
+
+                /*
+                 * Para alinear con Libro Ventas, el neto se calcula
+                 * siempre desde el total bruto de la línea.
+                 */
+                $ventaNeta = max(0, round($ventaBruta / $factorIVA, 2));
 
                 /*
                 * -------------------------------------------------
@@ -3641,9 +3644,31 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                     . '_'
                     . $venta->id_documento;
 
+                /*
+                 * Nombre del cliente: empresas usan razón social,
+                 * personas naturales usan nombres + apellidos. El rut
+                 * '60803000K' corresponde al cliente genérico de mostrador.
+                 */
+                $nombreCliente = 'SIN CLIENTE';
+
+                if ($venta->cliente_rut && $venta->cliente_rut !== '60803000K') {
+                    $nombreCliente = ((int) $venta->cliente_tipo_cliente === 0)
+                        ? trim($venta->cliente_nombres . ' ' . $venta->cliente_apellidos)
+                        : $venta->cliente_razon_social;
+
+                    if (trim((string) $nombreCliente) === '') {
+                        $nombreCliente = 'SIN CLIENTE';
+                    }
+                }
+
                 $documentosUnicos[$claveDocumento] = [
                     'tipo' => $venta->codigo_documento,
                     'id_documento' => (int) $venta->id_documento,
+                    'numero_documento' => $venta->numero_documento,
+                    'fecha_emision' => $venta->fecha_emision,
+                    'vendedor' => $venta->vendedor ?: 'SIN VENDEDOR',
+                    'cliente' => $nombreCliente,
+                    'es_credito' => (bool) $venta->es_credito,
                 ];
 
                 /*
@@ -3800,7 +3825,10 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
             * DOCUMENTOS ÚNICOS
             * =====================================================
             */
-            foreach ($documentosUnicos as $documento) {
+            $detalleDocumentosCredito = [];
+            $ventaBrutaCredito = 0;
+
+            foreach ($documentosUnicos as $claveDocumento => $documento) {
                 $resumen['cantidad_documentos']++;
 
                 if ($documento['tipo'] === 'fa') {
@@ -3808,7 +3836,142 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 } else {
                     $resumen['cantidad_boletas']++;
                 }
+
+                if (!$documento['es_credito']) {
+                    continue;
+                }
+
+                $montoDocumento = round(
+                    (float) ($brutoFiltradoPorDocumento[$claveDocumento] ?? 0),
+                    2
+                );
+
+                $resumen['cantidad_documentos_credito']++;
+
+                if ($documento['tipo'] === 'fa') {
+                    $resumen['cantidad_facturas_credito']++;
+                } else {
+                    $resumen['cantidad_boletas_credito']++;
+                }
+
+                $ventaBrutaCredito += $montoDocumento;
+
+                $detalleDocumentosCredito[] = [
+                    'tipo_documento' => $documento['tipo'] === 'fa'
+                        ? 'FACTURA'
+                        : 'BOLETA',
+                    'numero_documento' => $documento['numero_documento'],
+                    'fecha_emision' => $documento['fecha_emision'],
+                    'vendedor' => $documento['vendedor'],
+                    'cliente' => $documento['cliente'],
+                    'monto_bruto' => $montoDocumento,
+                ];
             }
+
+            $resumen['venta_bruta_credito'] = round($ventaBrutaCredito, 2);
+
+            /*
+             * Alineación con Libro Ventas:
+             * sin filtros de segmentación, usar sumas de cabecera.
+             * con filtros, usar la suma del detalle filtrado.
+             */
+            if ($sinFiltrosSegmentacion) {
+                $ventaBrutaFacturasCabecera = (float) factura::query()
+                    ->whereBetween('fecha_emision', [
+                        $fechaInicio,
+                        $fechaTermino
+                    ])
+                    ->where('activo', 1)
+                    ->whereIn('estado_sii', [
+                        'ACEPTADO',
+                        'REPARO'
+                    ])
+                    ->sum('total');
+
+                $ventaBrutaBoletasCabecera = (float) boleta::query()
+                    ->whereBetween('fecha_emision', [
+                        $fechaInicio,
+                        $fechaTermino
+                    ])
+                    ->where('activo', 1)
+                    ->whereIn('estado_sii', [
+                        'ACEPTADO',
+                        'REPARO'
+                    ])
+                    ->sum('total');
+
+                $resumen['venta_bruta_facturas'] =
+                    $ventaBrutaFacturasCabecera;
+
+                $resumen['venta_bruta_boletas'] =
+                    $ventaBrutaBoletasCabecera;
+
+                $resumen['venta_bruta'] =
+                    $ventaBrutaFacturasCabecera
+                    + $ventaBrutaBoletasCabecera;
+
+                $ventaBrutaCreditoFacturasCabecera = (float) factura::query()
+                    ->whereBetween('fecha_emision', [
+                        $fechaInicio,
+                        $fechaTermino
+                    ])
+                    ->where('activo', 1)
+                    ->whereIn('estado_sii', [
+                        'ACEPTADO',
+                        'REPARO'
+                    ])
+                    ->where('es_credito', 1)
+                    ->sum('total');
+
+                $ventaBrutaCreditoBoletasCabecera = (float) boleta::query()
+                    ->whereBetween('fecha_emision', [
+                        $fechaInicio,
+                        $fechaTermino
+                    ])
+                    ->where('activo', 1)
+                    ->whereIn('estado_sii', [
+                        'ACEPTADO',
+                        'REPARO'
+                    ])
+                    ->where('es_credito', 1)
+                    ->sum('total');
+
+                $resumen['venta_bruta_credito'] = round(
+                    $ventaBrutaCreditoFacturasCabecera
+                    + $ventaBrutaCreditoBoletasCabecera,
+                    2
+                );
+            }
+
+            $resumen['venta_neta_facturas'] = round(
+                $resumen['venta_bruta_facturas'] / $factorIVA,
+                0
+            );
+
+            $resumen['venta_neta_boletas'] = round(
+                $resumen['venta_bruta_boletas'] / $factorIVA,
+                0
+            );
+
+            $resumen['venta_neta'] =
+                $resumen['venta_neta_facturas']
+                + $resumen['venta_neta_boletas'];
+
+            $resumen['venta_neta_credito'] = round(
+                $resumen['venta_bruta_credito'] / $factorIVA,
+                2
+            );
+
+            $resumen['porcentaje_venta_credito'] =
+                $resumen['venta_bruta'] > 0
+                    ? round(
+                        (
+                            $resumen['venta_bruta_credito']
+                            / $resumen['venta_bruta']
+                        ) * 100,
+                        2
+                    )
+                    : 0;
 
             /*
             * =====================================================
@@ -4466,7 +4629,9 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 'costo_mercaderia',
                 'ganancia_bruta',
                 'venta_con_costo',
-                'venta_sin_costo'
+                'venta_sin_costo',
+                'venta_bruta_credito',
+                'venta_neta_credito'
             ] as $campo) {
                 $resumen[$campo] = round($resumen[$campo], 2);
             }
@@ -4484,6 +4649,12 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
 
             $productosOrdenados = collect($resumenProductos)
                 ->sortByDesc('cantidad_vendida')
+                ->values();
+
+            $detalleDocumentosCreditoOrdenado = collect(
+                $detalleDocumentosCredito
+            )
+                ->sortByDesc('fecha_emision')
                 ->values();
 
             return response()->json([
@@ -4506,6 +4677,19 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 'proveedores' => $proveedoresOrdenados,
                 'productos' => $productosOrdenados,
                 'notas_credito' => $notasCreditoResumen,
+                'documentos_credito' => [
+                    'cantidad_documentos' =>
+                        $resumen['cantidad_documentos_credito'],
+                    'cantidad_facturas' =>
+                        $resumen['cantidad_facturas_credito'],
+                    'cantidad_boletas' =>
+                        $resumen['cantidad_boletas_credito'],
+                    'venta_bruta' => $resumen['venta_bruta_credito'],
+                    'venta_neta' => $resumen['venta_neta_credito'],
+                    'porcentaje_sobre_venta_bruta' =>
+                        $resumen['porcentaje_venta_credito'],
+                    'detalle' => $detalleDocumentosCreditoOrdenado,
+                ],
                 'detalle' => $detalleResultado,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -4646,5 +4830,32 @@ $v = view('reportes.ventas_diarias_resumen', compact('boletas', 'facturas', 'tot
                 'locales'
             )
         );
+    }
+
+    /**
+     * Descargar repuestos filtrados por proveedor, marca, familia en Excel
+     */
+    public function descargar_repuestos_filtrados(\Illuminate\Http\Request $request)
+    {
+        try {
+            $id_proveedor = intval($request->get('id_proveedor', 0));
+            $id_marca = intval($request->get('id_marca', 0));
+            $id_marca_vehiculo = intval($request->get('id_marca_vehiculo', 0));
+            $id_familia = intval($request->get('id_familia', 0));
+            $texto = trim((string) $request->get('texto', ''));
+
+            $filename = 'repuestos_filtrados_' . date('Y-m-d_H-i-s') . '.xlsx';
+
+            return \Excel::download(
+                new \App\Exports\RepuestosFilteredExport($id_proveedor, $id_marca, $id_familia, $id_marca_vehiculo, $texto),
+                $filename
+            );
+        } catch (\Exception $e) {
+            \Log::error('Error al descargar repuestos filtrados', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['error' => 'Error al descargar el archivo: ' . $e->getMessage()], 500);
+        }
     }
 }

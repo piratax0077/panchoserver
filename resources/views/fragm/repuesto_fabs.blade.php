@@ -1,21 +1,27 @@
-<div class="col-12 tabla-scroll-y-300">
-	<p align="center"><strong>Fabricantes: {{$fabs->count()}}</strong></p>
+<div class="col-12">
+	<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; margin-bottom: 10px;">
+		<i class="fa fa-industry"></i> Fabricantes ({{$fabs->count()}})
+	</div>
 	@if($fabs->count()>0)
-	<table class="table table-sm tabla-scroll-y-200 letra-chica" style="overflow-x: hidden; border: 0px;">
-	  	<thead>
-	    	<tr>
-                  <th scope="col">Código</th><th scope="col">Fabric.</th>
-	    	</tr>
-	  	</thead>
-	  	<tbody>
-	  	@foreach($fabs as $fab)
-	      <tr>
-            <td>{{$fab->codigo_fab}}</td><td>{{$fab->marcarepuesto}}</td>
-	      </tr>
-	  	@endforeach
-		</tbody>
-	</table>
+	<div style="background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #cfd8dc;">
+		<div class="tabla-scroll-y-200">
+			<table class="table table-sm letra-chica mb-0" style="width:100%; table-layout: fixed; border: 0px;">
+				<thead>
+					<tr style="background: #cfd8dc;">
+						<th scope="col" style="width:50%; color: #37474f;">Código</th><th scope="col" style="width:50%; color: #37474f;">Fabric.</th>
+					</tr>
+				</thead>
+				<tbody>
+				@foreach($fabs as $fab)
+					<tr>
+						<td>{{$fab->codigo_fab}}</td><td>{{$fab->marcarepuesto}}</td>
+					</tr>
+				@endforeach
+				</tbody>
+			</table>
+		</div>
+	</div>
 	@else
-		<p>No hay Fabricantes agregados...</p>
+		<p style="color: #78909c; font-style: italic; margin: 0;">Sin fabricantes registrados.</p>
 	@endif
 </div>

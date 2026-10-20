@@ -1414,24 +1414,24 @@ class api_controlador extends Controller
                 $correlativo->save();
             }
             $carrito_existente = $this->damecarritoexistente($usuario_id);
-            // Los amortiguadores laterales se venden como máximo uno por lado.
+            // Los amortiguadores laterales se venden como máximo uno por lado y marca.
             $repuesto_amortiguador = repuesto::find($idrep);
             if ($repuesto_amortiguador && in_array((int) $repuesto_amortiguador->id_familia, [344, 345], true)) {
-                if ((int) $cantidad !== 1) {
+                if (!$this->cantidadAmortiguadorValida($repuesto_amortiguador, $cantidad)) {
                     return "amortiguador_unidad_lado";
                 }
 
-                $descripcion_amortiguador = strtoupper($repuesto_amortiguador->descripcion);
-                $lado_amortiguador = str_contains($descripcion_amortiguador, 'IZQUIERD')
-                    ? 'IZQUIERD'
-                    : (str_contains($descripcion_amortiguador, 'DERECH') ? 'DERECH' : null);
+                $lado_amortiguador = $this->detectarLadoPar($repuesto_amortiguador->descripcion);
 
                 if ($lado_amortiguador) {
                     $mismo_lado_en_carrito = carrito_virtual_detalle::where('carrito_numero', $carrito_existente->numero_carrito)
                         ->join('repuestos', 'carrito_virtual_detalle.repuesto_id', 'repuestos.id')
                         ->where('repuestos.id_familia', $repuesto_amortiguador->id_familia)
-                        ->where('repuestos.descripcion', 'like', '%' . $lado_amortiguador . '%')
-                        ->exists();
+                        ->where('repuestos.id_marca_repuesto', $repuesto_amortiguador->id_marca_repuesto)
+                        ->select('repuestos.descripcion')->get()
+                        ->contains(function ($rep) use ($lado_amortiguador) {
+                            return $this->detectarLadoPar($rep->descripcion) === $lado_amortiguador;
+                        });
 
                     if ($mismo_lado_en_carrito) {
                         return "amortiguador_lado_duplicado";
@@ -1442,6 +1442,26 @@ class api_controlador extends Controller
             $pregunta = carrito_virtual_detalle::where('repuesto_id',$idrep)->where('carrito_numero',$carrito_existente->numero_carrito)->get();
           
             if($pregunta->count() > 0){
+                // El mismo codigo completa el par cuando sirve para ambos lados.
+                if ($repuesto_amortiguador && in_array((int) $repuesto_amortiguador->id_familia, [344, 345], true)
+                    && $this->detectarLadoPar($repuesto_amortiguador->descripcion) === null) {
+                    $detalle = $pregunta->first();
+                    $cantidad_total = $detalle->cantidad + $cantidad;
+                    if (!$this->cantidadAmortiguadorValida($repuesto_amortiguador, $cantidad_total)) {
+                        return "amortiguador_unidad_lado";
+                    }
+                    if (\App\Services\StockPorLocalService::total($repuesto_amortiguador) < $cantidad_total) {
+                        return response()->json(['message' => 'Cantidad solicitada sobrepasa stock actual'], 500);
+                    }
+                    $detalle->cantidad = $cantidad_total;
+                    $detalle->subtotal_item = $detalle->pu * $cantidad_total;
+                    $detalle->total_item = $detalle->subtotal_item - $detalle->descuento_item;
+                    $detalle->save();
+                    $carrito_existente->fecha_emision = Carbon::today()->toDateString();
+                    $carrito_existente->save();
+                    $this->revisar_carrito_virtual($usuario_id);
+                    return response()->json(['message' => 'OK']);
+                }
                 return response()->json([
                     'message' => 'Repuesto ya existe en carrito!!',
                 ], 500);
@@ -1470,7 +1490,7 @@ class api_controlador extends Controller
                 }
 
                 // verificar que si la familia es 362 (retenes de valvulas)  la cantidad minima a agregar sea 8
-                if($id_familia == 362 || $id_familia == 87 || $id_familia == 392){ 
+                if($id_familia == 362 || $id_familia == 392){
                     if($cantidad % 8 != 0){
                         return "retene_valvula_multiplo";
                     }
@@ -1484,6 +1504,12 @@ class api_controlador extends Controller
                 if($id_familia == 188){
                     if($cantidad < 4){
                         return "golilla_minimo";
+                    }
+                }
+
+                if($id_familia == 92){
+                    if($cantidad < 16){
+                        return "taquie_valvula_minimo";
                     }
                 }
 
@@ -1652,6 +1678,7 @@ public function imprimir_ticket_totem($numero_carrito){
                             }
                             $rep->cantidad = $repuesto->cantidad;
                             $rep->numero_carrito = $repuesto->numero_carrito;
+                            $rep->id_familia = $repuesto->id_familia;
 
                             array_push($repuestos_,$rep);
                         }
@@ -1907,7 +1934,7 @@ public function imprimir_ticket_totem($numero_carrito){
                 array_push($repuestos_, $rep);
             }
 
-            if (in_array((int) $familia_completa->id, [344, 345, 348, 374, 375, 50], true)) {
+            if ($this->familiaUsaPares($familia_completa)) {
                 $repuestos_ = $this->armarParesDerechoIzquierdo($repuestos_);
             }
 
@@ -1985,9 +2012,13 @@ public function imprimir_ticket_totem($numero_carrito){
             }
         }
 
-        // Los productos sin lateralidad se muestran como tarjetas normales.
+        // Los amortiguadores sin lateralidad usan el mismo codigo en ambos lados.
         foreach ($otros as $otro) {
-            $pares[] = $otro;
+            if (in_array((int) $otro->id_familia, [344, 345], true)) {
+                $pares[] = ['derecho' => clone $otro, 'izquierdo' => clone $otro];
+            } else {
+                $pares[] = $otro;
+            }
         }
 
         return $pares;
@@ -2006,18 +2037,36 @@ public function imprimir_ticket_totem($numero_carrito){
         $descripcion = preg_replace('/\s+/', ' ', $descripcion);
         $descripcion = trim($descripcion);
 
-        return $rep->marcarepuesto . '|' . $descripcion;
+        return $rep->id_familia . '|' . $rep->marcarepuesto . '|' . $descripcion;
+    }
+
+    private function familiaUsaPares($familia)
+    {
+        return in_array((int) $familia->id, [344, 345, 348, 374, 375, 50, 87], true)
+            || preg_match('/\bBANDEJA\b.*\b(SUPERIOR|INFERIOR)\b/u', strtoupper($familia->nombrefamilia)) === 1;
+    }
+
+    private function cantidadAmortiguadorValida($repuesto, $cantidad)
+    {
+        $maximo = $this->detectarLadoPar($repuesto->descripcion) === null ? 2 : 1;
+        return is_numeric($cantidad) && (float) $cantidad === (float) (int) $cantidad
+            && (int) $cantidad >= 1 && (int) $cantidad <= $maximo;
     }
 
     private function detectarLadoPar($descripcion)
     {
         $descripcion = strtoupper($descripcion);
 
-        if (preg_match('/\b(DERECHO|DERECHA|DER|RIGHT|RH)\b/u', $descripcion)) {
+        $derecho = preg_match('/\b(DERECHO|DERECHA|DER|RIGHT|RH)\b/u', $descripcion);
+        $izquierdo = preg_match('/\b(IZQUIERDO|IZQUIERDA|IZQ|LEFT|LH)\b/u', $descripcion);
+        if ($derecho && $izquierdo) {
+            return null;
+        }
+        if ($derecho) {
             return 'derecho';
         }
 
-        if (preg_match('/\b(IZQUIERDO|IZQUIERDA|IZQ|LEFT|LH)\b/u', $descripcion)) {
+        if ($izquierdo) {
             return 'izquierdo';
         }
 
@@ -8614,7 +8663,7 @@ public function actualizar_cantidad_carrito_totem(Request $request){
     // revisar si existe stock suficiente para la cantidad solicitada
     $repuesto = repuesto::find($item);
     $id_familia = $repuesto->id_familia;
-    if (in_array((int) $id_familia, [344, 345], true) && (int) $cantidad !== 1) {
+    if (in_array((int) $id_familia, [344, 345], true) && !$this->cantidadAmortiguadorValida($repuesto, $cantidad)) {
         return "amortiguador_unidad_lado";
     }
     // verificar que si la familia es 24 (bujias) la cantidad minima a agregar sea 3
@@ -8638,9 +8687,16 @@ public function actualizar_cantidad_carrito_totem(Request $request){
     }
 
     // verificar que si la familia es 362 (retenes de valvulas)  la cantidad minima a agregar sea 8
-    if($id_familia == 362 || $id_familia == 87 || $id_familia == 392){ 
+    if($id_familia == 362 || $id_familia == 392){
         if($cantidad % 8 != 0){
             return "retene_valvula_multiplo";
+        }
+    }
+
+    // verificar que si la familia es 92 (TAQUIE VALVULA) la cantidad minima a agregar sea 16
+    if($id_familia == 92){
+        if($cantidad < 16){
+            return "taquie_valvula_minimo";
         }
     }
     $stock_bodega = $repuesto->stock_actual ?? 0;
@@ -8670,7 +8726,7 @@ public function actualizar_cantidad_carrito_totem(Request $request){
     if($detalle){
         $detalle->cantidad = $cantidad;
         $detalle->subtotal_item = $detalle->pu * $cantidad;
-        // Aquí podrías recalcular descuento_item y total_item si es necesario
+        $detalle->total_item = $detalle->subtotal_item - $detalle->descuento_item;
         if($detalle->save()){
             return 'OK';
         }

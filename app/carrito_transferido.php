@@ -69,6 +69,7 @@ class carrito_transferido extends Model
                                     ->leftjoin('ofertas_pagina_web','repuestos.id','ofertas_pagina_web.id_repuesto')
                                     ->join('users as usuario','carrito_transferido.usuarios_id','usuario.id')
                                     ->orderBy('carrito_transferido.item','ASC')
+                                    ->orderBy('carrito_transferido.id','ASC')
                                     ->distinct()
                                     ->get();
         //Debugbar::addMessage('carrito_compra->dame_todo_carrito','depurador');

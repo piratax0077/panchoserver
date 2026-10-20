@@ -1,31 +1,27 @@
 
 @if(empty($fotos))
-<div class="col-sm-10">
-	<p>Sin Fotos</p>
+<div class="col-sm-12">
+	<p style="color: #78909c; font-style: italic; margin: 0;">Sin fotos</p>
 </div>
 @else
 	@if($fotos->count()>0)
 
-		<div class="col-sm-12" style="padding:2px">
-		<p align="center"><strong>FOTOS: {{$fotos->count()}}</strong></p>
-		<table class="table table-sm tabla-scroll-y-200" style="overflow-x: hidden; border: 0px;">
-			<tbody>
+		<div class="col-sm-12" style="padding: 0 0 15px 0;">
+		<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; margin-bottom: 10px;">
+			<i class="fa fa-images"></i> Fotos ({{$fotos->count()}})
+		</div>
+		<div style="display: flex; flex-wrap: wrap; gap: 10px;">
 			@foreach($fotos as $foto)
-			<tr><td>
-			<!--El modal donde  se abrirá esta en repuestos.blade.php -->
-			<!-- {{asset('storage/'.$foto->urlfoto)}} -->
-			<a href="javascript:void(0);" onclick="abrir_foto_modal('{{$id_repuesto}}')">
-			  <img src="{{asset('storage/'.$foto->urlfoto)}}" width=180px/>
+			<a href="javascript:void(0);" onclick="abrir_foto_modal('{{$id_repuesto}}')" style="display:inline-block;">
+			  <img src="{{asset('storage/'.$foto->urlfoto)}}" width="100" height="100" style="object-fit: cover; border-radius: 8px; border: 1px solid #cfd8dc; box-shadow: 0 1px 4px rgba(0,0,0,0.1);"/>
 			</a>
-			</td></tr>
 			@endforeach
-		</tbody>
-		</table>
+		</div>
 		</div>
 
 	@else
 	<div class="col-sm-12">
-		<p>No hay fotos agregadas.</p>
+		<p style="color: #78909c; font-style: italic; margin: 0;">No hay fotos agregadas.</p>
 	</div>
 
 	@endif

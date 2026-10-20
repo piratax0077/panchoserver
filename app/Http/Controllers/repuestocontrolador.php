@@ -1110,15 +1110,17 @@ public function similares(Request $request)
 
         $familias=$this->damefamilias();
         $proveedores=$this->dameproveedores();
+        $marcarepuestos=$this->damemarcarepuestos();
+        $marcasvehiculo=$this->damemarcas();
         $permisos = permissions_detail::all();
         foreach ($permisos as $p) {
             if($p->usuarios_id == Auth::user()->id && $p->path_ruta == '/repuesto'){
-                return view('manten.repuestos',compact('familias','proveedores'));
+                return view('manten.repuestos',compact('familias','proveedores','marcarepuestos','marcasvehiculo'));
             }
         }
 
         if(Auth::user()->rol->nombrerol == "Administrador"){
-            return view('manten.repuestos',compact('familias','proveedores'));
+            return view('manten.repuestos',compact('familias','proveedores','marcarepuestos','marcasvehiculo'));
         }else return redirect('home');
         
     }
@@ -3769,5 +3771,73 @@ public function similares(Request $request)
             return $e->getMessage();
         }
         
+    }
+
+    /**
+     * Búsqueda de repuestos por múltiples filtros (proveedor, marca, marca de vehículo y familia)
+     */
+    public function buscar_filtros(Request $r)
+    {
+        try {
+            $id_proveedor = (int) $r->get('id_proveedor', 0);
+            $id_marca = (int) $r->get('id_marca', 0);
+            $id_marca_vehiculo = (int) $r->get('id_marca_vehiculo', 0);
+            $id_familia = (int) $r->get('id_familia', 0);
+            $texto = trim((string) $r->get('texto', ''));
+            $page = (int) $r->get('page', 1);
+
+            $query = repuesto::where('repuestos.activo', 1)
+                ->with(['proveedor', 'marcarepuesto', 'pais']);
+
+            // Filtro por proveedor
+            if ($id_proveedor > 0) {
+                $query->where('repuestos.id_proveedor', $id_proveedor);
+            }
+
+            // Filtro por marca
+            if ($id_marca > 0) {
+                $query->where('repuestos.id_marca_repuesto', $id_marca);
+            }
+
+            // Filtro por marca de vehículo (a través de las aplicaciones/similares)
+            if ($id_marca_vehiculo > 0) {
+                $query->whereIn('repuestos.id', function ($sub) use ($id_marca_vehiculo) {
+                    $sub->select('id_repuestos')
+                        ->from('similares')
+                        ->where('id_marca_vehiculo', $id_marca_vehiculo)
+                        ->where('activo', 1);
+                });
+            }
+
+            // Filtro por familia
+            if ($id_familia > 0) {
+                $query->where('repuestos.id_familia', $id_familia);
+            }
+
+            // Búsqueda libre por código interno, descripción o código de proveedor
+            if ($texto !== '') {
+                $query->where(function ($q) use ($texto) {
+                    $q->where('repuestos.codigo_interno', 'LIKE', "%{$texto}%")
+                      ->orWhere('repuestos.descripcion', 'LIKE', "%{$texto}%")
+                      ->orWhere('repuestos.cod_repuesto_proveedor', 'LIKE', "%{$texto}%");
+                });
+            }
+
+            // Paginar con los parámetros de filtro en los links
+            $repuestos = $query->orderBy('repuestos.id', 'desc')
+                ->paginate(15, ['*'], 'page', $page)
+                ->appends([
+                    'id_proveedor' => $id_proveedor,
+                    'id_marca' => $id_marca,
+                    'id_marca_vehiculo' => $id_marca_vehiculo,
+                    'id_familia' => $id_familia,
+                    'texto' => $texto
+                ]);
+
+            $vista = view('fragm.buscarepuesto', compact('repuestos'))->render();
+            return response($vista)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        } catch (\Exception $e) {
+            return 'Error: ' . $e->getMessage();
+        }
     }
 }

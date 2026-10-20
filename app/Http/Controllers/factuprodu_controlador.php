@@ -565,7 +565,7 @@ class factuprodu_controlador extends Controller
 
         $permisos = permissions_detail::all();
         foreach ($permisos as $p) {
-            if($p->usuarios_id == Auth::user()->id && $p->path_ruta == '/factuprodu/crear'){
+            if($p->usuarios_id == Auth::user()->id && $p->path_ruta == '/factuprodu/crear_importacion'){
                 return view('inventario.factu_produ_importacion', compact('proveedores', 'locales', 'marcas'));
             }
         }
@@ -1186,6 +1186,7 @@ class factuprodu_controlador extends Controller
                         'nombre_xml'  => $producto['nombre'] ?? '',
                         'cantidad'    => $producto['cantidad'] ?? 0,
                         'precio'      => $producto['precio'] ?? 0,
+                        'precio_compra_xml' => $producto['precio_compra_xml'] ?? $producto['precio'] ?? 0,
                         'monto'       => $producto['monto'] ?? 0,
                         'id_repuesto' => $repuesto->id,
                         'nombre_bd'   => $repuesto->descripcion ?? $repuesto->nombre ?? '',
@@ -1196,6 +1197,7 @@ class factuprodu_controlador extends Controller
                         'nombre_xml' => $producto['nombre'] ?? '',
                         'cantidad'   => $producto['cantidad'] ?? 0,
                         'precio'     => $producto['precio'] ?? 0,
+                        'precio_compra_xml' => $producto['precio_compra_xml'] ?? $producto['precio'] ?? 0,
                         'monto'      => $producto['monto'] ?? 0,
                     ];
                 }
@@ -1334,6 +1336,7 @@ class factuprodu_controlador extends Controller
                 'descripcion' => trim((string) $detalle->DscItem),
                 'cantidad'    => (float) $detalle->QtyItem,
                 'precio'      => (float) $detalle->PrcItem,
+                'precio_compra_xml' => CostosCompra::precioCompraXml($detalle),
                 'monto'       => (float) $detalle->MontoItem,
             ];
         }

@@ -695,7 +695,7 @@ class compras_controlador extends Controller
                                         ->where('compras_cab.id',$id_factura)
                                         ->first();
 
-            $repuesto = compras_det::select('repuestos.descripcion','repuestos.id', 'compras_det.id_factura_cab','compras_det.cantidad','compras_cab.factura_numero','compras_det.pu','compras_det.precio_sugerido','familias.porcentaje')
+            $repuesto = compras_det::select('repuestos.descripcion','repuestos.id', 'compras_det.id_factura_cab','compras_det.cantidad','compras_cab.factura_numero','compras_det.pu','compras_det.precio_sugerido','compras_det.costos as flete_actual','familias.porcentaje','familias.porcentaje_flete')
                     ->join('repuestos','compras_det.id_repuestos','repuestos.id')
                     ->join('compras_cab','compras_det.id_factura_cab','compras_cab.id')
                     ->join('familias','repuestos.id_familia','familias.id')

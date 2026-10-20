@@ -5,6 +5,11 @@
         var xml="";
         var TrackID="";
 
+        function formatearMontoCL(valor) {
+            let numero = Number(valor || 0);
+            return new Intl.NumberFormat('es-CL').format(numero);
+        }
+
         function formatear_error(error){
             let max=300;
             let rpta=error.substring(0,max);
@@ -15,6 +20,10 @@
             let mes=document.getElementById('periodo_mes').value;
             let año=document.getElementById('periodo_año').value;
             let url='{{url("/libro/ventas_resumen")}}'+'/'+mes+"&"+año;
+
+            $('#resumen').html('<div class="panel-cargando"><i class="fa fa-spinner fa-spin"></i> Cargando resumen mensual...</div>');
+            $('#detalle').html('<div class="panel-cargando"><i class="fa fa-spinner fa-spin"></i> Cargando documentos no aceptados...</div>');
+
             $.ajax({
                 type:'GET',
                 url:url,
@@ -41,22 +50,30 @@
                 url:url,
                 success:function(json){
                     let rechazados=JSON.parse(json);
-                    let html="<h5>NO ACEPTADOS (RECHAZO, REPARO, ETC) DEL PERÍODO</h5><br>";
-                    html+="<table class='table table-sm table-hover'>";
-                    html+="<thead><th width='80px'>Fecha</th><th width='50px'>Documento</th><th width='150px'>Motivo</th><th width='50px'>Total</th></thead><tbody>"
+                    let html="<div class='panel-libro'>";
+                    html+="<div class='panel-libro__header'><h5 class='panel-libro__titulo'>No aceptados del período</h5></div>";
+                    html+="<div class='table-responsive'>";
+                    html+="<table class='table table-sm table-hover tabla-libro tabla-libro--rechazados'>";
+                    html+="<thead><tr><th>Fecha</th><th>Documento</th><th>Motivo</th><th class='text-right'>Total</th></tr></thead><tbody>";
                     let total_rechazados=0;
-                    rechazados.forEach(function(r){
-                        let docu="";
-                        total_rechazados+=parseInt(r.total_doc);
-                        if(r.xml.substring(0,2)=='39'){
-                            docu="Boleta "+r.num_doc;
-                        }else{
-                            docu="Factura "+r.num_doc;
-                        }
-                        html+="<tr><td>"+r.fecha_doc+"</td><td>"+docu+"</td><td>"+r.estado_sii+": "+r.resultado_envio+"</td><td>"+parseInt(r.total_doc)+"</td></tr>";
-                    });
-                    html+="<tr><td></td><td></td><td class='text-right'><b>TOTAL:</b></td><td>"+parseInt(total_rechazados)+"</td></tr>";
-                    html+="</tbody></table>";
+
+                    if (rechazados.length === 0) {
+                        html += "<tr><td colspan='4' class='text-center text-muted py-3'>No hay documentos rechazados/reparo para este período.</td></tr>";
+                    } else {
+                        rechazados.forEach(function(r){
+                            let docu="";
+                            total_rechazados+=parseInt(r.total_doc);
+                            if(r.xml.substring(0,2)=='39'){
+                                docu="Boleta "+r.num_doc;
+                            }else{
+                                docu="Factura "+r.num_doc;
+                            }
+                            html+="<tr><td>"+r.fecha_doc+"</td><td>"+docu+"</td><td><span class='badge badge-warning mr-1'>"+r.estado_sii+"</span>"+r.resultado_envio+"</td><td class='text-right'>"+formatearMontoCL(parseInt(r.total_doc))+"</td></tr>";
+                        });
+                    }
+
+                    html+="</tbody><tfoot><tr><td colspan='3' class='text-right'><strong>Total no aceptados:</strong></td><td class='text-right'><strong>"+formatearMontoCL(parseInt(total_rechazados))+"</strong></td></tr></tfoot></table>";
+                    html+="</div></div>";
                     $('#detalle').html(html);
                 },
                 error: function(error){
@@ -262,65 +279,187 @@
 @endsection
 @section('style')
 <style>
-        .contenedor{
-        margin: 0px;
-        display:grid;
-        grid-template-columns: repeat(6,1fr);
-        grid-template-rows: 30px 40px auto;
-        grid-gap: 5px;
-    }
-    #titulo{
-        grid-column: 1/7;
-        background-color: cornflowerblue;
-    }
-    #botones{
-        grid-column: 1/7;
-        grid-row: 2/3;
-        background-color:gainsboro;
-        display:grid;
-        grid-template-columns: repeat(6,1fr);
-        grid-auto-flow: column;
-    }
-    #periodo{
-        grid-column: 1/2;
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-auto-flow: column;
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
 
-    }
-    #periodo_mes{
-
-    }
-    #btn_mostrar{
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-column: 2/3;
+    :root {
+        --lv-bg: linear-gradient(145deg, #f5f7fb 0%, #eef3f9 45%, #e7eef8 100%);
+        --lv-ink: #0f172a;
+        --lv-muted: #5e6a7d;
+        --lv-primary: #0e7490;
+        --lv-primary-soft: #d9f2f7;
+        --lv-surface: #ffffff;
+        --lv-border: #d8e1ee;
+        --lv-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     }
 
-    #btn_imprimir{
-        align-self: center;
-        justify-self: center;
-        display:grid;
-        grid-column: 6/7;
+    .contenedor {
+        margin: 0;
+        padding: 12px;
+        background: var(--lv-bg);
+        border: 1px solid var(--lv-border);
+        border-radius: 14px;
+        font-family: 'Manrope', sans-serif;
     }
 
-    #cuerpo{
-        grid-column:1/7;
-        grid-row:3/4;
-        display:grid;
-        grid-template-columns: 50% 50%;
-        grid-auto-flow: column;
+    .lv-titulo {
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: linear-gradient(100deg, #101f3f 0%, #0e7490 100%);
+        color: #fff;
+        font-weight: 800;
+        font-size: 26px;
+        letter-spacing: .3px;
+        text-align: center;
+        box-shadow: var(--lv-shadow);
     }
-    #resumen{
-        grid-column:1/2;
+
+    #botones {
+        background: var(--lv-surface);
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        box-shadow: var(--lv-shadow);
+        padding: 14px;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
     }
-    #detalle{
-        grid-column:2/3;
+
+    #periodo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-right: auto;
     }
-    .transbank{
-        color:grey;
+
+    #periodo label {
+        margin: 0;
+        color: var(--lv-muted);
+        font-weight: 700;
+    }
+
+    #periodo_mes,
+    #periodo_año {
+        min-width: 120px;
+        border-radius: 8px;
+        border: 1px solid #cfd9e6;
+    }
+
+    #btn_mostrar {
+        display: inline-flex;
+    }
+
+    #btn_mostrar .btn {
+        border-radius: 8px;
+        font-weight: 700;
+        padding: 7px 16px;
+    }
+
+    #btn_procesar .btn {
+        border-radius: 8px;
+        font-weight: 700;
+        padding: 7px 16px;
+    }
+
+    #cuerpo {
+        display: grid;
+        grid-template-columns: 1.05fr .95fr;
+        gap: 14px;
+    }
+
+    .panel-cargando {
+        background: var(--lv-surface);
+        border: 1px dashed #bfd0e4;
+        border-radius: 10px;
+        padding: 30px 18px;
+        color: var(--lv-muted);
+        text-align: center;
+        font-weight: 700;
+    }
+
+    .panel-libro {
+        background: var(--lv-surface);
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        box-shadow: var(--lv-shadow);
+        overflow: hidden;
+    }
+
+    .panel-libro__header {
+        background: linear-gradient(90deg, #eff8ff 0%, #f8fbff 100%);
+        border-bottom: 1px solid var(--lv-border);
+        padding: 10px 12px;
+    }
+
+    .panel-libro__titulo {
+        margin: 0;
+        color: var(--lv-ink);
+        font-size: 20px;
+        font-weight: 800;
+    }
+
+    .tabla-libro {
+        margin: 0;
+    }
+
+    .tabla-libro thead th {
+        background: var(--lv-primary-soft);
+        border-top: 0;
+        color: #0b3c4a;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .35px;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .tabla-libro td {
+        color: #1f2937;
+        font-size: 13px;
+        vertical-align: middle;
+    }
+
+    .tabla-libro tfoot td {
+        background: #f7fbff;
+        border-top: 2px solid #c8deef;
+    }
+
+    .transbank {
+        color: #64748b;
+    }
+
+    .badge-warning {
+        background: #ffd77a;
+        color: #583000;
+    }
+
+    @media (max-width: 992px) {
+        #cuerpo {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .contenedor {
+            padding: 8px;
+        }
+
+        .lv-titulo {
+            font-size: 22px;
+        }
+
+        #periodo {
+            width: 100%;
+        }
+
+        #periodo_mes,
+        #periodo_año {
+            width: calc(50% - 6px);
+            min-width: 0;
+        }
     }
 </style>
 @endsection
@@ -329,9 +468,7 @@
         @php
             $año_actual=date("Y");
         @endphp
-        <div class="titulazo">
-            <center><h4>Libro Ventas</h4></center>
-        </div>
+        <h4 class="lv-titulo">Libro Ventas</h4>
         <div id="botones">
             <div id="periodo">
                 <label for="periodo_mes">Periodo:</label>
@@ -359,7 +496,7 @@
                 @endfor
                 </select>
             </div>
-            <div id="btn_mostrar"><button class="btn btn-sm btn-success" onclick="mostrar()">MOSTRAR</button></div>
+            <div id="btn_mostrar"><button class="btn btn-sm btn-success" onclick="mostrar()"><i class="fa fa-search"></i> Mostrar</button></div>
             <div id="btn_procesar">
                 @if(Session::get('rol')=='S')
                     <button class="btn btn-sm btn-primary" onclick="procesar()" style="display:none">PROCESAR</button>
@@ -367,8 +504,8 @@
             </div>
         </div>
         <div id="cuerpo">
-            <div id="resumen">resumen</div>
-            <div id="detalle">detalle...</div>
+            <div id="resumen"><div class="panel-cargando">Selecciona período y pulsa Mostrar para ver el resumen.</div></div>
+            <div id="detalle"><div class="panel-cargando">Aquí verás el detalle de no aceptados del período.</div></div>
         </div>
 
     </div>

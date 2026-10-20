@@ -171,6 +171,32 @@
   #foto-modal .foto-estado { color: #64748b; font-size: 14px; }
   #foto-modal .foto-estado i { display: block; margin-bottom: 9px; font-size: 30px; }
 
+  /* Modal de Detalle del repuesto (info_repuesto_detalle + zonas fotos/similares/oem/fab) */
+  #detalleModal .modal-header {
+    background: #37474f !important;
+  }
+  #detalleModal .modal-body {
+    background: #f4f6f8;
+    padding: 16px;
+  }
+  #detalleModal #zona_detalle_fieldset {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  #detalleModal #zona_fotos,
+  #detalleModal #zona_similares,
+  #detalleModal #zona_oem,
+  #detalleModal #zona_fab {
+    background: #ffffff;
+    border: 1px solid #cfd8dc;
+    border-radius: 8px;
+    margin: 0 4px 8px 4px;
+    padding: 14px !important;
+  }
+  #detalleModal .modal-footer {
+    background: #f4f6f8;
+  }
+
   @media (max-width: 767.98px) {
     #buscar-repuesto-modal .modal-dialog { width: 100%; margin: 0; }
     #buscar-repuesto-modal .modal-content { height: 100vh; border-radius: 0; }
@@ -6546,9 +6572,7 @@ function detalleStockMinimo(id_rep){
       </div>
       <div class="modal-body">
         <div class="row row-cero-margen" >
-          <div class="col-12" id="info_repuesto_detalle" style="
-          margin-bottom: 10px;
-          padding: 10px;">
+          <div class="col-12" id="info_repuesto_detalle" style="margin-bottom: 14px;">
 
           </div>
         </div>
@@ -6556,19 +6580,19 @@ function detalleStockMinimo(id_rep){
 
           <div class="row row-cero-margen" id="zona_detalle_fieldset" style="width:100%">
 
-              <div class="col-3" id="zona_fotos" style=" padding-left: 1px;padding-right: 1px"></div>
+              <div class="col-3" id="zona_fotos" style="padding-left: 1px;padding-right: 1px"></div>
 
               <div class="col-5" id="zona_similares" style="padding-left: 1px;padding-right: 1px"></div>
 
             <div class="col-2 d-none" id="zona_rv" style="padding-left: 1px; padding-right: 10x;"></div>
 
-              <div class="col-2" id="zona_oem" style=" padding-left: 1px;padding-right: 1px">
+              <div class="col-2" id="zona_oem" style="padding-left: 1px;padding-right: 1px">
                
              </div>
 
               
               
-              <div class="col-2" id="zona_fab" style=" padding-left: 1px;padding-right: 1px"></div>
+              <div class="col-2" id="zona_fab" style="padding-left: 1px;padding-right: 1px"></div>
 
           </div>
 

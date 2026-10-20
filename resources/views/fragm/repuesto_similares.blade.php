@@ -1,14 +1,18 @@
 <!-- ES LO MISMO??? fragm.factuprodu_similares.blade -->
-<div class="container-fluid" style="margin-top:5px;padding:2px">
- <div class="col-12 tabla-scroll-y-300">
-        <p align="center"><strong>APLICACIONES: {{$similares->count()}}</strong></p>
+<div class="container-fluid" style="padding:0;">
+ <div class="col-12">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; margin-bottom: 10px;">
+          <i class="fa fa-car"></i> Aplicaciones ({{$similares->count()}})
+        </div>
         @if($similares->count()>0)
-        <table class="table table-sm tabla-scroll-y-200 letra-chica" style="overflow-x: hidden; border: 0px;">
+        <div style="background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #cfd8dc;">
+        <div class="tabla-scroll-y-200">
+        <table class="table table-sm letra-chica mb-0" style="width:100%; table-layout: fixed; border: 0px;">
           <thead>
-            <tr>
-              <th scope="col" style="width:17%">Marca</th>
-              <th scope="col" style="width:63%">Modelo</th>
-              <th scope="col" style="width:20%">Años</th>
+            <tr style="background: #cfd8dc;">
+              <th scope="col" style="width:17%; color: #37474f;">Marca</th>
+              <th scope="col" style="width:63%; color: #37474f;">Modelo</th>
+              <th scope="col" style="width:20%; color: #37474f;">Años</th>
             </tr>
           </thead>
           <tbody>
@@ -31,6 +35,10 @@
           @endforeach
         </tbody>
           </table>
+        </div>
+        </div>
+        @else
+        <p style="color: #78909c; font-style: italic; margin: 0;">Sin aplicaciones registradas.</p>
         @endif
         </div>
       </div>

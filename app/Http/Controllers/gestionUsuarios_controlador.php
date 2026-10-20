@@ -107,7 +107,7 @@ class gestionUsuarios_controlador extends Controller
     public function cambiar_div_vista($permisoId){
         $id = $permisoId;
         if($id == 3) $opciones = ['Ventas','Cotizaciones','Consignaciones','Busqueda expres','Busqueda cliente','Borrar carrito','Guardar carrito','Recuperar carrito','Transferir carrito','Solo transferir carrito','Nota de crédito','Nota de débito','Arqueo de caja','Pedidos','Vales de mercadería','Vales de consignación','Agregar referencia','Agregar repuesto expres','Ventas Totem'];
-        if($id == 4) $opciones = ['Facturas de compra','Listas facturas','Buscar repuestos','Stock de repuestos','Ingresados vs vendidos','Guía de despacho','Recepción de guía despacho','Traspaso de mercadería','Recepción de mercadería','Devolución de mercadería','Vista Ofertas','Vista Rep sin stock','Orden de transporte','Inventario por tienda','Solicitudes','Editar factura de ingreso','Mostrar ofertas web','Ultimos repuestos','Kit de repuestos','Evaluar cotizaciones','Stock Crítico','Stock Mínimo','Sin Stock Proveedor','Stock Pendiente'];
+        if($id == 4) $opciones = ['Facturas sin XML','Facturas con XML','Listas facturas','Buscar repuestos','Stock de repuestos','Ingresados vs vendidos','Guía de despacho','Recepción de guía despacho','Traspaso de mercadería','Recepción de mercadería','Devolución de mercadería','Vista Ofertas','Vista Rep sin stock','Orden de transporte','Inventario por tienda','Solicitudes','Editar factura de ingreso','Mostrar ofertas web','Ultimos repuestos','Kit de repuestos','Evaluar cotizaciones','Stock Crítico','Stock Mínimo','Sin Stock Proveedor','Stock Pendiente'];
         if($id == 5) $opciones = ['Cargar folios','Anulación de folios','Estado DTE','Ultimos Estados DTE'];
         if($id == 6) $opciones = ['Marca vehículo','Modelo vehículo','Roles de usuario','Familia de repuestos','Marca de repuestos','Modificar repuestos','Catálogo de repuestos','Paises','Proveedores','Formas de pago','Límites de créditos','Días de crédito','Clientes','Estado de cuenta cliente','Cliente express','Parametros','Repuestos relacionados','Usuarios'];
         if($id == 7) $opciones = ['RCOF Boletas','Libro ventas','Libro compras'];
@@ -169,7 +169,7 @@ try {
     if($role_id == 11){
         $p1 = new permissions_detail;
         $p1->permission_id = 4;
-        $p1->descripcion = 'Facturas de compra';
+        $p1->descripcion = 'Facturas sin XML';
         $p1->path_ruta = '/factuprodu/crear';
         $p1->usuarios_id = $user->id;
         $p1->save();
@@ -229,7 +229,7 @@ try {
     if($role_id == 12){
         $p1 = new permissions_detail;
         $p1->permission_id = 4;
-        $p1->descripcion = 'Facturas de compra';
+        $p1->descripcion = 'Facturas sin XML';
         $p1->path_ruta = '/factuprodu/crear';
         $p1->usuarios_id = $user->id;
         $p1->save();
@@ -454,7 +454,7 @@ try {
 
         $p2 = new permissions_detail;
         $p2->permission_id = 4;
-        $p2->descripcion = 'Facturas de compra';
+        $p2->descripcion = 'Facturas sin XML';
         $p2->path_ruta = '/factuprodu/crear';
         $p2->usuarios_id = $user->id;
         $p2->save();
@@ -749,7 +749,7 @@ try {
         if($request->role_id == 11){
             $p1 = new permissions_detail;
             $p1->permission_id = 4;
-            $p1->descripcion = 'Facturas de compra';
+            $p1->descripcion = 'Facturas sin XML';
             $p1->path_ruta = '/factuprodu/crear';
             $p1->usuarios_id = $user->id;
             $p1->save();
@@ -814,7 +814,7 @@ try {
         if($request->role_id == 12){
             $p1 = new permissions_detail;
             $p1->permission_id = 4;
-            $p1->descripcion = 'Facturas de compra';
+            $p1->descripcion = 'Facturas sin XML';
             $p1->path_ruta = '/factuprodu/crear';
             $p1->usuarios_id = $user->id;
             $p1->save();
@@ -1074,7 +1074,7 @@ try {
 
             $p2 = new permissions_detail;
             $p2->permission_id = 4;
-            $p2->descripcion = 'Facturas de compra';
+            $p2->descripcion = 'Facturas sin XML';
             $p2->path_ruta = '/factuprodu/crear';
             $p2->usuarios_id = $user->id;
             $p2->save();
@@ -1343,8 +1343,11 @@ try {
                         case'Ventas Totem':
                             $detalle_permiso->path_ruta = '/ventas/totem';
                             break;
-                        case 'Facturas de compra':
+                        case 'Facturas sin XML':
                             $detalle_permiso->path_ruta = '/factuprodu/crear';
+                            break;
+                        case 'Facturas con XML':
+                            $detalle_permiso->path_ruta = '/factuprodu/crear_importacion';
                             break;
                         case 'Listas facturas':
                             $detalle_permiso->path_ruta = '/compras/listar';

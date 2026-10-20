@@ -27,6 +27,30 @@ class CostosCompraTest extends TestCase
         ];
     }
 
+    /** @dataProvider casosPrecioXml */
+    public function testPrecioCompraIncluyeDescuentoXml($xml, $esperado)
+    {
+        $this->assertEqualsWithDelta($esperado,
+            CostosCompra::precioCompraXml(new \SimpleXMLElement($xml)), 0.000001);
+    }
+
+    public function casosPrecioXml()
+    {
+        return [
+            'factura 531532' => ['<Detalle><PrcItem>120924.4084</PrcItem><QtyItem>5</QtyItem><DescuentoMonto>62605</DescuentoMonto><MontoItem>542017</MontoItem></Detalle>', 108403.4],
+            'sin descuento conserva precision' => ['<Detalle><PrcItem>100.1234</PrcItem><QtyItem>3</QtyItem><MontoItem>300</MontoItem></Detalle>', 100.1234],
+            'descuento porcentual' => ['<Detalle><PrcItem>100</PrcItem><QtyItem>2</QtyItem><DescuentoPct>10</DescuentoPct><MontoItem>180</MontoItem></Detalle>', 90],
+            'descuento completo' => ['<Detalle><PrcItem>100</PrcItem><QtyItem>2</QtyItem><DescuentoMonto>200</DescuentoMonto><MontoItem>0</MontoItem></Detalle>', 0],
+        ];
+    }
+
+    public function testDescuentoSinCantidadValidaSeRechaza()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        CostosCompra::precioCompraXml(new \SimpleXMLElement(
+            '<Detalle><PrcItem>100</PrcItem><QtyItem>0</QtyItem><DescuentoMonto>10</DescuentoMonto><MontoItem>90</MontoItem></Detalle>'));
+    }
+
     public function testElFleteEsElDelXmlSinAplicarUtilidadNiPrecioVenta()
     {
         $this->assertSame(250.75, CostosCompra::fleteUnitario('250.75'));

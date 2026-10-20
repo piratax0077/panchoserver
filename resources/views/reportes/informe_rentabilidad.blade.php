@@ -678,6 +678,23 @@
             formatearMoneda(notasCredito.monto_total)
         );
 
+        const documentosCredito = respuesta.documentos_credito || {};
+        $('#valor_venta_credito').text(
+            formatearMoneda(documentosCredito.venta_bruta)
+        );
+        $('#detalle_venta_credito').text(
+            formatearNumero(documentosCredito.cantidad_documentos) +
+            ' documentos (' +
+            formatearNumero(documentosCredito.cantidad_facturas) +
+            ' facturas / ' +
+            formatearNumero(documentosCredito.cantidad_boletas) +
+            ' boletas) · ' +
+            formatearPorcentaje(
+                documentosCredito.porcentaje_sobre_venta_bruta
+            ) +
+            ' de la venta bruta'
+        );
+
         renderizarVendedores(respuesta.vendedores || []);
         renderizarProveedores(respuesta.proveedores || []);
         renderizarProductos(respuesta.productos || []);
@@ -686,6 +703,7 @@
             (respuesta.notas_credito || {}).por_emisor || [],
             (respuesta.notas_credito || {}).detalle || []
         );
+        renderizarVentaCredito(documentosCredito.detalle || []);
         renderizarDetalle(respuesta.detalle || []);
 
         $('#contenido_informe').show();
@@ -903,6 +921,27 @@
         $('#tbody_notas_detalle').html(
             htmlDetalle || filaSinResultados(7)
         );
+    }
+
+    function renderizarVentaCredito(detalle) {
+        let html = '';
+
+        detalle.forEach(function (item) {
+            html += '<tr>' +
+                '<td>' + formatearFecha(item.fecha_emision) + '</td>' +
+                '<td>' +
+                    escaparHtml(item.tipo_documento) + ' N° ' +
+                    escaparHtml(item.numero_documento) +
+                '</td>' +
+                '<td>' + escaparHtml(item.vendedor) + '</td>' +
+                '<td>' + escaparHtml(item.cliente) + '</td>' +
+                '<td class="texto-derecha">' +
+                    formatearMoneda(item.monto_bruto) +
+                '</td>' +
+            '</tr>';
+        });
+
+        $('#tbody_venta_credito').html(html || filaSinResultados(5));
     }
 
     function claseTasaNota(valor) {
@@ -1285,6 +1324,14 @@
                             <div class="detalle" id="detalle_notas_credito">$0</div>
                         </div>
                     </div>
+
+                    <div class="col-lg-3 col-md-4 col-sm-6">
+                        <div class="indicador indicador-advertencia">
+                            <div class="titulo">Boletas y facturas a crédito</div>
+                            <div class="valor" id="valor_venta_credito">$0</div>
+                            <div class="detalle" id="detalle_venta_credito">0 documentos</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1301,6 +1348,9 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link" data-toggle="tab" href="#tab_notas_credito" role="tab">Notas de crédito</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#tab_venta_credito" role="tab">Boletas/facturas a crédito</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" data-toggle="tab" href="#tab_detalle" role="tab">Detalle de ventas</a>
@@ -1361,7 +1411,7 @@
                                     <th>Código</th>
                                     <th>Descripción</th>
                                     <th>Proveedor</th>
-                                    <th class="texto-derecha">Cantidad</th>
+                                    <th class="texto-derecha">Cantidad vendida</th>
                                     <th class="texto-derecha">Venta bruta</th>
                                     <th class="texto-derecha">Venta neta</th>
                                     <th class="texto-derecha">Costo compra</th>
@@ -1434,6 +1484,28 @@
                                 </tr>
                             </thead>
                             <tbody id="tbody_notas_detalle"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab_venta_credito" role="tabpanel">
+                <div class="tabla-card">
+                    <div class="card-header">
+                        Boletas y facturas a crédito (pendientes de cobro)
+                    </div>
+                    <div class="card-body tabla-responsive">
+                        <table class="table table-sm table-striped table-bordered tabla-rentabilidad">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Documento</th>
+                                    <th>Vendedor</th>
+                                    <th>Cliente</th>
+                                    <th class="texto-derecha">Monto bruto</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody_venta_credito"></tbody>
                         </table>
                     </div>
                 </div>
