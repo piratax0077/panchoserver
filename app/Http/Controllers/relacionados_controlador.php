@@ -136,9 +136,19 @@ class relacionados_controlador extends Controller
 
         $this->validaSesion(); //Valida sesión
 
-        $familias=$this->dame_familias_repuestos($marca,$modelo);
-        $vista=view('fragm.buscarepuesto',compact('familias'))->render();
-        return $vista;
+        $familias = repuesto::query()
+            ->join('familias', 'repuestos.id_familia', '=', 'familias.id')
+            ->where('repuestos.id_marca_vehiculo', (int) $marca)
+            ->where('repuestos.id_modelo_vehiculo', (int) $modelo)
+            ->groupBy('repuestos.id_familia', 'familias.nombrefamilia')
+            ->orderBy('familias.nombrefamilia')
+            ->get([
+                'repuestos.id_familia',
+                'familias.nombrefamilia',
+                \DB::raw('COUNT(repuestos.id) as total'),
+            ]);
+
+        return view('fragm.relacionados_familias', compact('familias'))->render();
     }
 
 

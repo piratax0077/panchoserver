@@ -4647,11 +4647,19 @@ function cargar_vale_consignacion(num_consignacion){
        url:url,
        success:function(resp){
         console.log(resp);
-            let r=JSON.parse(resp);
+            let r = typeof resp === 'string' ? JSON.parse(resp) : resp;
             if(r.estado=='OK'){
                 var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
                 var w=window.open(r.mensaje,'_blank',config);
-                w.focus();
+                if(w){
+                    w.focus();
+                }else{
+                    Vue.swal({
+                        title: 'Ventana bloqueada',
+                        text: 'El PDF fue generado, pero el navegador bloqueo la ventana emergente.',
+                        icon: 'info',
+                    });
+                }
                 
             }else{
                 Vue.swal({

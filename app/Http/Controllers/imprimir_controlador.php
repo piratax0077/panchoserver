@@ -1409,9 +1409,12 @@ try {
 
     public function imprimir_cotizacion($num_cotizacion)
     {
-        $ruta=$this->donde('co',$num_cotizacion);
-
         try{
+            if (!ctype_digit((string) $num_cotizacion) || (int) $num_cotizacion < 1) {
+                throw new \InvalidArgumentException('El numero de cotizacion no es valido.');
+            }
+
+            $ruta=$this->donde('co',(int) $num_cotizacion);
             $mpdf=$this->configurarPDF();
             $mpdf->SetSubject($ruta['archivo']);
             $html=$this->damehtml($ruta['vista'],'co',$num_cotizacion);
@@ -1419,13 +1422,10 @@ try {
                 $estado=['estado'=>'ERROR','mensaje'=>'No se pudo generar el PDF'];
                 return json_encode($estado);
             }
-            $guardar_pdf=$ruta['donde'].$ruta['archivo'];
-            $guardar_pdf_public = $ruta['donde_public'].$ruta['archivo'];
             $mpdf->WriteHTML($html);
-            $mpdf->Output($guardar_pdf,"F"); // OJO: OUTPUT  F: Guardar el PDF  D: Descargar el PDF    I:  InLine Browser
-            $mpdf->Output($guardar_pdf_public,'F');
+            $this->guardarPdfGenerado($mpdf, $ruta);
             $estado=['estado'=>'OK','mensaje'=>$ruta['pdf']];
-        }catch (\Exception $error){
+        }catch (\Throwable $error){
             $e=$error->getMessage();
             $estado=['estado'=>'ERROR_IMPRESION','mensaje'=>$e];
 

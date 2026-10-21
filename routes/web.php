@@ -860,6 +860,8 @@ Route::get('eliminarprincipal/{id}','relacionados_controlador@eliminarprincipal'
 
 Route::get('eliminarrelacionado/{id}','relacionados_controlador@eliminarrelacionado');
 
+Route::get('relacionados/{marca}/y/{modelo}/familias','relacionados_controlador@damefamilias');
+
 Route::get('relacionados/{familia}/{marca}/{modelo}/damerepuestos','relacionados_controlador@dame_repuestos');
 
 Route::get('relacionadoprincipal/{idrep}','relacionados_controlador@dame_un_repuesto');
