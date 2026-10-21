@@ -408,7 +408,7 @@
         if($entorno=='local'){
             echo "<script src=\"".asset('js/app.js')."\" defer></script>";
         }elseif($entorno=='production'){
-            echo "<script src=\"".mix('app.js','dist')."\" defer></script>";
+            echo "<script src=\"".asset('js/app.js')."\" defer></script>";
         }
 
     @endphp

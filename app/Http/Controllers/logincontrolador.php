@@ -177,9 +177,14 @@ class logincontrolador extends Controller
     }
 
     public function getAvatar($filename){
-        
-        $file = Storage::disk('users')->get($filename);
+        $disk = Storage::disk('users');
 
-        return new Response($file,200);
+        // Un archivo borrado o no migrado debe responder 404, no provocar un error 500.
+        abort_unless($disk->exists($filename), 404);
+
+        return new Response($disk->get($filename), 200, [
+            'Content-Type' => $disk->mimeType($filename) ?: 'application/octet-stream',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 }

@@ -1027,12 +1027,25 @@
           $.ajax({
               type:'get',
               url: url,
-              success: function(url){
+              success: function(resp){
                
                 Vue.swal.close();
-                var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
-                var w=window.open(url,'_blank',config);
-                w.focus();
+
+                let r = typeof resp === 'string' ? JSON.parse(resp) : resp;
+
+                if(r.estado === 'OK'){
+                    var config="location=yes,height=570,width=720,scrollbars=yes,status=yes";
+                    var w=window.open(r.mensaje,'_blank',config);
+                    if(w){
+                        w.focus();
+                    }
+                }else{
+                    Vue.swal({
+                        title: r.estado || 'ERROR_IMPRESION',
+                        text: r.mensaje || 'No se pudo generar el PDF.',
+                        icon: 'error',
+                    });
+                }
 
                 limpiar_todo();
             },

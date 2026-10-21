@@ -21,7 +21,14 @@ define('LARAVEL_START', microtime(true));
 |
 */
 
-require __DIR__.'/../vendor/autoload.php';
+$applicationPath = realpath(__DIR__.'/../panchoserver') ?: realpath(__DIR__.'/..');
+
+if ($applicationPath === false || ! is_file($applicationPath.'/vendor/autoload.php')) {
+    http_response_code(500);
+    exit('No se pudo localizar la aplicacion Laravel. Verifique la carpeta panchoserver.');
+}
+
+require $applicationPath.'/vendor/autoload.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -35,7 +42,11 @@ require __DIR__.'/../vendor/autoload.php';
 |
 */
 
-$app = require_once __DIR__.'/../bootstrap/app.php';
+$app = require_once $applicationPath.'/bootstrap/app.php';
+
+// En produccion el DocumentRoot es public_html, separado del codigo Laravel.
+// Esto mantiene public_path(), Mix y los archivos generados apuntando al lugar publico real.
+$app->usePublicPath(__DIR__);
 
 /*
 |--------------------------------------------------------------------------

@@ -23,13 +23,8 @@
             Modifiqué el archivo Mix.php linea 46 para que pueda encontrar el manifiesto del cambio de versionado para app.js y app.css
             en /repuestos/vender/laravel/framework/src/illuminate/Foundation/Mix.php
         */
-        if($entorno=='local'){
-            echo "<link href=\"".asset('css/app.css')."\" rel='stylesheet'>";
-            echo "<link href=\"".asset('css/dev.css')."\" rel='stylesheet'>";
-        }elseif($entorno=='production'){
-            echo "<link href=\"".mix('app.css','dist')."\" rel='stylesheet'>";
-            echo "<link href=\"".mix('dev.css','dist')."\" rel='stylesheet'>";
-        }
+        echo "<link href=\"".asset('css/app.css')."\" rel='stylesheet'>";
+        echo "<link href=\"".asset('css/dev.css')."\" rel='stylesheet'>";
     @endphp
    <style>
        body{
@@ -50,11 +45,7 @@
     </div>
      <!-- Scripts  -->
      @php
-        if($entorno=='local'){
-            echo "<script src=\"".asset('js/app.js')."\" defer></script>";
-        }elseif($entorno=='production'){
-            echo "<script src=\"".mix('app.js','dist')."\" defer></script>";
-        }
+        echo "<script src=\"".asset('js/app.js')."\" defer></script>";
     @endphp
 </body>
 </html>

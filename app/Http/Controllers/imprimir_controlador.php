@@ -640,8 +640,32 @@ try {
                 $pdf->agregar($DTE->getDatos(), $DTE->getTED());
                 $guardar_pdf=$ruta['donde'].$ruta['archivo'];
                 $guardar_pdf_public = $ruta['donde_public'].$ruta['archivo'];
+
+                // Estas carpetas no necesariamente existen en una instalacion
+                // nueva, ya que storage y los PDF generados no se versionan.
+                foreach (array_unique([dirname($guardar_pdf), dirname($guardar_pdf_public)]) as $directorio) {
+                    if (!is_dir($directorio) && !mkdir($directorio, 0755, true) && !is_dir($directorio)) {
+                        throw new \RuntimeException('No fue posible crear el directorio para el PDF: '.$directorio);
+                    }
+
+                    if (!is_writable($directorio)) {
+                        throw new \RuntimeException('El directorio del PDF no tiene permisos de escritura: '.$directorio);
+                    }
+                }
+
                 $pdf->Output($guardar_pdf, 'F');
-                $pdf->Output($guardar_pdf_public,'F');
+
+                // En cPanel public_path() apunta a public_html. Se conserva una
+                // copia publica para instalaciones que no usan storage:link.
+                $mismoDirectorio = realpath(dirname($guardar_pdf)) === realpath(dirname($guardar_pdf_public));
+                $mismoArchivo = $mismoDirectorio && basename($guardar_pdf) === basename($guardar_pdf_public);
+
+                if (!$mismoArchivo) {
+                    if (!copy($guardar_pdf, $guardar_pdf_public)) {
+                        throw new \RuntimeException('No fue posible copiar el PDF a la ruta publica.');
+                    }
+                }
+
                 $estado=['estado'=>'OK','mensaje'=>$ruta['pdf']];
 
                 return json_encode($estado);
@@ -678,7 +702,7 @@ try {
         try {
             $mpdf = new Mpdf();
             $base_pdf=base_path('storage/app/public/pdf/pedidos')."/";
-            $base_pdf_public = base_path('public_original/storage/pdf/pedidos')."/";
+            $base_pdf_public = public_path('storage/pdf/pedidos')."/";
 
             $guardar_pdf=$base_pdf.$pdf;
             $guardar_pdf_public=$base_pdf_public.$pdf;
@@ -696,20 +720,47 @@ try {
     
     public function imprimir_pdf_vale_mercaderia($pdf){
         try {
-            $mpdf = new Mpdf();
-            $base_pdf=base_path('storage/app/public/pdf/vales_mercaderia')."/";
-            $base_pdf_public = base_path('public_original/storage/pdf/vales_mercaderia')."/";
+            if ($pdf !== basename($pdf) || !preg_match('/^vale_mercaderia_[0-9]+\.pdf$/', $pdf)) {
+                throw new \InvalidArgumentException('El nombre del PDF del vale no es valido.');
+            }
 
-            $guardar_pdf=$base_pdf.$pdf;
-            $guardar_pdf_public=$base_pdf_public.$pdf;
-            $pdf_ruta=asset('storage/pdf/vales_mercaderia')."/".$pdf;
-            // return $pdf_ruta;
-            // $mpdf->Output($guardar_pdf,"F"); // OJO: OUTPUT  F: Guardar el PDF  D: Descargar el PDF    I:  InLine Browser
-            // $mpdf->Output($guardar_pdf_public,"F");
-            $estado=['estado'=>'OK','mensaje'=>$pdf_ruta];
+            $rutaPrincipal = base_path('storage/app/public/pdf/vales_mercaderia').DIRECTORY_SEPARATOR.$pdf;
+            $rutaPublica = public_path('storage/pdf/vales_mercaderia').DIRECTORY_SEPARATOR.$pdf;
+
+            // Los PDF historicos pueden no haberse copiado durante la migracion.
+            // Si falta el archivo, se reconstruye usando los datos guardados del vale.
+            if (!is_file($rutaPrincipal) && !is_file($rutaPublica)) {
+                $vale = vale_mercaderia::where('url_pdf', $pdf)->first();
+
+                if (!$vale && preg_match('/^vale_mercaderia_([0-9]+)\.pdf$/', $pdf, $coincidencia)) {
+                    $vale = vale_mercaderia::where('numero_boucher', (int) $coincidencia[1])->first();
+                }
+
+                if (!$vale) {
+                    throw new \RuntimeException('No se encontro el vale asociado al PDF '.$pdf.'.');
+                }
+
+                $ruta = $this->dameParametrosImprimirVale($vale->numero_boucher);
+                $mpdf = $this->configurarPDF_vale();
+                $mpdf->SetSubject($ruta['archivo']);
+                $mpdf->WriteHTML($this->damehtml_vale(
+                    $ruta['vista'],
+                    $vale->descripcion,
+                    $vale->numero_documento,
+                    $vale->numero_boucher,
+                    $vale->nombre_cliente,
+                    $vale->rut_cliente,
+                    $vale->telefono_cliente,
+                    $vale->tipo_doc,
+                    $vale->valor
+                ));
+                $this->guardarPdfGenerado($mpdf, $ruta);
+            }
+
+            $estado=['estado'=>'OK','mensaje'=>asset('storage/pdf/vales_mercaderia')."/".$pdf];
             return json_encode($estado);
-        } catch (\Exception $e) {
-            return $e->getMessage();
+        } catch (\Throwable $e) {
+            return json_encode(['estado'=>'ERROR_IMPRESION','mensaje'=>$e->getMessage()]);
         }
     }
 
@@ -717,7 +768,7 @@ try {
         try {
             $mpdf = new Mpdf();
             $base_pdf=base_path('storage/app/public/pdf/consignaciones')."/";
-            $base_pdf_public = base_path('public_original/storage/pdf/consignaciones')."/";
+            $base_pdf_public = public_path('storage/pdf/consignaciones')."/";
 
             $guardar_pdf=$base_pdf.$pdf;
             $guardar_pdf_public=$base_pdf_public.$pdf;
@@ -746,14 +797,11 @@ try {
                 $estado=['estado'=>'ERROR','mensaje'=>'No se pudo generar el PDF'];
                 return json_encode($estado);
             }
-            $guardar_pdf=$ruta['donde'].$ruta['archivo'];
-            $guardar_pdf_public=$ruta['donde_public'].$ruta['archivo'];
             $mpdf->WriteHTML($html);
-            $mpdf->Output($guardar_pdf,"F"); // OJO: OUTPUT  F: Guardar el PDF  D: Descargar el PDF    I:  InLine Browser
-            $mpdf->Output($guardar_pdf_public,"F");
+            $this->guardarPdfGenerado($mpdf, $ruta);
             $estado=['estado'=>'OK','mensaje'=>$ruta['pdf']];
             return json_encode($estado);
-        } catch (\Exception $error) {
+        } catch (\Throwable $error) {
             $e=$error->getMessage();
             $estado=['estado'=>'ERROR_IMPRESION','mensaje'=>$e];
             return json_encode($estado);
@@ -1139,16 +1187,11 @@ try {
             DIRECTORY_SEPARATOR .
             $ruta['archivo'];
 
-        $archivoPublico =
-            rtrim($ruta['donde_public'], '/\\') .
-            DIRECTORY_SEPARATOR .
-            $ruta['archivo'];
-
         $mpdf = $this->configurarPDF_vale();
 
         $mpdf->SetSubject($ruta['archivo']);
         $mpdf->WriteHTML($html);
-        $mpdf->Output($archivoPrincipal, 'F');
+        $this->guardarPdfGenerado($mpdf, $ruta);
 
         if (!file_exists($archivoPrincipal)) {
             throw new \Exception(
@@ -1156,7 +1199,7 @@ try {
             );
         }
 
-        if ($archivoPrincipal !== $archivoPublico) {
+        if (false) {
             if (!copy($archivoPrincipal, $archivoPublico)) {
                 throw new \Exception(
                     'No fue posible copiar el PDF a la ruta pública.'
@@ -1312,10 +1355,35 @@ try {
         }
     }
 
+    private function guardarPdfGenerado($pdf, array $ruta)
+    {
+        $guardarPdf = $ruta['donde'].$ruta['archivo'];
+        $guardarPdfPublico = $ruta['donde_public'].$ruta['archivo'];
+
+        foreach (array_unique([dirname($guardarPdf), dirname($guardarPdfPublico)]) as $directorio) {
+            if (!is_dir($directorio) && !mkdir($directorio, 0755, true) && !is_dir($directorio)) {
+                throw new \RuntimeException('No fue posible crear el directorio para el PDF: '.$directorio);
+            }
+
+            if (!is_writable($directorio)) {
+                throw new \RuntimeException('El directorio del PDF no tiene permisos de escritura: '.$directorio);
+            }
+        }
+
+        $pdf->Output($guardarPdf, 'F');
+
+        $mismoDirectorio = realpath(dirname($guardarPdf)) === realpath(dirname($guardarPdfPublico));
+        $mismoArchivo = $mismoDirectorio && basename($guardarPdf) === basename($guardarPdfPublico);
+
+        if (!$mismoArchivo && !copy($guardarPdf, $guardarPdfPublico)) {
+            throw new \RuntimeException('No fue posible copiar el PDF a la ruta publica.');
+        }
+    }
+
     public function imprimir_pedido($id_abono){
-        $abono = abono::find($id_abono);
-        $ruta = $this->dameParametrosImprimirPedido($abono->num_abono);
         try {
+            $abono = abono::findOrFail($id_abono);
+            $ruta = $this->dameParametrosImprimirPedido($abono->num_abono);
             
             $mpdf = $this->configurarPDF_pedido();
             
@@ -1327,14 +1395,11 @@ try {
                 $estado=['estado'=>'ERROR','mensaje'=>'No se pudo generar el PDF'];
                 return json_encode($estado);
             }
-            $guardar_pdf=$ruta['donde'].$ruta['archivo'];
-            $guardar_pdf_public=$ruta['donde_public'].$ruta['archivo'];
             $mpdf->WriteHTML($html);
-            $mpdf->Output($guardar_pdf,"F"); // OJO: OUTPUT  F: Guardar el PDF  D: Descargar el PDF    I:  InLine Browser
-            $mpdf->Output($guardar_pdf_public,"F");
+            $this->guardarPdfGenerado($mpdf, $ruta);
             $estado=['estado'=>'OK','mensaje'=>$ruta['pdf']];
             return json_encode($estado);
-        } catch (\Exception $error) {
+        } catch (\Throwable $error) {
             $e=$error->getMessage();
             $estado=['estado'=>'ERROR_IMPRESION','mensaje'=>$e];
             return json_encode($estado);
@@ -1470,7 +1535,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         switch ($tipo_dte)
         {
             case "co" :
@@ -1543,7 +1608,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."arqueos/";
             $donde_public = $base_pdf_public."arqueos/";
@@ -1563,7 +1628,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."vales_mercaderia/";
             $donde_public = $base_pdf_public."vales_mercaderia/";
@@ -1584,7 +1649,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."vales_mercaderia_resultado/";
             $donde_public = $base_pdf_public."vales_mercaderia_resultado/";
@@ -1604,7 +1669,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."codigos/";
             $donde_public = $base_pdf_public."codigos/";
@@ -1624,7 +1689,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."consignaciones/";
             $donde_public = $base_pdf_public."consignaciones/";
@@ -1644,7 +1709,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."codigos/";
             $donde_public = $base_pdf_public."codigos/";
@@ -1664,7 +1729,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."saldopendiente/";
             $donde_public = $base_pdf_public."saldopendiente/";
@@ -1684,7 +1749,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."devoluciones/";
             $donde_public = $base_pdf_public."devoluciones/";
@@ -1704,7 +1769,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."solicitudes/";
             $donde_public = $base_pdf_public."solicitudes/";
@@ -1724,7 +1789,7 @@ try {
         $carpeta_xml="00";
         //$base_pdf=public_path("storage/pdf")."/"; //original
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."pedidos/";
             $donde_public = $base_pdf_public."pedidos/";
@@ -1742,7 +1807,7 @@ try {
 
     public function dameParametrosImprimirPedidoAdmin($num_abono){
         $base_pdf=base_path('storage/app/public/pdf')."/";
-        $base_pdf_public = base_path('public_original/storage/pdf')."/";
+        $base_pdf_public = public_path('storage/pdf')."/";
         try {
             $donde=$base_pdf."pedidos/";
             $donde_public = $base_pdf_public."pedidos/";
@@ -1870,23 +1935,20 @@ try {
     }
 
     public function imprimir_pedido_admin($id_pedido){
-        $abono = abono::find($id_pedido);
-        $ruta = $this->dameParametrosImprimirPedidoAdmin($abono->num_abono);
         try {
+            $abono = abono::findOrFail($id_pedido);
+            $ruta = $this->dameParametrosImprimirPedidoAdmin($abono->num_abono);
             $mpdf = $this->configurarPDF_pedido();
             $mpdf->SetSubject($ruta['archivo']);
             $html = $this->damehtml_pedido_admin($ruta['vista'], $id_pedido);
             if($html === false){
-                return 'Error: no se pudo generar el PDF';
+                return json_encode(['estado'=>'ERROR_IMPRESION','mensaje'=>'No se pudo generar el PDF']);
             }
-            $guardar_pdf = $ruta['donde'].$ruta['archivo'];
-            $guardar_pdf_public = $ruta['donde_public'].$ruta['archivo'];
             $mpdf->WriteHTML($html);
-            $mpdf->Output($guardar_pdf, "F");
-            $mpdf->Output($guardar_pdf_public, "F");
-            return $ruta['pdf'];
-        } catch (\Exception $e) {
-            return $e->getMessage();
+            $this->guardarPdfGenerado($mpdf, $ruta);
+            return json_encode(['estado'=>'OK','mensaje'=>$ruta['pdf']]);
+        } catch (\Throwable $e) {
+            return json_encode(['estado'=>'ERROR_IMPRESION','mensaje'=>$e->getMessage()]);
         }
     }
 }

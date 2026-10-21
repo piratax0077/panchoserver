@@ -42,9 +42,9 @@
 
         }elseif($entorno=='production'){
 
-            echo "<link href=\"".mix('app.css','dist')."\" rel='stylesheet'>";
+            echo "<link href=\"".asset('css/app.css')."\" rel='stylesheet'>";
 
-            echo "<link href=\"".mix('dev.css','dist')."\" rel='stylesheet'>";
+            echo "<link href=\"".asset('css/dev.css')."\" rel='stylesheet'>";
 
         }
 
@@ -184,7 +184,7 @@
 
         }elseif($entorno=='production'){
 
-            echo "<script src=\"".mix('app.js','dist')."\" defer></script>";
+            echo "<script src=\"".asset('js/app.js')."\" defer></script>";
 
         }
 
