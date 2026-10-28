@@ -57,7 +57,7 @@
                 <tbody>
                 @foreach ($marcas as $marca)
                 <tr>
-                  <td><img src="{{asset('storage/'.$marca->urlfoto)}}" width=50px /></td>
+                  <td><img src="{{route('storage.public', ['path' => $marca->urlfoto], false)}}" width="50" alt="Imagen de marca" /></td>
                   <td>{{$marca->marcanombre}}</td>
                   <td>
     <a href="{{url('marcavehiculo/'.$marca->idmarcavehiculo.'/eliminar')}}" class="btn btn-danger btn-sm" onclick="return confirmacion()">Eliminar</a>

@@ -3516,7 +3516,7 @@ public function similares(Request $request)
                 'stock_minimo' => (int) $repuesto->stock_minimo,
                 'stock_total' => $stockTotal,
                 'modificado_por' => $repuesto->modificado_por,
-                'foto' => $foto ? asset('storage/'.$foto) : null,
+                'foto' => route('storage.public', $foto ? ['path' => $foto] : [], false),
                 'ubicaciones' => \App\Services\StockPorLocalService::habilitado()
                     ? \App\RepuestoStock::with(['local','responsable'])->where('repuesto_id', $repuesto->id)->get()->map(function ($stock) {
                         return [

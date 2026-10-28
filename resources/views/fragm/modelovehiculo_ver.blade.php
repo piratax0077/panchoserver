@@ -23,7 +23,7 @@
               <b>(ZOFRI)</b>
             @endif
           </td>
-          <td><img src="{{asset('storage/'.$modelo->urlfoto)}}" width="80px" /></td>
+          <td><img src="{{route('storage.public', ['path' => $modelo->urlfoto], false)}}" width="80" alt="Imagen del modelo" /></td>
           <td>
             <button class="btn btn-warning btn-sm" onclick="modificarmodelo({{$modelo->id}})">Modificar</button>
           </td>

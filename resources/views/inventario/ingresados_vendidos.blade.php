@@ -163,7 +163,7 @@
 
   function renderIngresadosVendidos(data){
     let r=data.repuesto, resumen=data.resumen;
-    $('#iv-product-image').html(r.foto ? '<img src="'+ivEscape(r.foto)+'" alt="Imagen del repuesto">' : '<i class="fas fa-box-open"></i>');
+    $('#iv-product-image').html('<img src="'+ivEscape(r.foto || '{{route('storage.public', [], false)}}')+'" alt="Imagen del repuesto">');
     $('#iv-product-code').text(r.codigo_interno);
     $('#iv-product-title').text(r.descripcion);
     $('#iv-product-subtitle').text((r.marca || 'Sin marca')+' · '+(r.pais || 'Sin país'));

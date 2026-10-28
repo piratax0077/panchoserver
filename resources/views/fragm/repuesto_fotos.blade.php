@@ -1,7 +1,7 @@
 
 @if(empty($fotos))
 <div class="col-sm-12">
-	<p style="color: #78909c; font-style: italic; margin: 0;">Sin fotos</p>
+	<img src="{{route('storage.public', [], false)}}" width="100" height="100" alt="Sin imagen disponible" style="object-fit:cover; border-radius:8px; border:1px solid #cfd8dc;"/>
 </div>
 @else
 	@if($fotos->count()>0)
@@ -13,7 +13,7 @@
 		<div style="display: flex; flex-wrap: wrap; gap: 10px;">
 			@foreach($fotos as $foto)
 			<a href="javascript:void(0);" onclick="abrir_foto_modal('{{$id_repuesto}}')" style="display:inline-block;">
-			  <img src="{{asset('storage/'.$foto->urlfoto)}}" width="100" height="100" style="object-fit: cover; border-radius: 8px; border: 1px solid #cfd8dc; box-shadow: 0 1px 4px rgba(0,0,0,0.1);"/>
+			  <img src="{{route('storage.public', ['path' => $foto->urlfoto], false)}}" width="100" height="100" style="object-fit: cover; border-radius: 8px; border: 1px solid #cfd8dc; box-shadow: 0 1px 4px rgba(0,0,0,0.1);"/>
 			</a>
 			@endforeach
 		</div>
@@ -21,7 +21,7 @@
 
 	@else
 	<div class="col-sm-12">
-		<p style="color: #78909c; font-style: italic; margin: 0;">No hay fotos agregadas.</p>
+		<img src="{{route('storage.public', [], false)}}" width="100" height="100" alt="Sin imagen disponible" style="object-fit:cover; border-radius:8px; border:1px solid #cfd8dc;"/>
 	</div>
 
 	@endif

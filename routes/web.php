@@ -394,6 +394,10 @@ Route::middleware(['auth'])->prefix('similar')->group(function ()
     Route::get('/{id}/modificar','similarcontrolador@modificar'); // id es del repuesto
 });
 
+// Acceso autenticado al disco público para instalaciones sin symlink /storage.
+Route::middleware(['auth'])->get('/archivo-publico', 'ArchivoPublicoController@mostrar')
+    ->name('storage.public');
+
 //COMPRAS
 
 Route::middleware(['auth'])->prefix('compras')->group(function ()
@@ -445,6 +449,7 @@ Route::middleware(['auth'])->prefix('factuprodu')->group(function ()
     Route::get('/{id}/medidas','factuprodu_controlador@damemedidas');
     Route::post('/guardaritem','factuprodu_controlador@guardaritem');
     Route::post('/guardarfoto','factuprodu_controlador@guardarfoto');
+    Route::get('/foto/{idfoto}','factuprodu_controlador@mostrar_foto')->name('factuprodu.foto');
     Route::post('/guardarsimilar','factuprodu_controlador@guardarsimilar');
     Route::post('/guardaroem','factuprodu_controlador@guardaroem');
     Route::get('/{cod}/buscarepuesto/{idprov}','factuprodu_controlador@buscarepuesto');

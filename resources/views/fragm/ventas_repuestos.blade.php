@@ -624,12 +624,11 @@ abajo en el modal -->
             <td class="resultado-imagen">
                 @if(isset($fotos_por_repuesto[$repuesto->id]))
                     <a href="javascript:void(0)" class="resultado-imagen__enlace" onclick="abrir_foto_modal('{{$repuesto->id}}')" title="Ampliar imagen">
-                        <img src="{{asset('storage/'.$fotos_por_repuesto[$repuesto->id])}}" alt="Imagen de {{$repuesto->descripcion}}" loading="lazy">
+                        <img src="{{route('storage.public', ['path' => $fotos_por_repuesto[$repuesto->id]], false)}}" alt="Imagen de {{$repuesto->descripcion}}" loading="lazy">
                     </a>
                 @else
                     <div class="resultado-imagen__enlace resultado-imagen__vacia" aria-label="Repuesto sin imagen">
-                        <i class="fas fa-image" aria-hidden="true"></i>
-                        <span>Sin imagen</span>
+                        <img src="{{route('storage.public', [], false)}}" alt="Sin imagen disponible para {{$repuesto->descripcion}}" loading="lazy">
                     </div>
                 @endif
             </td>

@@ -1048,11 +1048,11 @@ function ampliar()
     function guardarfoto()
     {
       var url="{{url('factuprodu/guardarfoto')}}";
-      var archivo=$("#archivo")[0].files[0];
-      if(archivo.size > 510000)
+      var archi=document.getElementById("archivo");
+      if(archi.files.length === 0)
       {
         Vue.swal({
-                text: 'Imagen muy grande, no se puede guardar',
+                text: 'Elija una Imagen',
                 position: 'top-end',
                 icon: 'warning',
                 toast: true,
@@ -1062,13 +1062,11 @@ function ampliar()
         return false;
       }
 
-      var archi=document.getElementById("archivo");
-      var archivo_nombre=archi.value;
-
-      if(archivo_nombre.length==0)
+      var archivo=archi.files[0];
+      if(archivo.size > 512000)
       {
         Vue.swal({
-                text: 'Elija una Imagen',
+                text: 'La imagen no debe superar los 500 KB',
                 position: 'top-end',
                 icon: 'warning',
                 toast: true,
@@ -2726,14 +2724,14 @@ label {
           <div class="row margen-0" style="margin-top:10px">
             <p id="fotos_msje"><b>FOTOS:</b></p>
             <div class="col-12">
-              <label>Subir Foto (jpg,jpeg,png):</label>
-              <input type="file" name="archivo" id="archivo" class="form-control-file">
+              <label>Subir Foto (jpg, jpeg, png, webp; máx. 500 KB):</label>
+              <input type="file" name="archivo" id="archivo" class="form-control-file" accept="image/jpeg,image/png,image/webp">
             </div>
           </div>
 
           <div class="row margen-0" style="margin-top:10px">
             <div class="col-4">
-              <input type="submit" name="btnGuardarFoto" id="btnGuardarFoto" value="Agregar Foto" class="btn btn-primary btn-sm form-control-sm" onclick="guardarfoto()"/>
+              <input type="button" name="btnGuardarFoto" id="btnGuardarFoto" value="Agregar Foto" class="btn btn-primary btn-sm form-control-sm" onclick="guardarfoto()"/>
             </div>
           </div>
 

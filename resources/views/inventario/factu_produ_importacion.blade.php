@@ -848,6 +848,19 @@
             });
         });
 
+        let productosGuardables = productos.filter(function (producto) {
+            return producto.id_repuesto && numeroImportacion(producto.cantidad) > 0;
+        });
+
+        if (productosGuardables.length === 0) {
+            return Vue.swal({
+                title: 'No hay productos para guardar',
+                text: 'Debe existir al menos un producto asociado a un repuesto del sistema y con cantidad mayor a cero. La cabecera no será guardada.',
+                icon: 'warning',
+                confirmButtonText: 'Revisar productos'
+            });
+        }
+
         let idLocalGeneral = $('#import_id_local_general').val();
 
         if (!idLocalGeneral) {
@@ -856,7 +869,7 @@
 
         Vue.swal({
             title: 'Confirmar importación',
-            text: '¿Desea guardar la factura y los repuestos existentes?',
+            text: 'Se guardarán '+productosGuardables.length+' producto(s). Los productos nuevos no asociados serán omitidos. ¿Desea continuar?',
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, importar',
@@ -904,7 +917,15 @@
                     Vue.swal.close();
 
                     if (resp.estado === 'OK') {
-                        Vue.swal('Correcto', resp.mensaje, 'success');
+                        if (!resp.detalles_guardados || resp.detalles_guardados < 1) {
+                            return Vue.swal('Error', 'La operación no confirmó detalles guardados. La factura no fue aceptada como completa.', 'error');
+                        }
+
+                        Vue.swal(
+                            'Correcto',
+                            resp.mensaje+' Detalles verificados en la base de datos: '+resp.detalles_guardados+'.',
+                            'success'
+                        );
                         limpiarImportacionXml();
                     } else {
                         Vue.swal('Atención', resp.mensaje || 'No se pudo confirmar la importación.', 'warning');

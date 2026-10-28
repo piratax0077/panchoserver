@@ -5700,11 +5700,11 @@ class ventas_controlador extends Controller
                     //Guardamos la boleta igualmente con el estado de rechazado
                     // en caso de que no se envié al sii, se debe guardar un registro en la tabla dte_rechazados
                     $dte_rechazado = new dte_rechazados;
-                    $dte_rechazado->tipo_doc = $Datos['tipo_dte'];
+                    $dte_rechazado->tipo_doc = $tipo_dte;
                     $dte_rechazado->fecha_emision = Carbon::today()->format('d-m-Y');
-                    $dte_rechazado->folio_doc = $Datos['folio_dte'];
-                    $dte_rechazado->id_cliente = $idcliente;
-                    //$dte_rechazado->save();
+                    $dte_rechazado->folio_doc = $folioDteSesion;
+                    $dte_rechazado->id_cliente = $id_cliente;
+                    $dte_rechazado->save();
                     return response()->json($rs);
                 }
 
@@ -5924,10 +5924,10 @@ if($repuesto->local_id == $i->id_local){
                 }else{
                     // en caso de que no se genere el xml, se debe guardar un registro en la tabla dte_rechazados
                     $dte_rechazado = new dte_rechazados;
-                    $dte_rechazado->tipo_doc = $Datos['tipo_dte'];
+                    $dte_rechazado->tipo_doc = $tipo_dte;
                     $dte_rechazado->fecha_emision = Carbon::today()->format('d-m-Y');
-                    $dte_rechazado->folio_doc = $Datos['folio_dte'];
-                    $dte_rechazado->id_cliente = $idcliente;
+                    $dte_rechazado->folio_doc = $folioDteSesion;
+                    $dte_rechazado->id_cliente = $id_cliente;
                     $dte_rechazado->save();
                     return response()->json($rs);
                     //$TrackID="---";
@@ -6224,6 +6224,15 @@ if($repuesto->local_id == $i->id_local){
             if ($transaccionLocal) {
                 \Illuminate\Support\Facades\DB::rollBack();
             }
+
+            // Las RuntimeException de este flujo son validaciones controladas
+            // (folio repetido, pagos incompletos o stock). Los errores técnicos
+            // continúan ocultos en producción y quedan disponibles en el log.
+            $mensajeUsuario = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : ($recibidoSii
+                    ? 'El SII recibio el documento, pero fallo el registro local y se revirtieron sus cambios. Conserve el folio y solicite conciliacion antes de volver a emitir.'
+                    : 'No fue posible completar el envio. Revise el carrito y sus pagos.');
             Log::error('Error procesando envío DTE al SII', [
                 'recibido_sii' => $recibidoSii,
                 'usuario_id' => Auth::id(),
@@ -6238,15 +6247,25 @@ if($repuesto->local_id == $i->id_local){
 
             return response()->json([
                 'estado' => 'ERROR',
-                'mensaje' => $recibidoSii
-                    ? 'El SII recibio el documento, pero fallo el registro local y se revirtieron sus cambios. Conserve el folio y solicite conciliacion antes de volver a emitir.'
-                    : 'No fue posible completar el envio. Revise el carrito y sus pagos.',
+                'mensaje' => $mensajeUsuario,
                 'recibido_sii' => $recibidoSii,
                 'detalle' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
 
         return response()->json($rs);
+    }
+
+    public function limpiar_sesion()
+    {
+        Session::put('xml', 0);
+        Session::put('tipo_dte', 0);
+        Session::put('tipo_dte_nombre', '');
+        Session::put('folio_dte', 0);
+        Session::put('idcliente', 0);
+        Session::put('numero_giftcard', '');
+
+        return response()->json(['estado' => 'OK']);
     }
 
     public function guardar_meta(Request $req){

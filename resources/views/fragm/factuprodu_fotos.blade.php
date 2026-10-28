@@ -1,7 +1,7 @@
 <div class="tabla-scroll-y-400">
 @if(empty($fotos))
 	<div class="col-12">
-		<p>Fotos vacia.</p>
+		<img src="{{route('storage.public', [], false)}}" width="200" height="150" alt="Sin imagen disponible" style="object-fit:contain; border:1px solid #cfd8dc; border-radius:6px;"/>
 	</div>
 @else
 		@if($fotos->count()>0)
@@ -17,7 +17,14 @@
 		@foreach($fotos as $foto)
 		<tr>
 			<td style="padding: 2px;margin:2px">
-		  		<img src="{{asset('storage/'.$foto->urlfoto)}}" width=200px/>
+				<a href="{{ route('factuprodu.foto', ['idfoto' => $foto->id], false) }}" target="_blank" title="Ver imagen completa">
+					<img
+						src="{{ route('factuprodu.foto', ['idfoto' => $foto->id], false) }}"
+						alt="Fotografía del repuesto"
+						loading="lazy"
+						style="display:block; width:200px; max-width:100%; height:150px; object-fit:contain; background:#fff; border:1px solid #cfd8dc; border-radius:6px;"
+					/>
+				</a>
 			</td>
 			<td style="padding: 2px;margin:2px">
 				<abbr title="repuestos_fotos {{$foto->id}}">
@@ -31,7 +38,7 @@
 		</div>
 	@else
 	<div class="col-12">
-		<p>No hay fotos agregadas.</p>
+		<img src="{{route('storage.public', [], false)}}" width="200" height="150" alt="Sin imagen disponible" style="object-fit:contain; border:1px solid #cfd8dc; border-radius:6px;"/>
 	</div>
 
 	@endif

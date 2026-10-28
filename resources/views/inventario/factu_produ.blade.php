@@ -1752,6 +1752,18 @@ function guardar_motor(){
                     showConfirmButton: false,
                     timer: 3000,
                     });
+                var porcentajeFleteFactura = Number(r[6] || 0);
+                if(Number.isFinite(porcentajeFleteFactura) && porcentajeFleteFactura > 0) {
+                  document.getElementById("porcentaje_flete").value = porcentajeFleteFactura.toLocaleString("es-CL", {maximumFractionDigits:4});
+                  Vue.swal({
+                    text: 'Se recuperó el flete de la factura: '+porcentajeFleteFactura.toLocaleString("es-CL", {maximumFractionDigits:2})+'%',
+                    position: 'top-end',
+                    icon: 'info',
+                    toast: true,
+                    showConfirmButton: false,
+                    timer: 4000,
+                  });
+                }
               //r[1] tiene el id de compras_cab
               habilitar_ingreso_items(r[1]);
             }else{
@@ -5033,6 +5045,7 @@ function editar_medida_familia(idmedida){
       document.getElementById("subtotalitem").value="0";
       // Conservar los porcentajes de utilidad y flete para el siguiente ítem.
       document.getElementById("flete").value="0";
+      delete document.getElementById("flete").dataset.valorExacto;
       document.getElementById("preciosug").value="0";
       document.getElementById("preal").value="";
       document.getElementById("poferta").value="";

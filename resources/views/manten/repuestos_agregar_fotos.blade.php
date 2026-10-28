@@ -175,7 +175,7 @@
               @if($fotos->count()>0)
               <div class="col-md-12">
                 @foreach($fotos as $foto)
-                  <img src="{{asset('storage/'.$foto->urlfoto)}}" width=100px/>
+                  <img src="{{route('storage.public', ['path' => $foto->urlfoto], false)}}" width="100" alt="Fotografía del repuesto"/>
                 @endforeach
               </div>
               @else

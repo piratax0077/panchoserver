@@ -92,7 +92,7 @@
                             $('#modal_body_ultimas_ofertas').append(`
                             <div class="col-md-3">
                             
-                            <img src="/storage/`+e.urlfoto+`" style="width: 200px; height: 200px;"/><br>
+                            <img src="{{route('storage.public', [], false)}}?path=`+encodeURIComponent(e.urlfoto)+`" style="width: 200px; height: 200px; object-fit: contain;"/><br>
                             <span>`+e.codigo_interno+` </span> <br>
                             <span>`+e.descripcion+`</span><br>
                             <span class="font-weight-bold">Precio normal $ `+precio_total+` </span> <br>

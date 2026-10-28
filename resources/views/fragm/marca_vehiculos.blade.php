@@ -4,7 +4,7 @@
     @foreach($marcas as $marca)
         <li class="mb-2 mt-2">
             <a href="javascript:void(0);" onclick="cargar_Modelos({{$marca->idmarcavehiculo}})">
-                <img src="{{asset('storage/'.$marca->urlfoto)}}" width="100px" height="100px"/>&nbsp;{{$marca->marcanombre}}
+                <img src="{{route('storage.public', ['path' => $marca->urlfoto], false)}}" width="100" height="100" alt="Imagen de {{$marca->marcanombre}}"/>&nbsp;{{$marca->marcanombre}}
             </a>
         </li>
         <hr style="margin:1px;background-color:black">

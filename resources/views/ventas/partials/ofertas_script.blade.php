@@ -14,7 +14,7 @@
             const id = Number(d.id);
             const fila = $('<tr>');
             const imagen = $('<td>');
-            if (d.image_path) imagen.append($('<img>', {src:'/storage/imagenes/familias/' + d.image_path, alt:'Referencia de familia', class:'logoHeader'}));
+            if (d.image_path) imagen.append($('<img>', {src:'{{route('storage.public', [], false)}}?path=' + encodeURIComponent('imagenes/familias/' + d.image_path), alt:'Referencia de familia', class:'logoHeader'}));
             fila.append(imagen);
             fila.append($('<td>').append($('<button>', {type:'button',class:'btn btn-link btn-sm'}).text(d.nombrefamilia).on('click', function () { editar_descuento_familia(id); })));
             [d.porcentaje + ' %', d.desde, d.hasta, d.activo == 1 ? 'Vigente' : 'Caducado', canales[d.id_local] || 'Sin canal'].forEach(valor => fila.append($('<td>').text(valor)));

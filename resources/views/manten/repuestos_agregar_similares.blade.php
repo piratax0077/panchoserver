@@ -199,7 +199,7 @@ function agregar_OEM()
             @if(count($fotos)>0)
             <div class="col-12">
               @for($i=0;$i<count($fotos);$i++)
-                <img src="{{asset('storage/'.$fotos[$i]['urlfoto'])}}" width=100px />
+                <img src="{{route('storage.public', ['path' => $fotos[$i]['urlfoto']], false)}}" width="100" alt="Fotografía del repuesto" />
               @endfor
             </div>
             @endif

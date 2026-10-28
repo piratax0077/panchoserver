@@ -39,7 +39,7 @@ var modifica=false;
           {
             document.getElementById("imagen_check").checked=true;
             document.getElementById("valor").value=d.image_path;
-            var fot="<img src='"+"{{asset('storage')}}"+"/"+d.image_path+"' width='60px'>";
+            var fot="<img src='{{route('storage.public', [], false)}}?path="+encodeURIComponent(d.image_path)+"' width='60px'>";
             $("#fotito").html(fot);
             ///document.getElementById("imagen").value=d.valor;
             document.getElementById("imagen").disabled=false;
@@ -301,7 +301,7 @@ var modifica=false;
                 $valor=substr($valoor,0,4);
                @endphp
               @if($valor=='foto')
-              <td><a href="javascript:void(0)" onclick="abrir_foto_modal('{{$t->image_path}}')"><img src="{{asset('storage/'.$t->image_path)}}" alt="foto repuesto"  class="imagen_pequeña"> </a> </td>
+              <td><a href="javascript:void(0)" onclick="abrir_foto_modal('{{$t->image_path}}')"><img src="{{route('storage.public', ['path' => $t->image_path], false)}}" alt="foto repuesto" class="imagen_pequeña"> </a> </td>
               @else
               <td>{{$t->valor}}</td>
               @endif

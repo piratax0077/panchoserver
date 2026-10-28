@@ -59,6 +59,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 
 
@@ -456,14 +457,32 @@ class factuprodu_controlador extends Controller
         //buscar el ID en detalle y contabilizar num_item_documento
         if (!is_null($f)) {
             $cr = $this->cuenta_repuestos($f->id, $numfac, $idproveedor);
+            $porcentajeFlete = $this->porcentajeFleteFactura($f->id);
             //Mandamos el ID de compras_cab para actualizar más items
-            $resp = "EXISTE*" . $f->id . "*" . $f->factura_numero . "*" . $f->factura_fecha . "*" . $cr['total_repuestos_factura'] . "*" . $cr['total_repuestos_ot'];
+            $resp = "EXISTE*" . $f->id . "*" . $f->factura_numero . "*" . $f->factura_fecha . "*" . $cr['total_repuestos_factura'] . "*" . $cr['total_repuestos_ot'] . "*" . $porcentajeFlete;
         } else {
 
             $cr = $this->cuenta_repuestos(0, $numfac, $idproveedor);
             $resp = "NO EXISTE*0*0*" . $cr['total_repuestos_factura'] . "*" . $cr['total_repuestos_ot'];
         }
         return $resp;
+    }
+
+    private function porcentajeFleteFactura($idFactura)
+    {
+        $detalle = compras_det::where('id_factura_cab', $idFactura)
+            ->where('activo', 1)
+            ->where('pu', '>', 0)
+            ->where('costos', '>', 0)
+            ->orderByDesc('item')
+            ->orderByDesc('id')
+            ->first(['pu', 'costos']);
+
+        if (!$detalle) {
+            return 0;
+        }
+
+        return round(((float) $detalle->costos / (float) $detalle->pu) * 100, 4);
     }
 
 
@@ -802,12 +821,9 @@ class factuprodu_controlador extends Controller
 
     public function guardaritem(Request $request)
     {
-        if (\App\Services\StockPorLocalService::habilitado()) {
-            return \DB::transaction(function () use ($request) {
-                return $this->guardaritemInterno($request);
-            }, 3);
-        }
-        return $this->guardaritemInterno($request);
+        return \DB::transaction(function () use ($request) {
+            return $this->guardaritemInterno($request);
+        }, 3);
     }
 
     private function guardaritemInterno(Request $request)
@@ -1304,9 +1320,17 @@ class factuprodu_controlador extends Controller
                 ->first();
 
             if ($facturaExistente) {
-                $facturaExiste = true;
                 $facturaExistenteId = $facturaExistente->id;
-                $facturaExistenteMensaje = 'La factura '.$folio.' ya existe para el proveedor '.$proveedor->empresa_nombre.'.';
+                $cantidadDetalles = compras_det::where('id_factura_cab', $facturaExistente->id)
+                    ->where('activo', 1)
+                    ->count();
+
+                // Una cabecera sin detalles es una importación incompleta y se
+                // puede recuperar leyendo y confirmando nuevamente el XML.
+                $facturaExiste = $cantidadDetalles > 0;
+                if ($facturaExiste) {
+                    $facturaExistenteMensaje = 'La factura '.$folio.' ya existe para el proveedor '.$proveedor->empresa_nombre.'.';
+                }
             }
         }
 
@@ -1343,18 +1367,6 @@ class factuprodu_controlador extends Controller
 
         if (count($productos) == 0) {
             throw new \Exception('No se encontraron productos con código en el XML');
-        }
-
-        if (!empty($cabeceraXml['factura_existe'])) {
-            return response()->json([
-                'estado' => 'ERROR',
-                'codigo' => 'FACTURA_DUPLICADA',
-                'mensaje' => $cabeceraXml['factura_existente_mensaje']
-                    ?? 'Esta factura ya fue importada anteriormente.',
-                'id_factura_existente' => $cabeceraXml['factura_existente_id'] ?? null,
-                'numero_factura' => $cabeceraXml['folio'] ?? null,
-                'proveedor_nombre' => $cabeceraXml['proveedor_nombre'] ?? null,
-            ], 422);
         }
 
         return [
@@ -1448,8 +1460,22 @@ private function limpiarRut($rut)
         $detalle->cantidad = $datos->cantidad; //keke
         $detalle->pu = $datos->pu;
         $detalle->subtotal = $datos->subtotalitem;
-        $detalle->costos = $datos->flete;
-        $detalle->costos_descripcion = "Flete";
+        $fleteUnitario = CostosCompra::fleteUnitario($datos->flete ?? 0);
+        $fleteHeredado = false;
+
+        // Al agregar productos a una factura existente, el formulario antiguo
+        // podía volver a 0. Heredar el último porcentaje positivo evita guardar
+        // nuevos detalles sin el flete que ya utiliza esa factura.
+        if ($fleteUnitario == 0 && (float) $datos->pu > 0) {
+            $porcentajeFlete = $this->porcentajeFleteFactura($datos->idFactura);
+            if ($porcentajeFlete > 0) {
+                $fleteUnitario = round((float) $datos->pu * ($porcentajeFlete / 100), 2);
+                $fleteHeredado = true;
+            }
+        }
+
+        $detalle->costos = $fleteUnitario;
+        $detalle->costos_descripcion = $fleteHeredado ? "Flete heredado de factura" : "Flete";
         $detalle->precio_sugerido = $datos->preciosug;
         $detalle->id_local = $datos->idLocal;
         $detalle->activo = 1;
@@ -1458,9 +1484,8 @@ private function limpiarRut($rut)
         try {
             $detalle->save();
         } catch (\Exception $error) {
-            $debug = $error;
-            $v = view('errors.debug_ajax', compact('debug'))->render();
-            return $v;
+            report($error);
+            throw $error;
         }
 
         //Calculamos para actualizar cabecera de factura con subtotal, iva y total
@@ -1481,33 +1506,50 @@ private function limpiarRut($rut)
             $r = new repuestocontrolador();
             $r->actualiza_saldos('I', $detalle->id_repuestos, $detalle->id_local, $detalle->cantidad);
         } catch (\Exception $error) {
-            $debug = $error;
-            $v = view('errors.debug_ajax', compact('debug'))->render();
-
-            return $v;
+            report($error);
+            throw $error;
         }
     }
 
     public function guardarfoto(Request $r)
     {
+        $r->validate([
+            'idrep' => 'required|integer|exists:repuestos,id',
+            'archivo' => 'required|file|image|mimes:jpeg,jpg,png,webp|max:500',
+        ], [
+            'archivo.required' => 'Debe elegir una imagen.',
+            'archivo.image' => 'El archivo seleccionado no es una imagen válida.',
+            'archivo.mimes' => 'La imagen debe ser JPG, JPEG, PNG o WEBP.',
+            'archivo.max' => 'La imagen no debe superar los 500 KB.',
+        ]);
+
+        $ruta_guardada = null;
+
         try {
             $archivo = $r->file('archivo');
-            $nombre_archivo = $archivo->getClientOriginalName();
-            //aqui comprobar si existe ya la misma imagen
+            $extension = strtolower($archivo->getClientOriginalExtension());
+            $nombre_archivo = $r->idrep.'_'.sha1_file($archivo->getRealPath()).'.'.$extension;
+
+            // El hash evita sobrescribir archivos de otros repuestos y permite
+            // detectar si esta misma imagen ya fue agregada al repuesto.
             $buscado = 'fotozzz/' . $nombre_archivo;
             $fotito = repuestofoto::where('urlfoto', $buscado)
                 ->where('id_repuestos', $r->idrep)
                 ->first();
 
             if (is_null($fotito)) {
+                Storage::disk('public')->makeDirectory('fotozzz');
+
+                $ruta_guardada = $archivo->storeAs('fotozzz', $nombre_archivo, 'public');
+                if ($ruta_guardada === false) {
+                    throw new \RuntimeException('No fue posible guardar la imagen en el almacenamiento público.');
+                }
+
                 $repuestofoto = new repuestofoto;
                 $repuestofoto->id_repuestos = $r->idrep;
-                $repuestofoto->urlfoto = $archivo->storeAs('fotozzz', $nombre_archivo, 'public');
+                $repuestofoto->urlfoto = $ruta_guardada;
                 $repuestofoto->usuarios_id = Auth::user()->id;
                 $repuestofoto->activo = 1;
-                $ruta_origen = "C:/xampp/htdocs/repuestos/storage/app/public/fotozzz/".$nombre_archivo;
-                $ruta_destino = "C:/xampp/htdocs/repuestos/public_original/storage/fotozzz/".$nombre_archivo;;
-                copy($ruta_origen, $ruta_destino);
                 $repuestofoto->save();
                 
                 $fotos = $this->damefotosrepuesto($r->idrep);
@@ -1517,18 +1559,50 @@ private function limpiarRut($rut)
                 return "EXISTE";
             }
         } catch (\Exception $error) {
-            $debug = $error;
-            $v = view('errors.debug_ajax', compact('debug'))->render();
-            return $v;
+            if ($ruta_guardada && !isset($repuestofoto->id)) {
+                Storage::disk('public')->delete($ruta_guardada);
+            }
+
+            report($error);
+
+            return response(
+                'No fue posible guardar la imagen. Revise los permisos de storage/app/public e inténtelo nuevamente.',
+                500
+            );
         }
     }
 
     public function borrar_foto($idfoto, $idrep)
     {
-        repuestofoto::destroy($idfoto);
+        $foto = repuestofoto::where('id', $idfoto)
+            ->where('id_repuestos', $idrep)
+            ->firstOrFail();
+        $ruta_foto = $foto->urlfoto;
+        $foto->delete();
+
+        // Algunos registros antiguos pueden compartir la misma ruta. El archivo
+        // se elimina solamente cuando ninguna otra fotografía lo utiliza.
+        if (!repuestofoto::where('urlfoto', $ruta_foto)->exists()) {
+            Storage::disk('public')->delete($ruta_foto);
+        }
+
         $fotos = $this->damefotosrepuesto($idrep);
         $v = view('fragm.factuprodu_fotos', compact('fotos'))->render();
         return $v;
+    }
+
+    public function mostrar_foto($idfoto)
+    {
+        $foto = repuestofoto::findOrFail($idfoto);
+
+        if (!Storage::disk('public')->exists($foto->urlfoto)) {
+            return redirect()->route('storage.public');
+        }
+
+        return Storage::disk('public')->response($foto->urlfoto, null, [
+            'Cache-Control' => 'private, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function borrar_similar($idsimilar, $idrep)
@@ -1842,12 +1916,27 @@ private function limpiarRut($rut)
     public function confirmarImportacionXml(Request $request)
     {
         $request->validate([
-            'id_proveedor' => 'required|integer',
+            'id_proveedor' => 'required|integer|exists:proveedores,id',
             'numero_factura' => 'required',
             'fecha_factura' => 'required|date',
-            'id_local_general' => 'required|integer',
-            'productos' => 'required|array',
+            'id_local_general' => 'required|integer|exists:locales,id',
+            'productos' => 'required|array|min:1',
+            'productos.*.id_repuesto' => 'nullable|integer|exists:repuestos,id',
+            'productos.*.cantidad' => 'required|numeric|min:0',
         ]);
+
+        $productosGuardables = collect($request->productos)->filter(function ($producto) {
+            return !empty($producto['id_repuesto'])
+                && (float) ($producto['cantidad'] ?? 0) > 0;
+        });
+
+        if ($productosGuardables->isEmpty()) {
+            return response()->json([
+                'estado' => 'ERROR',
+                'codigo' => 'SIN_PRODUCTOS_GUARDABLES',
+                'mensaje' => 'No se guardó la factura porque ningún producto del XML está asociado a un repuesto existente con cantidad mayor a cero.',
+            ], 422);
+        }
 
         \DB::beginTransaction();
 
@@ -1855,37 +1944,56 @@ private function limpiarRut($rut)
             $existe = compras_cab::where('factura_id_proveedor', $request->id_proveedor)
                 ->where('factura_numero', $request->numero_factura)
                 ->where('activo', 1)
+                ->lockForUpdate()
                 ->first();
 
             if ($existe) {
-                \DB::rollBack();
-                return response()->json([
-                    'estado' => 'ERROR',
-                    'mensaje' => 'La factura ya existe para este proveedor.',
-                ], 422);
-            }
+                $detallesExistentes = compras_det::where('id_factura_cab', $existe->id)
+                    ->where('activo', 1)
+                    ->count();
 
-            $cabecera = compras_cab::create([
-                'factura_id_proveedor' => $request->id_proveedor,
-                'factura_numero' => $request->numero_factura,
-                'factura_fecha' => $request->fecha_factura,
-                'factura_es_credito' => 0,
-                'factura_fecha_venc' => $request->fecha_vencimiento,
-                'factura_subtotal' => 0,
-                'factura_iva' => 0,
-                'factura_total' => 0,
-                'factura_observaciones' => 'Importación XML',
-                'factura_flete_pagado' => $request->factura_flete_pagado ?? 0,
-                'activo' => 1,
-                'usuarios_id' => Auth::user()->id,
-            ]);
+                if ($detallesExistentes > 0) {
+                    \DB::rollBack();
+                    return response()->json([
+                        'estado' => 'ERROR',
+                        'codigo' => 'FACTURA_DUPLICADA',
+                        'mensaje' => 'La factura ya existe para este proveedor y contiene productos.',
+                    ], 422);
+                }
+
+                $cabecera = $existe;
+                $cabecera->fill([
+                    'factura_fecha' => $request->fecha_factura,
+                    'factura_fecha_venc' => $request->fecha_vencimiento,
+                    'factura_subtotal' => 0,
+                    'factura_iva' => 0,
+                    'factura_total' => 0,
+                    'factura_observaciones' => 'Importación XML recuperada',
+                    'usuarios_id' => Auth::user()->id,
+                ]);
+                $cabecera->save();
+            } else {
+                $cabecera = compras_cab::create([
+                    'factura_id_proveedor' => $request->id_proveedor,
+                    'factura_numero' => $request->numero_factura,
+                    'factura_fecha' => $request->fecha_factura,
+                    'factura_es_credito' => 0,
+                    'factura_fecha_venc' => $request->fecha_vencimiento,
+                    'factura_subtotal' => 0,
+                    'factura_iva' => 0,
+                    'factura_total' => 0,
+                    'factura_observaciones' => 'Importación XML',
+                    'activo' => 1,
+                    'usuarios_id' => Auth::user()->id,
+                ]);
+            }
 
             $item = 1;
             $guardados = 0;
             $omitidos = 0;
 
             foreach ($request->productos as $producto) {
-                if (($producto['estado'] ?? '') !== 'EXISTENTE' || empty($producto['id_repuesto'])) {
+                if (empty($producto['id_repuesto'])) {
                     $omitidos++;
                     continue;
                 }
@@ -2011,9 +2119,23 @@ private function limpiarRut($rut)
                 $item++;
             }
 
+            if ($guardados === 0) {
+                throw new \RuntimeException('La importación no contiene productos que se puedan guardar. No se creó la cabecera.');
+            }
+
             $subtotalGuardado = compras_det::where('id_factura_cab', $cabecera->id)
                 ->where('activo', 1)
                 ->sum('subtotal');
+
+            $detallesPersistidos = compras_det::where('id_factura_cab', $cabecera->id)
+                ->where('activo', 1)
+                ->count();
+
+            if ($detallesPersistidos !== $guardados || $detallesPersistidos === 0) {
+                throw new \RuntimeException(
+                    'No fue posible verificar todos los detalles de la factura. Se revirtió la importación completa.'
+                );
+            }
 
             $ivaGuardado = round($subtotalGuardado * 0.19);
             $totalGuardado = $subtotalGuardado + $ivaGuardado;
@@ -2029,6 +2151,8 @@ private function limpiarRut($rut)
                 'estado' => 'OK',
                 'mensaje' => 'Importación confirmada correctamente. Guardados: '.$guardados.'. Omitidos: '.$omitidos,
                 'id_compras_cab' => $cabecera->id,
+                'detalles_guardados' => $detallesPersistidos,
+                'productos_omitidos' => $omitidos,
                 'subtotal_guardado' => $subtotalGuardado,
                 'iva_guardado' => $ivaGuardado,
                 'total_guardado' => $totalGuardado,
@@ -2036,6 +2160,7 @@ private function limpiarRut($rut)
 
         } catch (\Exception $e) {
             \DB::rollBack();
+            report($e);
 
             return response()->json([
                 'estado' => 'ERROR',

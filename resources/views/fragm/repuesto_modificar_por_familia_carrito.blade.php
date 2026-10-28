@@ -5,7 +5,7 @@
               
               @foreach($fotos as $foto)
               <div class="carousel-item {{ $loop->first ? 'active' : '' }}">
-                <img class="d-block w-100" src="{{asset('storage/'.$foto->urlfoto)}}" alt="Second slide">
+                <img class="d-block w-100" src="{{route('storage.public', ['path' => $foto->urlfoto], false)}}" alt="Fotografía del repuesto">
               </div>
               @endforeach
               

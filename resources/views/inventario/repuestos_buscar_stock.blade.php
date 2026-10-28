@@ -252,14 +252,17 @@
         let totalStock = Number(element.stock_actual || 0) + Number(element.stock_actual_dos || 0) + Number(element.stock_actual_tres || 0);
         let cantidadBajos = [element.stock_actual, element.stock_actual_dos, element.stock_actual_tres]
           .filter(stock => Number(stock || 0) < 10).length;
-        let urlFoto = imagen && imagen.urlfoto ? '/storage/' + imagen.urlfoto : '';
+        let urlFoto = '{{ route('storage.public', [], false) }}';
+        if (imagen && imagen.urlfoto) {
+          urlFoto += '?path=' + encodeURIComponent(imagen.urlfoto);
+        }
 
         $('#tbody_resultados').append(`
           <section class="stock-result-layout">
             <aside class="stock-product-card">
               <div class="stock-product-status"><i class="fas fa-check-circle"></i> Activo</div>
               <div class="stock-product-image-wrap">
-                ${urlFoto ? `<img src="${urlFoto}" alt="${valor_seguro(element.descripcion, 'Repuesto')}" class="stock-product-image">` : '<i class="fas fa-box-open stock-product-placeholder"></i>'}
+                <img src="${urlFoto}" alt="${valor_seguro(element.descripcion, 'Repuesto')}" class="stock-product-image">
               </div>
 
               <div class="stock-product-data">

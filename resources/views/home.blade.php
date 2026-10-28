@@ -57,7 +57,7 @@
                 $('#modal_body_ultimos_repuestos').append(`
                 <div class="col-md-3">
                   
-                  <img src="/storage/`+resp[1][contador]+`" style="width: 200px; height: 200px;" onerror="this.onerror=null; this.src='https://placehold.co/100x100'"/><br>
+                  <img src="{{route('storage.public', [], false)}}?path=`+encodeURIComponent(resp[1][contador])+`" style="width: 200px; height: 200px; object-fit: contain;"/><br>
                   <span>`+e.descripcion+`</span><br>
                   <span>`+e.codigo_interno+`</span><br>
                   <span class="font-weight-bold badge badge-info text-white" style="font-size: 16px;">$ `+commaSeparateNumber(precio_total)+` </span>

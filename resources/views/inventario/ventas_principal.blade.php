@@ -2355,8 +2355,7 @@ function dame_relacionados(idrep)
 
   function abrir_foto_modal(link)
   {
-    var base='{{asset("storage/")}}';
-    var enlace=base+'/'+link;
+    var enlace='{{route("storage.public", [], false)}}?path='+encodeURIComponent(link);
     $("#aqui_foto").html("<img src='"+enlace+"' width='100%' onmouseout='cerrar_foto_modal();'>");
     $('#foto-modal').modal({backdrop: 'static', keyboard: false})
     $("#foto-modal").modal("show");

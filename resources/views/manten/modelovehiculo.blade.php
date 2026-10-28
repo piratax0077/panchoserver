@@ -96,7 +96,7 @@
           document.getElementById("modelovehiculo").value=d.modelonombre;
           document.getElementById("aniosvehiculo").value=d.anios_vehiculo;
           document.getElementById("zofri").checked=d.zofri==1 ? true:false;
-          var fot="<img src='"+"{{asset('storage')}}"+"/"+d.urlfoto+"' width='60px'>";
+          var fot="<img src='{{route('storage.public', [], false)}}?path="+encodeURIComponent(d.urlfoto)+"' width='60px'>";
           $("#fotito").html(fot);
         },
           error: function(error){

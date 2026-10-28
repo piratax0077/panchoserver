@@ -3,12 +3,12 @@
     <div id="carouselExampleControls" class="carousel slide" data-ride="carousel">
         <div class="carousel-inner">
             <div class="carousel-item active">
-                <img class="d-block w-100" src="{{asset('storage/'.$fotos[0]->urlfoto)}}" alt="First slide">
+                <img class="d-block w-100" src="{{route('storage.public', ['path' => $fotos[0]->urlfoto], false)}}" alt="Fotografía del repuesto">
               </div>
               
               @foreach($fotos as $foto)
               <div class="carousel-item">
-                <img class="d-block w-100" src="{{asset('storage/'.$foto->urlfoto)}}" alt="Second slide">
+                <img class="d-block w-100" src="{{route('storage.public', ['path' => $foto->urlfoto], false)}}" alt="Fotografía del repuesto">
               </div>
               @endforeach
               
